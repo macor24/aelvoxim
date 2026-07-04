@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Environment
+.env
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project-specific
+src/aelvoxim_orchestrator/scheduler.py
+.backup/
+*.log
+*.log.*
+*.pid
+
+# Data dirs (runtime state, not source)
+.metacore/
+.aelvoxim/

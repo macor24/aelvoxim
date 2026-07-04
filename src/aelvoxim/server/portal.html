@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aelvoxim</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:linear-gradient(135deg,#0f0c29,#302b63,#24243e);color:#e2e8f0;min-height:100vh;display:flex;flex-direction:column}
+  .header{padding:32px 24px 16px;text-align:center}
+  .header h1{font-size:36px;font-weight:700;background:linear-gradient(90deg,#6366f1,#a855f7,#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+  .header .sub{font-size:13px;color:#64748b;margin-top:4px}
+  .container{flex:1;max-width:800px;margin:0 auto;padding:24px;width:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;align-content:center}
+  .card{background:rgba(255,255,255,0.06);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:28px 20px;text-align:center;cursor:pointer;transition:all 0.2s;text-decoration:none;color:#e2e8f0}
+  .card:hover{background:rgba(255,255,255,0.12);border-color:rgba(255,255,255,0.18);transform:translateY(-2px)}
+  .card .icon{font-size:36px;margin-bottom:10px}
+  .card .name{font-size:16px;font-weight:600;margin-bottom:4px}
+  .card .desc{font-size:12px;color:#94a3b8;line-height:1.4}
+  .footer{padding:20px 24px;text-align:center;font-size:11px;color:#475569}
+  .login-bar{position:fixed;top:16px;right:24px;display:flex;gap:8px;align-items:center;z-index:100}
+  .login-bar .btn{padding:6px 16px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);color:#e2e8f0;font-size:12px;cursor:pointer;transition:all 0.15s}
+  .login-bar .btn:hover{background:rgba(255,255,255,0.15)}
+  .login-bar .primary{background:#6366f1;border-color:#6366f1}
+  .login-bar .primary:hover{background:#4f46e5}
+  .login-bar .user{font-size:12px;color:#94a3b8}
+  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:1000;align-items:center;justify-content:center}
+  .modal-overlay.active{display:flex}
+  .modal{background:#1e1b4b;border-radius:16px;padding:28px;width:360px;max-width:90vw;border:1px solid rgba(255,255,255,0.08)}
+  .modal h2{font-size:16px;margin-bottom:4px}
+  .modal .hint{font-size:12px;color:#64748b;margin-bottom:16px}
+  .modal .fg{margin-bottom:12px}
+  .modal .fg label{display:block;font-size:11px;color:#94a3b8;margin-bottom:3px}
+  .modal .fg input{width:100%;padding:8px 12px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:rgba(255,255,255,0.04);color:#e2e8f0;font-size:13px;outline:none;box-sizing:border-box}
+  .modal .fg input:focus{border-color:#6366f1}
+  .modal .fg input::placeholder{color:#475569}
+  .modal .btn-row{display:flex;gap:8px;margin-top:16px}
+  .modal .btn-row button{flex:1;padding:8px;border-radius:8px;border:none;cursor:pointer;font-size:13px}
+  .modal .btn-row .primary{background:#6366f1;color:#fff}
+  .modal .btn-row .primary:hover{background:#4f46e5}
+  .modal .btn-row .ghost{background:transparent;border:1px solid rgba(255,255,255,0.12);color:#94a3b8}
+  .modal .btn-row .ghost:hover{color:#e2e8f0;border-color:rgba(255,255,255,0.2)}
+  .modal .err{font-size:11px;color:#f87171;min-height:18px;text-align:center;margin-top:8px}
+  .modal .switch{font-size:11px;color:#6366f1;text-align:center;margin-top:8px;cursor:pointer}
+  .modal .switch:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+
+<div class="login-bar" id="loginBar">
+  <span class="user" id="headerUser"></span>
+  <button class="btn primary" id="loginBtn" onclick="showAuth()">登录</button>
+  <button class="btn" id="logoutBtn" onclick="doLogout()" style="display:none">退出</button>
+</div>
+
+<div class="header">
+  <h1>Aelvoxim</h1>
+  <div class="sub">AI Agent 核心引擎</div>
+</div>
+
+<div class="container">
+  <a class="card" href="http://127.0.0.1:9702/" target="_blank" id="card-chat">
+    <div class="icon">💬</div>
+    <div class="name">对话</div>
+    <div class="desc">与 AI Agent 对话<br>知识库 + 记忆 + 专家分析</div>
+  </a>
+  <a class="card" href="/docs" target="_blank" id="card-api">
+    <div class="icon">🔌</div>
+    <div class="name">API 文档</div>
+    <div class="desc">开发者门户<br>API Key / 用量 / 文档</div>
+  </a>
+  <a class="card" href="/v1/admin/panel" id="card-admin">
+    <div class="icon">⚙️</div>
+    <div class="name">管理后台</div>
+    <div class="desc">用户 / 日志 / LLM / SentriKit<br>配置与监控</div>
+  </a>
+  <a class="card" href="/v1/admin/panel" id="card-dash">
+    <div class="icon">📊</div>
+    <div class="name">仪表盘</div>
+    <div class="desc">系统运行状态<br>Learner / 性能指标</div>
+  </a>
+</div>
+
+<div class="footer">Aelvoxim · v1.0</div>
+
+<!-- 登录弹窗 -->
+<div class="modal-overlay" id="authModal" onclick="if(event.target===this)closeAuth()">
+  <div class="modal">
+    <h2 id="authTitle">登录</h2>
+    <div class="hint" id="authHint">登录后即可使用全部功能</div>
+    <div class="fg"><label>邮箱</label><input type="email" id="authEmail" placeholder="your@email.com"></div>
+    <div class="fg"><label>密码</label><input type="password" id="authPassword" placeholder="密码" onkeydown="if(event.key==='Enter')submitAuth()"></div>
+    <div class="err" id="authErr"></div>
+    <div class="btn-row">
+      <button class="primary" onclick="submitAuth()" id="authSubmitBtn">登录</button>
+    </div>
+    <div class="switch" id="authSwitch" onclick="toggleAuthMode()">没有账号？注册</div>
+  </div>
+</div>
+
+<script>
+var _key = localStorage.getItem('ael_token') || '';
+var _mode = 'login';
+
+function showAuth() { document.getElementById('authModal').classList.add('active'); }
+function closeAuth() { document.getElementById('authModal').classList.remove('active'); }
+
+function toggleAuthMode() {
+  _mode = _mode === 'login' ? 'register' : 'login';
+  document.getElementById('authTitle').textContent = _mode === 'login' ? '登录' : '注册';
+  document.getElementById('authHint').textContent = _mode === 'login' ? '登录后即可使用全部功能' : '创建一个新账号';
+  document.getElementById('authSubmitBtn').textContent = _mode === 'login' ? '登录' : '注册';
+  document.getElementById('authSwitch').textContent = _mode === 'login' ? '没有账号？注册' : '已有账号？登录';
+  document.getElementById('authErr').textContent = '';
+}
+
+function submitAuth() {
+  var email = document.getElementById('authEmail').value.trim();
+  var pw = document.getElementById('authPassword').value;
+  if (!email || !pw) { document.getElementById('authErr').textContent = '请填写邮箱和密码'; return; }
+  document.getElementById('authErr').textContent = '请求中...';
+  var url = _mode === 'login' ? '/v1/auth/login' : '/v1/auth/register';
+  var body = JSON.stringify({email:email, password:pw, plan:'community'});
+  fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:body})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if (d.api_key) {
+        _key = d.api_key;
+        localStorage.setItem('ael_token', d.api_key);
+        localStorage.setItem('ael_email', email);
+        document.getElementById('loginBtn').style.display = 'none';
+        document.getElementById('logoutBtn').style.display = '';
+        document.getElementById('headerUser').textContent = email;
+        closeAuth();
+        // 更新卡片链接，带上 token
+        document.querySelectorAll('.card').forEach(function(c){
+          var href = c.getAttribute('href');
+          if (href) c.setAttribute('href', href.split('?')[0] + '?token=' + encodeURIComponent(d.api_key));
+        });
+      } else {
+        document.getElementById('authErr').textContent = d.detail || '操作失败';
+      }
+    }).catch(function(){document.getElementById('authErr').textContent = '网络错误';});
+}
+
+function doLogout() {
+  _key = '';
+  localStorage.removeItem('ael_token');
+  localStorage.removeItem('ael_email');
+  document.getElementById('loginBtn').style.display = '';
+  document.getElementById('logoutBtn').style.display = 'none';
+  document.getElementById('headerUser').textContent = '';
+  // 清除卡片链接中的 token
+  document.querySelectorAll('.card').forEach(function(c){
+    var href = c.getAttribute('href');
+    if (href) c.setAttribute('href', href.split('?')[0]);
+  });
+}
+
+// 自动恢复登录状态
+(function(){
+  var savedKey = localStorage.getItem('ael_token');
+  var savedEmail = localStorage.getItem('ael_email');
+  if (savedKey) {
+    _key = savedKey;
+    document.getElementById('loginBtn').style.display = 'none';
+    document.getElementById('logoutBtn').style.display = '';
+    document.getElementById('headerUser').textContent = savedEmail || '已登录';
+    document.querySelectorAll('.card').forEach(function(c){
+      var href = c.getAttribute('href');
+      if (href) c.setAttribute('href', href.split('?')[0] + '?token=' + encodeURIComponent(savedKey));
+    });
+  }
+})();
+</script>
+</body>
+</html>

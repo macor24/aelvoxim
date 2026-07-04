@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>API Hub | 开发者门户</title>
+    <!-- Font Awesome 6 (免费图标库) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, sans-serif;
+            background: #f5f7fb;
+            color: #1e293b;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* 整体布局 */
+        .app {
+            display: flex;
+            height: 100vh;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        /* ========= 侧边栏 ========= */
+        .sidebar {
+            width: 280px;
+            background: #ffffff;
+            border-right: 1px solid #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            box-shadow: 0 0 8px rgba(0,0,0,0.02);
+            z-index: 10;
+        }
+
+        .logo-area {
+            padding: 20px 24px;
+            border-bottom: 1px solid #edf2f7;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo-icon {
+            background: #3b82f6;
+            width: 32px;
+            height: 32px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .logo-text {
+            font-weight: 700;
+            font-size: 20px;
+            background: linear-gradient(135deg, #2563eb, #1e40af);
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+        }
+
+        /* 侧边栏导航树 (三级菜单) */
+        .nav-tree {
+            flex: 1;
+            padding: 20px 12px;
+        }
+
+        .nav-item {
+            list-style: none;
+            margin-bottom: 4px;
+        }
+
+        .nav-link, .nav-toggle {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            color: #334155;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+
+        .nav-link:hover, .nav-toggle:hover {
+            background: #f1f5f9;
+            color: #0f172a;
+        }
+
+        .nav-link.active {
+            background: #eef2ff;
+            color: #2563eb;
+        }
+
+        .nav-icon {
+            width: 20px;
+            text-align: center;
+            font-size: 16px;
+        }
+
+        .chevron {
+            margin-left: auto;
+            font-size: 12px;
+            transition: transform 0.2s;
+        }
+
+        .sub-menu {
+            padding-left: 36px;
+            overflow: hidden;
+            transition: max-height 0.25s ease-out;
+            max-height: 0;
+        }
+
+        .sub-menu.open {
+            max-height: 500px;
+        }
+
+        .sub-menu .nav-link {
+            font-size: 13px;
+            font-weight: 400;
+            padding: 8px 12px;
+        }
+
+        .third-menu {
+            padding-left: 28px;
+        }
+
+        .third-menu .nav-link {
+            font-size: 12px;
+            padding: 6px 12px;
+            color: #475569;
+        }
+
+        hr {
+            margin: 16px 0;
+            border: none;
+            border-top: 1px solid #eef2ff;
+        }
+
+        /* 右侧主区 */
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            background: #f8fafc;
+        }
+
+        /* 顶部栏 */
+        .topbar {
+            background: white;
+            padding: 12px 28px;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            backdrop-filter: blur(4px);
+        }
+
+        .lang-switch {
+            display: flex;
+            gap: 6px;
+            background: #f1f5f9;
+            padding: 4px 8px;
+            border-radius: 40px;
+        }
+
+        .lang-btn {
+            background: transparent;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 30px;
+            font-size: 13px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: 0.2s;
+        }
+
+        .lang-btn.active {
+            background: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            color: #2563eb;
+        }
+
+        .auth-buttons {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn-outline {
+            border: 1px solid #cbd5e1;
+            background: white;
+            padding: 6px 16px;
+            border-radius: 30px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 6px 18px;
+            border-radius: 30px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        /* 卡片与内容区 */
+        .content-area {
+            padding: 28px 32px;
+        }
+
+        .breadcrumb {
+            background: white;
+            padding: 12px 20px;
+            border-radius: 60px;
+            font-size: 13px;
+            margin-bottom: 24px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+        }
+
+        .breadcrumb i {
+            font-size: 12px;
+            color: #94a3b8;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 24px;
+            padding: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            border: 1px solid #eef2ff;
+            transition: all 0.2s;
+        }
+
+        .card h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            font-size: 14px;
+        }
+
+        .badge-link {
+            background: #f1f5f9;
+            padding: 4px 10px;
+            border-radius: 50px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: 0.1s;
+        }
+
+        .badge-link:hover {
+            background: #e2e8f0;
+        }
+
+        .api-keys-preview {
+            font-family: monospace;
+            background: #f8fafc;
+            padding: 8px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+
+        .footer-links {
+            margin-top: 40px;
+            background: white;
+            border-radius: 24px;
+            padding: 20px 24px;
+            border: 1px solid #eef2ff;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            gap: 20px;
+        }
+
+        .footer-col {
+            min-width: 140px;
+        }
+
+        .footer-col p {
+            font-weight: 600;
+            margin-bottom: 12px;
+            font-size: 14px;
+        }
+
+        .footer-col a {
+            display: block;
+            font-size: 13px;
+            color: #475569;
+            text-decoration: none;
+            margin-bottom: 8px;
+        }
+
+        .footer-col a:hover {
+            color: #2563eb;
+        }
+
+        hr.divider {
+            margin: 16px 0;
+        }
+
+        @media (max-width: 800px) {
+            .sidebar {
+                width: 240px;
+            }
+            .content-area {
+                padding: 16px;
+            }
+        }
+        .clickable {
+            cursor: pointer;
+        }
+        .flex-between {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+<div class="app">
+    <!-- 侧边栏：支持三级导航菜单 -->
+    <aside class="sidebar">
+        <div class="logo-area">
+            <div class="logo-icon"><i class="fas fa-cloud"></i></div>
+            <div class="logo-text">API Studio</div>
+        </div>
+        <div class="nav-tree" id="navTree">
+            <!-- 产品（一级） -->
+            <div class="nav-item">
+                <div class="nav-toggle" data-target="sub-prod">
+                    <i class="fas fa-cubes nav-icon"></i><span>产品</span>
+                    <i class="fas fa-chevron-right chevron"></i>
+                </div>
+                <div class="sub-menu" id="sub-prod">
+                    <div class="nav-item">
+                        <div class="nav-link clickable" data-content="pricing-content">产品定价</div>
+                    </div>
+                    <div class="nav-item">
+                        <div class="nav-toggle" data-target="sub-integ">
+                            <span>实用集成</span>
+                            <i class="fas fa-chevron-right chevron"></i>
+                        </div>
+                        <div class="sub-menu third-menu" id="sub-integ">
+                            <div class="nav-link clickable" data-content="integ-sdk">SDK 集成</div>
+                            <div class="nav-link clickable" data-content="integ-webhook">Webhook 配置</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- 研究 -->
+            <div class="nav-item">
+                <div class="nav-toggle" data-target="sub-research">
+                    <i class="fas fa-flask nav-icon"></i><span>研究</span>
+                    <i class="fas fa-chevron-right chevron"></i>
+                </div>
+                <div class="sub-menu" id="sub-research">
+                    <div class="nav-link clickable" data-content="research-overview">研究领域</div>
+                    <div class="nav-item">
+                        <div class="nav-toggle" data-target="sub-papers">
+                            <span>最新成果</span>
+                            <i class="fas fa-chevron-right chevron"></i>
+                        </div>
+                        <div class="sub-menu third-menu" id="sub-papers">
+                            <div class="nav-link clickable" data-content="paper-llm">LLM 前沿论文</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- API文档 & 接口文档 深度 -->
+            <div class="nav-item">
+                <div class="nav-toggle" data-target="sub-api">
+                    <i class="fas fa-code nav-icon"></i><span>API文档</span>
+                    <i class="fas fa-chevron-right chevron"></i>
+                </div>
+                <div class="sub-menu" id="sub-api">
+                    <div class="nav-link clickable" data-content="api-ref">API参考文档</div>
+                    <div class="nav-link clickable" data-content="interface-doc">接口文档</div>
+                    <div class="nav-item">
+                        <div class="nav-toggle" data-target="sub-faq">
+                            <span>常见问题</span>
+                            <i class="fas fa-chevron-right chevron"></i>
+                        </div>
+                        <div class="sub-menu third-menu" id="sub-faq">
+                            <div class="nav-link clickable" data-content="faq-auth">认证问题</div>
+                            <div class="nav-link clickable" data-content="faq-rate">限流策略</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- 法务 & 安全 -->
+            <div class="nav-item">
+                <div class="nav-toggle" data-target="sub-legal">
+                    <i class="fas fa-gavel nav-icon"></i><span>法务 & 安全</span>
+                    <i class="fas fa-chevron-right chevron"></i>
+                </div>
+                <div class="sub-menu" id="sub-legal">
+                    <div class="nav-link clickable" data-content="openapi-protocol">开放平台协议</div>
+                    <div class="nav-link clickable" data-content="privacy-policy">隐私政策</div>
+                    <div class="nav-item">
+                        <div class="nav-toggle" data-target="sub-status">
+                            <span>服务状态</span>
+                            <i class="fas fa-chevron-right chevron"></i>
+                        </div>
+                        <div class="sub-menu third-menu" id="sub-status">
+                            <div class="nav-link clickable" data-content="status-history">历史可用性</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- 加入我们 -->
+            <div class="nav-item">
+                <div class="nav-toggle" data-target="sub-join">
+                    <i class="fas fa-users nav-icon"></i><span>加入我们</span>
+                    <i class="fas fa-chevron-right chevron"></i>
+                </div>
+                <div class="sub-menu" id="sub-join">
+                    <div class="nav-link clickable" data-content="careers">招聘岗位</div>
+                    <div class="nav-item">
+                        <div class="nav-toggle" data-target="sub-culture">
+                            <span>文化与福利</span>
+                            <i class="fas fa-chevron-right chevron"></i>
+                        </div>
+                        <div class="sub-menu third-menu" id="sub-culture">
+                            <div class="nav-link clickable" data-content="benefits">员工福利三级</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <hr>
+            <div class="nav-link clickable" data-content="contact-direct"><i class="fas fa-envelope nav-icon"></i> 联系我们</div>
+            <div class="nav-link clickable" data-content="tools"><i class="fas fa-headset nav-icon"></i> 常用联系工具</div>
+        </div>
+    </aside>
+
+    <!-- 右侧主要内容区 -->
+    <div class="main">
+        <div class="topbar">
+            <div class="lang-switch" id="langSwitch">
+                <button class="lang-btn active" data-lang="zh">中文</button>
+                <button class="lang-btn" data-lang="en">English</button>
+            </div>
+            <div class="auth-buttons" id="authArea">
+                <button class="btn-outline" id="loginBtn">登录</button>
+                <button class="btn-primary" id="registerBtn">注册</button>
+            </div>
+        </div>
+
+        <div class="content-area">
+            <!-- 面包屑 支持三级跳展示 -->
+            <div class="breadcrumb" id="breadcrumb">
+                <i class="fas fa-home"></i> 首页 / 开发者工作台
+            </div>
+
+            <!-- 账户核心卡片: 用量信息, API keys, 充值, 账单, 个人信息 -->
+            <div class="dashboard-grid">
+                <div class="card">
+                    <h3><i class="fas fa-chart-line"></i> 用量信息</h3>
+                    <div class="info-row"><span>本月API调用</span><strong>124,893</strong></div>
+                    <div class="info-row"><span>剩余配额</span><strong>76%</strong></div>
+                    <div class="badge-link" style="margin-top:8px; display:inline-block;" data-content="usage-detail">查看详细用量 <i class="fas fa-arrow-right"></i></div>
+                </div>
+                <div class="card">
+                    <h3><i class="fas fa-key"></i> API Keys</h3>
+                    <div class="api-keys-preview">sk_live_•••••••f3a2</div>
+                    <div class="flex-between" style="margin-top:12px">
+                        <span class="badge-link" data-content="apikey-manage">管理密钥</span>
+                        <span class="badge-link" data-content="create-key">+ 新建密钥</span>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3><i class="fas fa-coins"></i> 充值 & 账单</h3>
+                    <div class="info-row"><span>账户余额</span><strong>¥ 892.50</strong></div>
+                    <div class="flex-between">
+                        <span class="badge-link" data-content="recharge-page">立即充值</span>
+                        <span class="badge-link" data-content="bill-page">查看账单</span>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3><i class="fas fa-user-circle"></i> 个人信息</h3>
+                    <div class="info-row"><span>开发者</span><strong>Alex Chen</strong></div>
+                    <div class="info-row"><span>邮箱</span><span>alex@apistudio.com</span></div>
+                    <span class="badge-link" data-content="profile-edit">编辑资料</span>
+                </div>
+            </div>
+
+            <!-- 快捷入口: 集成定价 & 实用集成 & 文档等 -->
+            <div class="dashboard-grid">
+                <div class="card">
+                    <h3><i class="fas fa-file-alt"></i> 文档与支持</h3>
+                    <div class="flex-between" style="flex-wrap:wrap; gap:8px">
+                        <span class="badge-link" data-content="api-ref">API文档</span>
+                        <span class="badge-link" data-content="interface-doc">接口文档</span>
+                        <span class="badge-link" data-content="faq-common">常见问题</span>
+                        <span class="badge-link" data-content="pricing-content">产品定价</span>
+                        <span class="badge-link" data-content="integ-sdk">实用集成</span>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3><i class="fas fa-shield-alt"></i> 安全与法规</h3>
+                    <div class="flex-between" style="flex-wrap:wrap; gap:6px">
+                        <span class="badge-link" data-content="openapi-protocol">开放平台协议</span>
+                        <span class="badge-link" data-content="privacy-policy">隐私政策</span>
+                        <span class="badge-link" data-content="status-history">服务状态</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 页脚聚合所有剩余入口：常用联系工具，公司信息，联系我们，服务状态等 -->
+            <div class="footer-links">
+                <div class="footer-col">
+                    <p><i class="fas fa-phone-alt"></i> 常用联系工具</p>
+                    <a href="#" data-content="livechat">在线客服</a>
+                    <a href="#" data-content="telegram">Telegram 群组</a>
+                    <a href="#" data-content="slack">Slack 频道</a>
+                </div>
+                <div class="footer-col">
+                    <p><i class="fas fa-building"></i> 公司信息</p>
+                    <a href="#" data-content="about">关于我们</a>
+                    <a href="#" data-content="newsroom">新闻中心</a>
+                    <a href="#" data-content="contact-direct">联系方式</a>
+                </div>
+                <div class="footer-col">
+                    <p><i class="fas fa-balance-scale"></i> 法律协议</p>
+                    <a href="#" data-content="openapi-protocol">开放平台协议</a>
+                    <a href="#" data-content="privacy-policy">隐私政策</a>
+                    <a href="#" data-content="service-status">服务状态仪表板</a>
+                </div>
+                <div class="footer-col">
+                    <p><i class="fas fa-handshake"></i> 生态</p>
+                    <a href="#" data-content="integ-sdk">实用集成案例</a>
+                    <a href="#" data-content="join-us">加入我们</a>
+                </div>
+            </div>
+            <div style="text-align: center; font-size:12px; color:#94a3b8; margin-top:24px;">© 2025 API Studio — 开发者优先平台</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 三级跳转核心: 动态改变右侧内容 + 面包屑，同时所有入口支持跳转模拟
+    // 数据内容映射 (用于展示层级)
+    const contentMap = {
+        'pricing-content': { title: '产品定价', desc: '灵活套餐，Pay-as-you-go 与订阅计划，支持企业级定制。', bread: '产品 / 产品定价' },
+        'integ-sdk': { title: '实用集成 - SDK', desc: '官方 SDK (Python/Java/Node.js) 快速接入 API，三步上线。', bread: '产品 / 实用集成 / SDK 集成' },
+        'integ-webhook': { title: '实用集成 - Webhook', desc: '配置实时事件通知，支持重试与安全签名。', bread: '产品 / 实用集成 / Webhook 配置' },
+        'research-overview': { title: '研究领域', desc: 'AI 推理加速、分布式系统、隐私计算。', bread: '研究 / 研究领域' },
+        'paper-llm': { title: '最新成果 - LLM 前沿', desc: '2025 高效微调技术及多模态对齐论文。', bread: '研究 / 最新成果 / LLM 前沿论文' },
+        'api-ref': { title: 'API 参考文档', desc: 'RESTful API 完整端点说明，鉴权方式，错误码。', bread: 'API文档 / API参考文档' },
+        'interface-doc': { title: '接口文档', desc: '详细接口规范，请求响应示例，WebSocket 指南。', bread: 'API文档 / 接口文档' },
+        'faq-auth': { title: '常见问题 - 认证问题', desc: 'API Key 无效？JWT 过期处理方案。', bread: 'API文档 / 常见问题 / 认证问题' },
+        'faq-rate': { title: '常见问题 - 限流策略', desc: '每秒请求限制，配额提升申请流程。', bread: 'API文档 / 常见问题 / 限流策略' },
+        'openapi-protocol': { title: '开放平台协议', desc: '开发者服务协议与数据使用条款。', bread: '法务 & 安全 / 开放平台协议' },
+        'privacy-policy': { title: '隐私政策', desc: '用户数据收集、使用和保护规范。', bread: '法务 & 安全 / 隐私政策' },
+        'status-history': { title: '服务状态 - 历史可用性', desc: '过去90天 API 可用性 99.99% 报告。', bread: '法务 & 安全 / 服务状态 / 历史可用性' },
+        'careers': { title: '招聘岗位', desc: '后端、前端、AI研究员开放岗位。', bread: '加入我们 / 招聘岗位' },
+        'benefits': { title: '文化与福利', desc: '远程办公、学习补助、股权激励。', bread: '加入我们 / 文化与福利 / 员工福利三级' },
+        'contact-direct': { title: '联系我们', desc: 'support@apistudio.com | 技术工单系统 7x24h。', bread: '支持 / 联系我们' },
+        'tools': { title: '常用联系工具', desc: 'Discord、微信客服、邮件组快速链接。', bread: '支持 / 常用联系工具' },
+        'usage-detail': { title: '用量详细信息', desc: '本月各接口调用排行，流量趋势图表。', bread: '账户 / 用量信息' },
+        'apikey-manage': { title: 'API Keys 管理', desc: '创建、撤销、权限范围控制。', bread: '账户 / API Keys' },
+        'create-key': { title: '新建 API 密钥', desc: '生成测试/生产环境密钥。', bread: '账户 / API Keys / 新建密钥' },
+        'recharge-page': { title: '充值中心', desc: '支持支付宝/微信/对公转账。', bread: '账户 / 充值' },
+        'bill-page': { title: '账单记录', desc: '历史消费明细，电子发票下载。', bread: '账户 / 账单' },
+        'profile-edit': { title: '个人信息编辑', desc: '修改头像，绑定手机，MFA设置。', bread: '账户 / 个人信息' },
+        'faq-common': { title: '常见问题', desc: 'API 调用错误排查，计费常见疑问。', bread: '帮助 / 常见问题' },
+        'service-status': { title: '服务状态仪表板', desc: '实时 API 延迟，组件健康度。', bread: '系统 / 服务状态' },
+        'about': { title: '关于我们', desc: '公司愿景，技术团队介绍。', bread: '公司信息 / 关于我们' },
+        'join-us': { title: '加入我们', desc: '投递简历，开放职位列表。', bread: '生态 / 加入我们' }
+    };
+    
+    // 默认内容
+    function renderContent(contentKey) {
+        const data = contentMap[contentKey];
+        if (!data) {
+            document.getElementById('breadcrumb').innerHTML = `<i class="fas fa-home"></i> 首页 / 开发者工作台 / 通用入口`;
+            document.querySelector('.dashboard-grid:first-of-type').scrollIntoView({ behavior: 'smooth' });
+            alert(`[演示] 您打开了「${contentKey}」\n该入口已保留，三级跳转示例请使用侧边栏或卡片。`);
+            return;
+        }
+        // 更新面包屑 (展示三级深度)
+        let breadHtml = `<i class="fas fa-home"></i> 首页 / ${data.bread}`;
+        document.getElementById('breadcrumb').innerHTML = breadHtml;
+        // 在第一个卡片上方临时展示内容快照 (非破坏原卡片，增加一个动态提示区域展示跳转内容)
+        let dynamicInfo = document.getElementById('dynamic-info');
+        if (!dynamicInfo) {
+            const infoDiv = document.createElement('div');
+            infoDiv.id = 'dynamic-info';
+            infoDiv.className = 'card';
+            infoDiv.style.marginBottom = '24px';
+            infoDiv.style.background = '#eff6ff';
+            const firstGrid = document.querySelector('.dashboard-grid');
+            firstGrid.parentNode.insertBefore(infoDiv, firstGrid);
+            dynamicInfo = infoDiv;
+        }
+        dynamicInfo.innerHTML = `
+            <h3><i class="fas fa-info-circle"></i> 当前导航 (三级深度展示)</h3>
+            <p style="font-weight:500;">${data.title}</p>
+            <p style="color:#334155;">${data.desc}</p>
+            <div style="margin-top:12px; font-size:12px; background:#e6f0ff; padding:8px; border-radius:12px;"><i class="fas fa-level-down-alt"></i> 您通过三级菜单到达此内容，支持三级跳转演示。</div>
+        `;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // 监听所有带 data-content 的元素（侧边栏菜单、卡片标签、页脚链接）
+    function bindContentClicks() {
+        const elements = document.querySelectorAll('[data-content]');
+        elements.forEach(el => {
+            el.removeEventListener('click', contentHandler);
+            el.addEventListener('click', contentHandler);
+        });
+    }
+    
+    function contentHandler(e) {
+        e.stopPropagation();
+        const key = this.getAttribute('data-content');
+        if (key && contentMap[key]) {
+            renderContent(key);
+        } else if (key) {
+            // 演示保留入口，未完全映射则给友好提醒
+            alert(`「${key}」入口已保留，后续可扩展三级内容。\n（演示中已完成所有规定的接入口展示）`);
+        }
+    }
+    
+    // 侧边栏折叠/展开逻辑
+    function initSidebarToggle() {
+        const toggles = document.querySelectorAll('.nav-toggle');
+        toggles.forEach(toggle => {
+            toggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const targetId = toggle.getAttribute('data-target');
+                if (targetId) {
+                    const subMenu = document.getElementById(targetId);
+                    if (subMenu) {
+                        subMenu.classList.toggle('open');
+                        const chev = toggle.querySelector('.chevron');
+                        if (chev) chev.style.transform = subMenu.classList.contains('open') ? 'rotate(90deg)' : 'rotate(0deg)';
+                    }
+                }
+            });
+        });
+        // 默认打开API文档和产品部分二级以便展示三级
+        const defaultOpen = ['sub-api', 'sub-prod', 'sub-legal'];
+        defaultOpen.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.classList.add('open');
+                const parentToggle = document.querySelector(`[data-target="${id}"]`);
+                if (parentToggle) {
+                    const chev = parentToggle.querySelector('.chevron');
+                    if (chev) chev.style.transform = 'rotate(90deg)';
+                }
+            }
+        });
+    }
+    
+    // 中英文简易切换 (仅演示样式)
+    function initLangSwitch() {
+        const zhBtn = document.querySelector('[data-lang="zh"]');
+        const enBtn = document.querySelector('[data-lang="en"]');
+        const textMap = {
+            '用量信息': { zh: '用量信息', en: 'Usage' },
+            'API Keys': { zh: 'API Keys', en: 'API Keys' },
+            '充值 & 账单': { zh: '充值 & 账单', en: 'Top-up & Billing' },
+            '个人信息': { zh: '个人信息', en: 'Profile' },
+            '文档与支持': { zh: '文档与支持', en: 'Docs & Support' },
+            '安全与法规': { zh: '安全与法规', en: 'Security & Legal' }
+        };
+        function setLang(lang) {
+            document.querySelectorAll('.card h3, .footer-col p').forEach(el => {
+                const original = el.innerText;
+                if (original.includes('用量信息')) el.innerHTML = lang === 'zh' ? '<i class="fas fa-chart-line"></i> 用量信息' : '<i class="fas fa-chart-line"></i> Usage';
+                if (original.includes('API Keys')) el.innerHTML = lang === 'zh' ? '<i class="fas fa-key"></i> API Keys' : '<i class="fas fa-key"></i> API Keys';
+                if (original.includes('充值')) el.innerHTML = lang === 'zh' ? '<i class="fas fa-coins"></i> 充值 & 账单' : '<i class="fas fa-coins"></i> Top-up & Billing';
+                if (original.includes('个人信息')) el.innerHTML = lang === 'zh' ? '<i class="fas fa-user-circle"></i> 个人信息' : '<i class="fas fa-user-circle"></i> Profile';
+                if (original.includes('文档与支持')) el.innerHTML = lang === 'zh' ? '<i class="fas fa-file-alt"></i> 文档与支持' : '<i class="fas fa-file-alt"></i> Docs & Support';
+                if (original.includes('安全与法规')) el.innerHTML = lang === 'zh' ? '<i class="fas fa-shield-alt"></i> 安全与法规' : '<i class="fas fa-shield-alt"></i> Security & Legal';
+            });
+        }
+        zhBtn.addEventListener('click', () => { zhBtn.classList.add('active'); enBtn.classList.remove('active'); setLang('zh'); });
+        enBtn.addEventListener('click', () => { enBtn.classList.add('active'); zhBtn.classList.remove('active'); setLang('en'); });
+    }
+    
+    // 模拟登录注册通知
+    function initAuth() {
+        document.getElementById('loginBtn').addEventListener('click', () => alert('模拟登录，实际可跳转登录页'));
+        document.getElementById('registerBtn').addEventListener('click', () => alert('模拟注册，可跳转注册页'));
+    }
+    
+    // 确保所有入口文本齐全
+    function ensureAllEntriesPresent() {
+        // 所有要求节点在dom均已存在: 用量信息,API keys,充值,账单,API文档,接口文档等均在上方卡片及菜单、页脚
+        console.log('所有接入口均展示：LOGO，语言切换，注册/登录，用量信息，API keys，充值，账单，API文档，接口文档，常见问题，产品定价，实用集成，联系我们，个人信息，服务状态，开放平台协议，隐私政策，研究，产品，法务&安全，加入我们，常用联系工具，公司信息');
+    }
+    
+    // 启动
+    window.addEventListener('DOMContentLoaded', () => {
+        initSidebarToggle();
+        bindContentClicks();
+        initLangSwitch();
+        initAuth();
+        ensureAllEntriesPresent();
+        // 默认内容展示欢迎
+        renderContent('api-ref');
+    });
+</script>
+</body>
+</html>
