@@ -14,7 +14,7 @@ from .base import BaseExpert, ExpertInput, ExpertOutput
 # ── Plugin registry ──
 
 _EXPERT_REGISTRY: Dict[str, Type[BaseExpert]] = {}
-_COMMUNITY_ONLY = {"logic", "memory", "ethics", "safety"}
+_COMMUNITY_ONLY = {"logic", "memory", "ethics", "safety", "code_review"}  # 5 core experts for community edition
 
 
 def register_expert(cls: Type[BaseExpert]) -> Type[BaseExpert]:
@@ -24,23 +24,26 @@ def register_expert(cls: Type[BaseExpert]) -> Type[BaseExpert]:
     return cls
 
 
-def discover_experts(capability: str = None, edition: str = "community") -> List[Type[BaseExpert]]:
+def discover_experts(capability: str = None, edition: str = "") -> List[Type[BaseExpert]]:
     """Get registered expert classes, optionally filtered by capability or edition.
 
-    edition='community' limits to {logic, memory, ethics, safety}.
+    edition='community' limits to {logic, memory, ethics, safety, code_review}.
+    Uses aelvoxim.server.edition if no explicit edition passed.
     """
-    experts = list(_EXPERT_REGISTRY.values())
+    if not edition:
+        try:
+            from ..server.edition import current as _ed_cur
+            edition = _ed_cur()
+        except ImportError:
+            edition = "community"
     if edition == "community":
-        experts = [
-            cls for cls in experts
-            if cls.__name__.lower().replace("expert", "") in _COMMUNITY_ONLY
-        ]
-    if capability:
-        experts = [
-            cls for cls in experts
-            if capability in getattr(cls, '_capabilities', [])
-        ]
-    return experts
+        max_n = 5
+        from ..server.edition import get as _ed_get
+        max_n = _ed_get("max_experts", 5)
+        experts = [cls for cls in _EXPERT_REGISTRY.values()
+                   if cls.__name__.lower().replace("expert", "") in _COMMUNITY_ONLY]
+        return experts[:max_n]
+    return list(_EXPERT_REGISTRY.values())
 
 
 def get_expert_names() -> List[str]:

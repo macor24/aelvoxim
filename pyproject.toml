@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=64.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aelvoxim"
+version = "1.0.0"
+description = "轻量级 AI 认知引擎框架 — 给你的 AI 装上记忆体"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "gmxchz"},
+]
+keywords = ["ai", "agent", "cognitive-engine", "memory", "self-learning", "framework"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+]
+dependencies = [
+    "bcrypt>=4.0.0",
+    "fastapi>=0.100.0",
+    "uvicorn[standard]>=0.20.0",
+]
+
+[project.optional-dependencies]
+pg = ["psycopg2-binary>=2.9.0"]
+full = ["aelvoxim[pg]"]
+
+[project.urls]
+Homepage = "https://github.com/gmxchz/aelvoxim"
+Repository = "https://github.com/gmxchz/aelvoxim"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[project.scripts]
+aelvoxim = "aelvoxim.__main__:main"
+aelvoxim-admin = "aelvoxim.admin:main"

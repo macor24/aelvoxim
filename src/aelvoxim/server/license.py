@@ -130,17 +130,32 @@ def load_license() -> Dict[str, Any]:
         return {"plan": "community", "is_valid": False, "reason": "Corrupt license file"}
 
 
+def apply_license(key: str) -> bool:
+    """Verify a license key and apply the edition.
+
+    On success, sets the runtime edition to the license plan.
+    Returns True if valid and applied.
+    """
+    result = verify_license(key)
+    if result.get("valid"):
+        from .edition import set_edition
+        set_edition(result["plan"])
+        return True
+    return False
+
+
 def current_edition() -> str:
     """Get current runtime edition.
 
     Priority:
-    1. METACORE_EDITION env var (explicit override)
+    1. AELVOXIM_EDITION env var (explicit override, handled by edition.py)
     2. Valid license file
     3. Default: community
     """
-    env = os.environ.get("METACORE_EDITION", "")
-    if env:
-        return env
+    from .edition import current as _ed_current
+    _ed = _ed_current()
+    if _ed and _ed != "community":
+        return _ed
     lic = load_license()
     if lic.get("is_valid"):
         return lic["plan"]

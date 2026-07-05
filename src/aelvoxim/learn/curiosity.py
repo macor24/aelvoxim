@@ -142,7 +142,17 @@ def activate_curiosity(
 
     Called during Learner's idle cycle when no active directions exist.
     Returns True if a new direction was added.
+
+    Edition gate: community edition disables curiosity-driven discovery.
     """
+    # Edition gate
+    try:
+        from aelvoxim.server.edition import get as _ed_get
+        if not _ed_get("curiosity_enabled", False):
+            return False
+    except ImportError:
+        pass
+
     topic = pick_next_topic(directions, log_func)
     if not topic:
         return False

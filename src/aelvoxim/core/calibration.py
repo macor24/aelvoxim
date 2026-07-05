@@ -354,7 +354,17 @@ class Calibration:
 
         Returns:
             changes: List of applied changes
+
+        Edition gate: community edition disables automatic tuning.
         """
+        # Edition gate
+        try:
+            from ..server.edition import get as _ed_get
+            if not _ed_get("auto_tune_enabled", False):
+                return []
+        except ImportError:
+            pass
+
         if not self._data.get("metaevolve", {}).get("auto_tune_enabled", True):
             return []
 

@@ -457,7 +457,9 @@ class Learner:
 
             # Gap analysis → auto-create plans
             try:
-                from ..learn.gap_analysis import analyze_knowledge_gaps
+                from ..server.edition import get as _ed_get_gap
+                if _ed_get_gap("gap_analysis_enabled", False):
+                    from ..learn.gap_analysis import analyze_knowledge_gaps
                 _kb_topics = {}
                 try:
                     from ..learn.knowledge import KnowledgeBase
@@ -924,19 +926,21 @@ class Learner:
                         suggest_directions_from_knowledge, self.add_direction,
                     )
 
-                    # Post-validation audit (every 30 min)
+                    # Post-validation audit (every 30 min, Pro feature)
                     try:
-                        _now_pv = time.time()
-                        if not hasattr(self, '_last_post_audit') or _now_pv - self._last_post_audit > 1800:
-                            self._last_post_audit = _now_pv
-                            from ..learn.post_validation import PostValidationEngine
-                            _pve = PostValidationEngine(log_func=self._log)
-                            _preport = _pve.run_audit(max_entries=30, max_issues=10)
-                            if _preport and _preport.total_flagged > 0:
-                                self._log("  🔍 Post-audit: {}".format(_preport.summary))
-                                for _fi in _preport.issues[:3]:
-                                    self._log("    [{}] {}: {} — {}".format(
-                                        _fi.severity, _fi.dimension, _fi.entry_title[:30], _fi.detail[:50]))
+                        from ..server.edition import get as _ed_get_pv
+                        if _ed_get_pv("auto_post_validation", False):
+                            _now_pv = time.time()
+                            if not hasattr(self, '_last_post_audit') or _now_pv - self._last_post_audit > 1800:
+                                self._last_post_audit = _now_pv
+                                from ..learn.post_validation import PostValidationEngine
+                                _pve = PostValidationEngine(log_func=self._log)
+                                _preport = _pve.run_audit(max_entries=30, max_issues=10)
+                                if _preport and _preport.total_flagged > 0:
+                                    self._log("  🔍 Post-audit: {}".format(_preport.summary))
+                                    for _fi in _preport.issues[:3]:
+                                        self._log("    [{}] {}: {} — {}".format(
+                                            _fi.severity, _fi.dimension, _fi.entry_title[:30], _fi.detail[:50]))
                     except Exception:
                         pass
 
@@ -970,6 +974,15 @@ class Learner:
         if not self._directions:
             self._log("⚠️ No directions, use add_direction() first")
             return
+
+        # Edition gate: community edition does not run auto-learning loop
+        try:
+            from ..server.edition import get as _ed_get
+            if not _ed_get("auto_learn", False):
+                self._log("  ℹ️ Community edition: auto-learning disabled (start Pro for 7×24 loop)")
+                return
+        except ImportError:
+            pass
 
         self._running = True
         self._thread = threading.Thread(target=self._main_loop_safe, daemon=True, name="learner-main")
