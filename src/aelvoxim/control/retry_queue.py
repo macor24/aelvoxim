@@ -92,11 +92,11 @@ class RetryQueue:
             for i in entry.issues
         )
         return (
-            "你之前写了一段话，但存在以下问题：\n"
+            "You previously wrote the following text, but there are issues:\n"
             f"{issues_text}\n\n"
-            "请仅修正以下文本，保持上下文的连贯性：\n"
+            "Please fix ONLY the text below while keeping the context coherent:\n"
             f"{entry.chunk}\n\n"
-            "修正版本："
+            "Corrected version:"
         )
 
     def build_supplement(self) -> str:
@@ -110,11 +110,11 @@ class RetryQueue:
                 t = issue.get("type", "")
                 d = issue.get("detail", "")
                 if t == "clarity":
-                    parts.append(f"* 表达已优化：{d}")
+                    parts.append(f"* Improved expression: {d}")
                 elif t == "unverified_fact":
-                    parts.append(f"* 数据说明：{d}")
+                    parts.append(f"* Data clarification: {d}")
                 elif t == "drift":
-                    parts.append(f"* 补充说明：{d}")
+                    parts.append(f"* Additional context: {d}")
         return "\n".join(parts) if parts else ""
 
     def has_unresolved(self) -> bool:

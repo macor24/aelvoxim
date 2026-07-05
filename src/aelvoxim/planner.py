@@ -189,7 +189,7 @@ class Plan:
 class LongTermPlanner:
     """Manages multiple plans and derives next actions.
 
-    Serves as the "长期规划引擎" from AEL.txt.
+    Referenced as the "long-term planning engine" from AEL.txt.
     Called by Scheduler every 5 minutes.
     """
 

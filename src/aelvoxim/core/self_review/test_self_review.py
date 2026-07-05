@@ -1,4 +1,4 @@
-﻿import sys
+import sys
 sys.path.insert(0, r"C:\Aelvoxim\src\metacore\core")
 
 from self_review_system import SelfReviewSystem
@@ -14,14 +14,14 @@ system = SelfReviewSystem(memory_interface=MockMemory())
 
 result = system.review_conversation(
     conversation_id="test_001",
-    user_question="什么是自我评估系统？",
-    assistant_responses=["自我评估系统是一种用于衡量AI回答质量的机制。"],
-    user_feedback="不错"
+    user_question="What is a self-assessment system?",
+    assistant_responses=["A self-assessment system evaluates AI response quality."],
+    user_feedback="good"
 )
 
-print("SelfReviewSystem 初始化成功")
+print("SelfReviewSystem initialized successfully")
 print("Review Result:")
-print(f"  总体评分: {result['overall_score']}")
-print(f"  各维度评分: {result['scores']}")
-print(f"  薄弱环节: {result['weaknesses']}")
-print(f"  改进计划: {result['improvement_plan']}")
+print(f"  Overall score: {result['overall_score']}")
+print(f"  Dimension scores: {result['scores']}")
+print(f"  Weaknesses: {result['weaknesses']}")
+print(f"  Improvement plan: {result['improvement_plan']}")
