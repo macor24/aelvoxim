@@ -28,7 +28,21 @@ src/aelvoxim_orchestrator/scheduler.py
 *.log
 *.log.*
 *.pid
+secrets.json
+*.pem
+
+# Large / binary files (not source)
+*.psd
+*.zip
+*.mp4
+*.avi
+*.mov
+*.tar.gz
+models/
 
 # Data dirs (runtime state, not source)
 .metacore/
 .aelvoxim/
+
+# Internal planning docs (not for public)
+docs/plans/
