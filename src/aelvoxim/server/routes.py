@@ -88,6 +88,11 @@ async def _verify_key(authorization: str = Header(None)) -> dict:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(401, detail="missing or invalid Authorization header")
     api_key = authorization[7:]
+    # Rate limit by API key suffix (last 8 chars)
+    from .ratelimit import api_limiter
+    allowed, retry_after = api_limiter.check(api_key[-8:])
+    if not allowed:
+        raise HTTPException(429, detail=f"Rate limit exceeded. Retry after {retry_after}s")
     user = find_user(api_key)
     if not user:
         raise HTTPException(401, detail="unknown API key")

@@ -74,8 +74,13 @@ _SAFETY_RESPONSE = "I'm sorry, but I cannot assist with that request."
 @router.post("/auth/login")
 async def login(body: dict):
     """Login with email + password. Returns api_key for subsequent API calls."""
-    from .auth import find_by_email, verify_password
     email = body.get("email", "").strip().lower()
+    # Rate limit by email (5 attempts per minute)
+    from .ratelimit import login_limiter
+    allowed, retry_after = login_limiter.check(email)
+    if not allowed:
+        raise HTTPException(429, detail=f"Too many login attempts. Retry after {retry_after}s")
+    from .auth import find_by_email, verify_password
     password = body.get("password", "")
     if not email or not password:
         raise HTTPException(400, detail="email and password are required")
