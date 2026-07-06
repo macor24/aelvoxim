@@ -95,6 +95,8 @@ async def _verify_key(authorization: str = Header(None)) -> dict:
         raise HTTPException(429, detail=f"Rate limit exceeded. Retry after {retry_after}s")
     user = find_user(api_key)
     if not user:
+        from .audit import log as _audit_log
+        _audit_log("auth.failure", user=api_key[-8:], status="failure", detail={"reason": "unknown api key"})
         raise HTTPException(401, detail="unknown API key")
     ok, reason = check_quota(user)
     if not ok:

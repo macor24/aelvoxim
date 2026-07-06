@@ -86,7 +86,11 @@ async def login(body: dict):
         raise HTTPException(400, detail="email and password are required")
     user = find_by_email(email)
     if not user or not verify_password(password, user.get("password_hash", "")):
+        from .audit import log as _audit_log
+        _audit_log("user.login", user=email, status="failure", detail={"reason": "invalid credentials"})
         raise HTTPException(401, detail="invalid email or password")
+    from .audit import log as _audit_log
+    _audit_log("user.login", user=email, status="success")
     return {"api_key": user.get("api_keys", [None])[0] or "", "plan": user.get("plan", "free"), "email": email}
 
 @router.post("/auth/register")
@@ -112,7 +116,11 @@ async def register(body: dict):
         "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
     if create_user(user):
+        from .audit import log as _audit_log
+        _audit_log("user.register", user=email, status="success")
         return {"api_key": api_key, "plan": plan, "email": email}
+    from .audit import log as _audit_log
+    _audit_log("user.register", user=email, status="failure", detail={"reason": "creation failed"})
     raise HTTPException(500, detail="user creation failed")
 
 @router.post("/auth/send-verification")
