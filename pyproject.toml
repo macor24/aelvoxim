@@ -5,11 +5,11 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "aelvoxim"
 version = "1.0.0"
-description = "轻量级 AI 认知引擎框架 — 给你的 AI 装上记忆体"
+description = "Lightweight AI Cognitive Engine Framework — give your AI a memory"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
-    {name = "gmxchz"},
+    {name = "macor24", email = "macor@gealss.com"},
 ]
 keywords = ["ai", "agent", "cognitive-engine", "memory", "self-learning", "framework"]
 classifiers = [
@@ -31,14 +31,20 @@ dependencies = [
 
 [project.optional-dependencies]
 pg = ["psycopg2-binary>=2.9.0"]
+test = ["pytest>=7.0", "httpx>=0.27"]
+dev = ["aelvoxim[pg,test]", "build>=1.0", "twine>=4.0"]
 full = ["aelvoxim[pg]"]
 
 [project.urls]
-Homepage = "https://github.com/gmxchz/aelvoxim"
-Repository = "https://github.com/gmxchz/aelvoxim"
+Homepage = "https://github.com/macor24/aelvoxim"
+Repository = "https://github.com/macor24/aelvoxim"
+Documentation = "https://github.com/macor24/aelvoxim/tree/master/docs"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+aelvoxim = ["**/*.html"]
 
 [project.scripts]
 aelvoxim = "aelvoxim.__main__:main"
