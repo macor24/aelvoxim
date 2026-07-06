@@ -78,12 +78,22 @@ def create_app() -> FastAPI:
         except Exception:
             import logging
             logging.getLogger("aelvoxim.server").exception("startup: pyc cleanup failed")
-        # Inject edition into modules that need it
+        # License verification + edition injection
         try:
+            from aelvoxim.server.edition import current as _ed_current
             from aelvoxim.server.license import current_edition
+            # Priority: 1) env var AELVOXIM_EDITION  2) AELVOXIM_LICENSE_KEY  3) community
+            _lic_key = os.environ.get("AELVOXIM_LICENSE_KEY", "")
+            if _lic_key:
+                from aelvoxim.server.license import apply_license
+                apply_license(_lic_key)
             _ed = current_edition()
             from aelvoxim.learn.knowledge import KnowledgeBase
             KnowledgeBase._current_plan = _ed
+            import logging
+            logging.getLogger("aelvoxim.server").info(
+                "Edition: %s (license: %s)", _ed, "set" if _lic_key else "none"
+            )
         except Exception:
             import logging
             logging.getLogger("aelvoxim.server").exception("startup: edition injection failed")

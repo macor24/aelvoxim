@@ -20,7 +20,7 @@ from typing import Any, Dict, Optional
 
 log = logging.getLogger("aelvoxim.cortex.scheduler")
 
-_TICK_INTERVAL = 300  # 5 minutes
+_TICK_INTERVAL = 900  # 15 minutes
 
 
 def _submit_task(goal: str, task_type: str = "learn", plan_id: str = "", milestone_id: str = "") -> bool:

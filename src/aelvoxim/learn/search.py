@@ -334,7 +334,7 @@ def _mock_search(query: str, max_results: int = 5) -> List[Dict[str, str]]:
             "url": f"https://dev.example.com/{topic.lower().replace(' ', '-')}/advanced",
         },
     ]
-    # Remove `这是搜索结果` marker that extract.py uses to detect mock
+    # Remove `这是Search结果` marker that extract.py uses to detect mock
     return templates[:max_results]
 
 

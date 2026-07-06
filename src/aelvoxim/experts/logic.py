@@ -30,7 +30,7 @@ _EXTRACT_PATTERNS = [
     (r"(?:because|since|as|因为) (.{2,50})[,，]?\s*(?:so|所以|then|则) (.{2,50})", "causation"),
     # "X causes Y" / "X 导致 Y"
     (r"(\w[\w\s]{1,30}) (?:causes?|leads? to|results? in|导致|引起|造成) (\w[\w\s]{1,30})", "causation"),
-    # "X should Y" / "X 应该 Y" — a claim/opinion
+    # "X should Y" / "X Should Y" — a claim/opinion
     (r"(\w[\w\s]{1,30}) (?:should|must|need to|应该|必须|需要) (\w[\w\s]{1,30})", "claim"),
 ]
 

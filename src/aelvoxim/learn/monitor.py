@@ -231,7 +231,7 @@ class HealthMonitor:
     - Each step has independent try/except, single crash won't affect the whole
     """
 
-    TICK_INTERVAL = 300       # Collect every 5 minutes
+    TICK_INTERVAL = 900       # Collect every 15 minutes
     METRICS_HISTORY_LIMIT = 100
     FIX_COOLDOWN = 1800       # At least 30 minutes between fixes
 

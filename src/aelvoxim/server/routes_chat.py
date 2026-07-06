@@ -295,7 +295,13 @@ async def llm_chat_stream(
                                  first_msg=next((m["content"] for m in messages if m.get("role") == "user"), ""),
                                  latest_reply=next((m["content"] for m in reversed(messages) if m.get("role") == "assistant"), ""))
         if decision["blocked"]:
-            raise HTTPException(403, detail=str(decision.get("opinion", "Blocked by expert system")))
+            # Return block reason as SSE message instead of HTTP error
+            # — HTTP 403 causes frontend to show "API Key invalid" which is misleading
+            _block_msg = str(decision.get("opinion", "I'm not able to answer that."))
+            async def _blocked_stream():
+                yield f"data: {json.dumps({'token': _block_msg})}\n\n"
+                yield "data: [DONE]\n\n"
+            return StreamingResponse(_blocked_stream(), media_type="text/event-stream")
         _cortex_tone = decision["adjustments"]["tone"]
         _cortex_clarify = decision["adjustments"]["clarify"]
         _cortex_recap = decision["adjustments"]["recap"]
@@ -405,6 +411,21 @@ async def llm_chat_stream(
     _pg_uid = str(user.get("id") or user.get("user_id", "")) if user else ""
     _pg_msg = user_msg or ""
 
+    # Generate a session ID upfront so user message is saved immediately
+    # — this prevents data loss when user switches sessions mid-stream
+    import time as _tmod
+    _pg_sid = _pg_email.replace("@", "_at_") + ":" + str(int(_tmod.time()))
+
+    # Save user message immediately (not waiting for stream to finish)
+    if _pg_email and _pg_msg:
+        try:
+            from ..storage.db import save_session_to_pg, save_message_to_pg
+            save_session_to_pg({"id": _pg_sid, "user_id": _pg_uid,
+                                "title": _pg_msg[:100] or "新对话", "messages": []})
+            save_message_to_pg(_pg_sid, "user", _pg_msg or "")
+        except Exception:
+            pass
+
     def _generate():
         try:
             for chunk in stream:
@@ -414,17 +435,12 @@ async def llm_chat_stream(
             yield "data: [DONE]\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
-        # Save to PG after stream finishes
+        # Save assistant response after stream finishes (best-effort)
         if _pg_collected and _pg_email:
             _text = "".join(_pg_collected)
             try:
-                from ..storage.db import save_session_to_pg, save_message_to_pg
-                import time as _tmod
-                _sid = _pg_email.replace("@", "_at_") + ":" + str(int(_tmod.time()))
-                save_session_to_pg({"id": _sid, "user_id": _pg_uid,
-                                    "title": _pg_msg[:100] or "新对话", "messages": []})
-                save_message_to_pg(_sid, "user", _pg_msg or "")
-                save_message_to_pg(_sid, "assistant", _text)
+                from ..storage.db import save_message_to_pg
+                save_message_to_pg(_pg_sid, "assistant", _text)
             except Exception:
                 pass
     return StreamingResponse(
