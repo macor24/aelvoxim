@@ -30,7 +30,8 @@ jobs:
 
       - name: Run tests
         run: |
-          python -m pytest tests/ -v --timeout=60 2>&1 || true
+          pip install pytest
+          python -m pytest tests/ -v 2>&1
         env:
           AELVOXIM_EDITION: community
           PYTHONPATH: src
