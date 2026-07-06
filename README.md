@@ -1,5 +1,9 @@
 # Aelvoxim
 
+<p align="center">
+  <img src="docs/Aelvoxim2.jpg" alt="Aelvoxim" width="600">
+</p>
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![PyPI](https://img.shields.io/pypi/v/aelvoxim)](https://pypi.org/project/aelvoxim/)
