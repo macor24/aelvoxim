@@ -64,12 +64,22 @@ def _mask_api_key(text: str) -> str:
 def run_safety_check(user_msg: str, user: dict) -> Optional[dict]:
     """Local safety check — block common dangerous patterns.
     Falls back silently when SentriKit is unavailable.
+    Also checks prompt injection via content_filter (env-toggle: METACORE_CONTENT_FILTER).
     """
     try:
         from ..client.sentrikit import check_user_input as _sk_check
         _sk_result = _sk_check(user_msg)
         if not _sk_result.get("allowed", True):
             return _sk_result
+    except Exception:
+        pass
+    # Content filter prompt injection check
+    try:
+        if os.environ.get("METACORE_CONTENT_FILTER", "").lower() in ("true", "1", "yes"):
+            from ..core.content_filter import filter_input
+            verdict = filter_input(user_msg)
+            if not verdict.passed:
+                return {"allowed": False, "reason": f"Content filter blocked: {verdict.reason}"}
     except Exception:
         pass
     # Local keyword-based safety check (SentriKit unavailable fallback)
