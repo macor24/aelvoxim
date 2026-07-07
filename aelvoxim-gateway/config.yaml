@@ -1,0 +1,13 @@
+# Aelvoxim Desktop Gateway — Configuration
+gateway:
+  port: 9705
+  host: "127.0.0.1"
+  aelvoxim_host: "ws://127.0.0.1:9701/ws/gateway"
+  temp_dir: "/tmp/aelvoxim_gateway"
+  refresh_interval_sec: 3
+
+apps:
+  - name: "photoshop"
+    read_script: "photoshop.jsx"
+    exec_mode: "uia"
+    window_title: "Photoshop"

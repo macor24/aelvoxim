@@ -1,0 +1,13 @@
+{
+  "learner.initialized": "Learner initialized",
+  "learner.add_direction": "Added learning direction: {topic}",
+  "learner.loop_started": "Learning loop started",
+  "learner.loop_stopped": "Learning loop stopped",
+  "learner.idle": "No active directions, waiting...",
+  "learner.all_completed": "All directions completed",
+  "learner.auto_discover": "Auto-discovered: {topic}",
+  "selfmodel.snapshot": "SelfModel snapshot taken",
+  "monitor.fix": "Self-heal: {action}",
+  "monitor.search_fixed": "Search engine fixed: mock → {engine}",
+  "monitor.directions_added": "Added {n} new directions from knowledge base"
+}

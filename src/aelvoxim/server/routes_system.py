@@ -80,7 +80,7 @@ async def login(body: dict):
     allowed, retry_after = login_limiter.check(email)
     if not allowed:
         raise HTTPException(429, detail=f"Too many login attempts. Retry after {retry_after}s")
-    from .auth import find_by_email, verify_password
+    from .auth import find_by_email, verify_password, _save_user
     password = body.get("password", "")
     if not email or not password:
         raise HTTPException(400, detail="email and password are required")
@@ -89,14 +89,23 @@ async def login(body: dict):
         from .audit import log as _audit_log
         _audit_log("user.login", user=email, status="failure", detail={"reason": "invalid credentials"})
         raise HTTPException(401, detail="invalid email or password")
+    # Check trial expiry on every login — downgrade to community if expired
+    from .license import check_trial_expiry
+    before = user.get("plan")
+    user = check_trial_expiry(user)
+    if user.get("plan") != before:
+        _save_user(user)
     from .audit import log as _audit_log
     _audit_log("user.login", user=email, status="success")
     return {"api_key": user.get("api_keys", [None])[0] or "", "plan": user.get("plan", "free"), "email": email}
 
 @router.post("/auth/register")
 async def register(body: dict):
-    """Register a new user with email + password + username."""
-    from .auth import create_user, hash_password, find_by_email, generate_api_key
+    """Register a new user with email + password + username.
+    New users automatically get a 30-day full-feature trial.
+    """
+    from .auth import create_user, hash_password, find_by_email, generate_api_key, TRIAL_DAYS
+    from .license import create_trial_license, check_trial_expiry
     email = body.get("email", "").strip().lower()
     password = body.get("password", "")
     username = body.get("username", "")
@@ -105,12 +114,15 @@ async def register(body: dict):
         raise HTTPException(400, detail="email and password are required")
     if find_by_email(email):
         raise HTTPException(409, detail="email already registered")
+    # New users get a trial; override plan to "trial"
+    trial_expires = create_trial_license(email)
     api_key = generate_api_key()
     user = {
         "email": email,
         "password_hash": hash_password(password),
         "username": username or email.split("@")[0],
-        "plan": plan,
+        "plan": "trial",
+        "trial_expires_at": trial_expires,
         "role": "user",
         "api_keys": [api_key],
         "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -118,7 +130,13 @@ async def register(body: dict):
     if create_user(user):
         from .audit import log as _audit_log
         _audit_log("user.register", user=email, status="success")
-        return {"api_key": api_key, "plan": plan, "email": email}
+        return {
+            "api_key": api_key,
+            "plan": "trial",
+            "email": email,
+            "trial_expires_at": trial_expires,
+            "trial_days": TRIAL_DAYS,
+        }
     from .audit import log as _audit_log
     _audit_log("user.register", user=email, status="failure", detail={"reason": "creation failed"})
     raise HTTPException(500, detail="user creation failed")

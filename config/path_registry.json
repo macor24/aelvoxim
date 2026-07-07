@@ -1,0 +1,32 @@
+{
+  "root": "",
+  "modules": {
+    "chat_pipeline": "src/aelvoxim/server/service_chat.py",
+    "metacore": "src/aelvoxim/",
+    "knowledge_base": "src/aelvoxim/learn/knowledge.py",
+    "learner": "src/aelvoxim/learn/",
+    "auth": "src/aelvoxim/server/auth.py",
+    "self_review": "src/aelvoxim/core/self_review/",
+    "dashboard": "src/aelvoxim/ui/",
+    "gateway": "src/aelvoxim-gateway/"
+  },
+  "tools": {
+    "read_file": "src/aelvoxim/server/tool_use.py",
+    "execute": "src/aelvoxim/learn/execute.py",
+    "gateway_executor": "src/aelvoxim-gateway/gateway/executor/"
+  },
+  "data": {
+    "user_data": "~/.aelvoxim/",
+    "learner_config": "~/.aelvoxim/learner/",
+    "knowledge": "~/.aelvoxim/knowledge/",
+    "memory": "~/.aelvoxim/memory/",
+    "llm_config": "~/.aelvoxim/llm-config.json",
+    "sentrikit_config": "~/.aelvoxim/sentrikit_config.json",
+    "session_store": "frontend/chatael-v2/data/sessions/",
+    "message_store": "frontend/chatael-v2/data/messages/"
+  },
+  "configs": {
+    "admin_panel": "src/metacore/server/admin_panel.html",
+    "gateway_config": "aelvoxim-gateway/config.yaml"
+  }
+}

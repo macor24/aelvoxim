@@ -1,0 +1,52 @@
+{
+  "app": {},
+  "sidebar": {
+    "newChat": "New Chat",
+    "search": "Search sessions...",
+    "noSessions": "No sessions"
+  },
+  "session": {
+    "rename": "Rename",
+    "delete": "Delete",
+    "confirmDelete": "Are you sure you want to delete this session?"
+  },
+  "chat": {
+    "placeholder": "Type a message...",
+    "noMessages": "Start a new conversation"
+  },
+  "message": {
+    "copy": "Copy",
+    "delete": "Delete",
+    "confirmDelete": "Delete this message?",
+    "error": "Send failed"
+  },
+  "common": {
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "login": "Login",
+    "register": "Register",
+    "email": "Email",
+    "password": "Password",
+    "confirmPassword": "Confirm Password",
+    "serverUrl": "Server URL",
+    "apiKey": "API Key",
+    "account": "Account",
+    "logout": "Logout",
+    "switchAccount": "Switch Account",
+    "name": "Name",
+    "delete": "Delete"
+  },
+  "auth": {
+    "fillRequired": "Please fill in email and password",
+    "loginFailed": "Login failed",
+    "noKey": "No API Key returned",
+    "loginSuccess": "Login successful",
+    "passwordMismatch": "Passwords do not match",
+    "passwordTooShort": "Password must be at least 6 characters",
+    "registerFailed": "Registration failed",
+    "registerSuccess": "Registration successful, please login",
+    "enterKey": "Please enter an API Key",
+    "keySet": "API Key set successfully"
+  },
+  "settings": {}
+}

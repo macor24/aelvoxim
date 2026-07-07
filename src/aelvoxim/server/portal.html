@@ -1,99 +1,251 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Aelvoxim</title>
+<title>Aelvoxim — Cognitive Self-Learning AI Brain</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
-  *{margin:0;padding:0;box-sizing:border-box}
-  body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:linear-gradient(135deg,#0f0c29,#302b63,#24243e);color:#e2e8f0;min-height:100vh;display:flex;flex-direction:column}
-  .header{padding:32px 24px 16px;text-align:center}
-  .header h1{font-size:36px;font-weight:700;background:linear-gradient(90deg,#6366f1,#a855f7,#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-  .header .sub{font-size:13px;color:#64748b;margin-top:4px}
-  .container{flex:1;max-width:800px;margin:0 auto;padding:24px;width:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;align-content:center}
-  .card{background:rgba(255,255,255,0.06);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:28px 20px;text-align:center;cursor:pointer;transition:all 0.2s;text-decoration:none;color:#e2e8f0}
-  .card:hover{background:rgba(255,255,255,0.12);border-color:rgba(255,255,255,0.18);transform:translateY(-2px)}
-  .card .icon{font-size:36px;margin-bottom:10px}
-  .card .name{font-size:16px;font-weight:600;margin-bottom:4px}
-  .card .desc{font-size:12px;color:#94a3b8;line-height:1.4}
-  .footer{padding:20px 24px;text-align:center;font-size:11px;color:#475569}
-  .login-bar{position:fixed;top:16px;right:24px;display:flex;gap:8px;align-items:center;z-index:100}
-  .login-bar .btn{padding:6px 16px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);color:#e2e8f0;font-size:12px;cursor:pointer;transition:all 0.15s}
-  .login-bar .btn:hover{background:rgba(255,255,255,0.15)}
-  .login-bar .primary{background:#6366f1;border-color:#6366f1}
-  .login-bar .primary:hover{background:#4f46e5}
-  .login-bar .user{font-size:12px;color:#94a3b8}
-  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:1000;align-items:center;justify-content:center}
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+    font-feature-settings:'cv01','ss03';
+    background:#08090a;
+    color:#f7f8f8;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+  }
+  .header{
+    padding:40px 32px 0;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    max-width:640px;
+    margin:0 auto;
+    width:100%;
+  }
+  .logo{font-size:20px;font-weight:590;letter-spacing:-0.24px;color:#f7f8f8}
+  .logo span{color:#5e6ad2}
+  .header-actions{display:flex;gap:8px;align-items:center}
+  .header-actions .user{font-size:13px;color:#62666d}
+  .btn-ghost{
+    font-family:'Inter',system-ui,sans-serif;
+    font-feature-settings:'cv01','ss03';
+    font-size:13px;font-weight:510;
+    padding:6px 14px;border-radius:6px;
+    border:1px solid rgba(255,255,255,0.08);
+    background:rgba(255,255,255,0.02);
+    color:#d0d6e0;
+    cursor:pointer;
+    transition:all 0.15s;
+  }
+  .btn-ghost:hover{background:rgba(255,255,255,0.05);color:#f7f8f8}
+  .btn-primary{
+    font-family:'Inter',system-ui,sans-serif;
+    font-feature-settings:'cv01','ss03';
+    font-size:13px;font-weight:510;
+    padding:6px 14px;border-radius:6px;
+    border:none;
+    background:#5e6ad2;
+    color:#fff;
+    cursor:pointer;
+    transition:background 0.15s;
+  }
+  .btn-primary:hover{background:#7170ff}
+  .hero{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    padding:80px 32px 60px;
+    max-width:640px;
+    margin:0 auto;
+    width:100%;
+  }
+  .hero-label{
+    font-size:12px;font-weight:510;letter-spacing:0.3px;text-transform:uppercase;
+    color:#62666d;margin-bottom:16px;
+  }
+  .hero h1{
+    font-size:36px;font-weight:510;line-height:1.13;letter-spacing:-0.7px;
+    color:#f7f8f8;text-align:center;margin-bottom:12px;
+  }
+  .hero h1 span{color:#7170ff}
+  .hero p{
+    font-size:15px;font-weight:400;line-height:1.6;letter-spacing:-0.165px;
+    color:#8a8f98;text-align:center;max-width:440px;margin-bottom:48px;
+  }
+  .card-grid{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:12px;
+    width:100%;
+    max-width:640px;
+  }
+  .card{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    text-align:center;
+    padding:32px 20px 28px;
+    border-radius:12px;
+    background:rgba(255,255,255,0.02);
+    border:1px solid rgba(255,255,255,0.08);
+    text-decoration:none;
+    color:#f7f8f8;
+    transition:all 0.2s;
+    cursor:pointer;
+    position:relative;
+    overflow:hidden;
+  }
+  .card::before{
+    content:'';
+    position:absolute;inset:0;
+    background:radial-gradient(600px circle at var(--mx,50%) var(--my,50%),rgba(94,106,210,0.06),transparent 60%);
+    opacity:0;
+    transition:opacity 0.3s;
+    pointer-events:none;
+  }
+  .card:hover::before{opacity:1}
+  .card:hover{
+    background:rgba(255,255,255,0.04);
+    border-color:rgba(255,255,255,0.12);
+    transform:translateY(-1px);
+  }
+  .card .icon{
+    font-size:28px;margin-bottom:12px;
+    width:48px;height:48px;
+    display:flex;align-items:center;justify-content:center;
+    border-radius:10px;
+    background:rgba(255,255,255,0.04);
+    border:1px solid rgba(255,255,255,0.06);
+  }
+  .card .name{font-size:16px;font-weight:590;letter-spacing:-0.18px;color:#f7f8f8;margin-bottom:4px}
+  .card .desc{font-size:12px;font-weight:400;line-height:1.5;color:#62666d}
+  .footer{
+    padding:24px 32px 32px;
+    text-align:center;
+    font-size:12px;font-weight:400;
+    color:#3e3e44;
+  }
+  .modal-overlay{
+    display:none;position:fixed;inset:0;
+    background:rgba(0,0,0,0.6);
+    backdrop-filter:blur(6px);
+    -webkit-backdrop-filter:blur(6px);
+    z-index:1000;
+    align-items:center;justify-content:center;
+  }
   .modal-overlay.active{display:flex}
-  .modal{background:#1e1b4b;border-radius:16px;padding:28px;width:360px;max-width:90vw;border:1px solid rgba(255,255,255,0.08)}
-  .modal h2{font-size:16px;margin-bottom:4px}
-  .modal .hint{font-size:12px;color:#64748b;margin-bottom:16px}
-  .modal .fg{margin-bottom:12px}
-  .modal .fg label{display:block;font-size:11px;color:#94a3b8;margin-bottom:3px}
-  .modal .fg input{width:100%;padding:8px 12px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:rgba(255,255,255,0.04);color:#e2e8f0;font-size:13px;outline:none;box-sizing:border-box}
-  .modal .fg input:focus{border-color:#6366f1}
-  .modal .fg input::placeholder{color:#475569}
+  .modal{
+    background:#0f1011;
+    border:1px solid rgba(255,255,255,0.08);
+    border-radius:12px;
+    padding:28px;
+    width:360px;
+    max-width:90vw;
+  }
+  .modal h2{font-size:18px;font-weight:510;letter-spacing:-0.2px;color:#f7f8f8;margin-bottom:4px}
+  .modal .hint{font-size:13px;color:#62666d;margin-bottom:20px}
+  .modal .fg{margin-bottom:14px}
+  .modal .fg label{display:block;font-size:12px;font-weight:510;color:#8a8f98;margin-bottom:4px}
+  .modal .fg input{
+    width:100%;padding:10px 12px;
+    border:1px solid rgba(255,255,255,0.08);border-radius:6px;
+    background:rgba(255,255,255,0.02);
+    color:#f7f8f8;font-size:14px;font-family:'Inter',sans-serif;
+    outline:none;box-sizing:border-box;
+    transition:border-color 0.15s;
+  }
+  .modal .fg input:focus{border-color:#5e6ad2}
+  .modal .fg input::placeholder{color:#3e3e44}
+  .modal .err{font-size:12px;color:#f87171;min-height:18px;text-align:center;margin-top:8px}
   .modal .btn-row{display:flex;gap:8px;margin-top:16px}
-  .modal .btn-row button{flex:1;padding:8px;border-radius:8px;border:none;cursor:pointer;font-size:13px}
-  .modal .btn-row .primary{background:#6366f1;color:#fff}
-  .modal .btn-row .primary:hover{background:#4f46e5}
-  .modal .btn-row .ghost{background:transparent;border:1px solid rgba(255,255,255,0.12);color:#94a3b8}
-  .modal .btn-row .ghost:hover{color:#e2e8f0;border-color:rgba(255,255,255,0.2)}
-  .modal .err{font-size:11px;color:#f87171;min-height:18px;text-align:center;margin-top:8px}
-  .modal .switch{font-size:11px;color:#6366f1;text-align:center;margin-top:8px;cursor:pointer}
-  .modal .switch:hover{text-decoration:underline}
+  .modal .btn-row button{
+    flex:1;padding:9px;border-radius:6px;
+    border:none;cursor:pointer;
+    font-size:13px;font-weight:510;font-family:'Inter',sans-serif;
+    font-feature-settings:'cv01','ss03';
+  }
+  .modal .btn-row .primary{background:#5e6ad2;color:#fff}
+  .modal .btn-row .primary:hover{background:#7170ff}
+  .modal .btn-row .ghost{
+    background:transparent;
+    border:1px solid rgba(255,255,255,0.08);
+    color:#8a8f98;
+  }
+  .modal .btn-row .ghost:hover{color:#f7f8f8;border-color:rgba(255,255,255,0.12)}
+  .modal .switch{font-size:12px;color:#5e6ad2;text-align:center;margin-top:12px;cursor:pointer}
+  .modal .switch:hover{color:#7170ff}
+  @media(max-width:640px){
+    .header{padding:24px 16px 0}
+    .hero{padding:48px 16px 40px}
+    .hero h1{font-size:28px;letter-spacing:-0.5px}
+    .card-grid{grid-template-columns:1fr;gap:10px}
+    .card{padding:24px 16px 20px;flex-direction:row;text-align:left;gap:14px}
+    .card .icon{margin-bottom:0;flex-shrink:0}
+  }
 </style>
 </head>
 <body>
 
-<div class="login-bar" id="loginBar">
-  <span class="user" id="headerUser"></span>
-  <button class="btn primary" id="loginBtn" onclick="showAuth()">登录</button>
-  <button class="btn" id="logoutBtn" onclick="doLogout()" style="display:none">退出</button>
-</div>
-
 <div class="header">
-  <h1>Aelvoxim</h1>
-  <div class="sub">AI Agent 核心引擎</div>
+  <div class="logo">aelvoxim<span>.</span></div>
+  <div class="header-actions">
+    <span class="user" id="headerUser"></span>
+    <button class="btn-ghost" id="logoutBtn" onclick="doLogout()" style="display:none">Logout</button>
+    <button class="btn-primary" id="loginBtn" onclick="showAuth()">Login</button>
+  </div>
 </div>
 
-<div class="container">
-  <a class="card" href="http://127.0.0.1:9702/" target="_blank" id="card-chat">
-    <div class="icon">💬</div>
-    <div class="name">对话</div>
-    <div class="desc">与 AI Agent 对话<br>知识库 + 记忆 + 专家分析</div>
-  </a>
-  <a class="card" href="/docs" target="_blank" id="card-api">
-    <div class="icon">🔌</div>
-    <div class="name">API 文档</div>
-    <div class="desc">开发者门户<br>API Key / 用量 / 文档</div>
-  </a>
-  <a class="card" href="/v1/admin/panel" id="card-admin">
-    <div class="icon">⚙️</div>
-    <div class="name">管理后台</div>
-    <div class="desc">用户 / 日志 / LLM / SentriKit<br>配置与监控</div>
-  </a>
-  <a class="card" href="/v1/admin/panel" id="card-dash">
-    <div class="icon">📊</div>
-    <div class="name">仪表盘</div>
-    <div class="desc">系统运行状态<br>Learner / 性能指标</div>
-  </a>
+<div class="hero">
+  <div class="hero-label">Cognitive Self-Learning AI Brain</div>
+  <h1>Not a chatbot. <span>A brain that learns.</span></h1>
+  <p>Self-hosted AI decision layer with memory, reasoning, tool calling, and autonomous learning.</p>
+
+  <div class="card-grid">
+    <a class="card" href="http://127.0.0.1:9702/" target="_blank" id="card-chat">
+      <div class="icon">🧠</div>
+      <div class="card-body">
+        <div class="name">AI Brain</div>
+        <div class="desc">Decision / Tool Calling<br>Memory / Learning / Experts</div>
+      </div>
+    </a>
+    <a class="card" href="/docs" target="_blank" id="card-api">
+      <div class="icon">🔌</div>
+      <div class="card-body">
+        <div class="name">API Docs</div>
+        <div class="desc">Developer portal<br>API Key / Usage / Reference</div>
+      </div>
+    </a>
+    <a class="card" href="/v1/admin/panel" id="card-admin">
+      <div class="icon">⚙️</div>
+      <div class="card-body">
+        <div class="name">Admin Panel</div>
+        <div class="desc">Configuration / Monitoring<br>Pricing &amp; System Management</div>
+      </div>
+    </a>
+  </div>
 </div>
 
 <div class="footer">Aelvoxim · v1.0</div>
 
-<!-- 登录弹窗 -->
+<!-- Auth Modal -->
 <div class="modal-overlay" id="authModal" onclick="if(event.target===this)closeAuth()">
   <div class="modal">
-    <h2 id="authTitle">登录</h2>
-    <div class="hint" id="authHint">登录后即可使用全部功能</div>
-    <div class="fg"><label>邮箱</label><input type="email" id="authEmail" placeholder="your@email.com"></div>
-    <div class="fg"><label>密码</label><input type="password" id="authPassword" placeholder="密码" onkeydown="if(event.key==='Enter')submitAuth()"></div>
+    <h2 id="authTitle">Login</h2>
+    <div class="hint" id="authHint">Sign in to access all features</div>
+    <div class="fg"><label>Email</label><input type="email" id="authEmail" placeholder="your@email.com"></div>
+    <div class="fg"><label>Password</label><input type="password" id="authPassword" placeholder="Password" onkeydown="if(event.key==='Enter')submitAuth()"></div>
     <div class="err" id="authErr"></div>
     <div class="btn-row">
-      <button class="primary" onclick="submitAuth()" id="authSubmitBtn">登录</button>
+      <button class="primary" onclick="submitAuth()" id="authSubmitBtn">Login</button>
     </div>
-    <div class="switch" id="authSwitch" onclick="toggleAuthMode()">没有账号？注册</div>
+    <div class="switch" id="authSwitch" onclick="toggleAuthMode()">No account? Sign up</div>
   </div>
 </div>
 
@@ -106,18 +258,18 @@ function closeAuth() { document.getElementById('authModal').classList.remove('ac
 
 function toggleAuthMode() {
   _mode = _mode === 'login' ? 'register' : 'login';
-  document.getElementById('authTitle').textContent = _mode === 'login' ? '登录' : '注册';
-  document.getElementById('authHint').textContent = _mode === 'login' ? '登录后即可使用全部功能' : '创建一个新账号';
-  document.getElementById('authSubmitBtn').textContent = _mode === 'login' ? '登录' : '注册';
-  document.getElementById('authSwitch').textContent = _mode === 'login' ? '没有账号？注册' : '已有账号？登录';
+  document.getElementById('authTitle').textContent = _mode === 'login' ? 'Login' : 'Sign Up';
+  document.getElementById('authHint').textContent = _mode === 'login' ? 'Sign in to access all features' : 'Create a new account';
+  document.getElementById('authSubmitBtn').textContent = _mode === 'login' ? 'Login' : 'Sign Up';
+  document.getElementById('authSwitch').textContent = _mode === 'login' ? 'No account? Sign up' : 'Already have an account? Login';
   document.getElementById('authErr').textContent = '';
 }
 
 function submitAuth() {
   var email = document.getElementById('authEmail').value.trim();
   var pw = document.getElementById('authPassword').value;
-  if (!email || !pw) { document.getElementById('authErr').textContent = '请填写邮箱和密码'; return; }
-  document.getElementById('authErr').textContent = '请求中...';
+  if (!email || !pw) { document.getElementById('authErr').textContent = 'Email and password are required'; return; }
+  document.getElementById('authErr').textContent = 'Requesting...';
   var url = _mode === 'login' ? '/v1/auth/login' : '/v1/auth/register';
   var body = JSON.stringify({email:email, password:pw, plan:'community'});
   fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:body})
@@ -131,15 +283,14 @@ function submitAuth() {
         document.getElementById('logoutBtn').style.display = '';
         document.getElementById('headerUser').textContent = email;
         closeAuth();
-        // 更新卡片链接，带上 token
         document.querySelectorAll('.card').forEach(function(c){
           var href = c.getAttribute('href');
           if (href) c.setAttribute('href', href.split('?')[0] + '?token=' + encodeURIComponent(d.api_key));
         });
       } else {
-        document.getElementById('authErr').textContent = d.detail || '操作失败';
+        document.getElementById('authErr').textContent = d.detail || 'Operation failed';
       }
-    }).catch(function(){document.getElementById('authErr').textContent = '网络错误';});
+    }).catch(function(){document.getElementById('authErr').textContent = 'Network error';});
 }
 
 function doLogout() {
@@ -149,14 +300,13 @@ function doLogout() {
   document.getElementById('loginBtn').style.display = '';
   document.getElementById('logoutBtn').style.display = 'none';
   document.getElementById('headerUser').textContent = '';
-  // 清除卡片链接中的 token
   document.querySelectorAll('.card').forEach(function(c){
     var href = c.getAttribute('href');
     if (href) c.setAttribute('href', href.split('?')[0]);
   });
 }
 
-// 自动恢复登录状态
+// Restore login state on page load
 (function(){
   var savedKey = localStorage.getItem('ael_token');
   var savedEmail = localStorage.getItem('ael_email');
@@ -164,7 +314,7 @@ function doLogout() {
     _key = savedKey;
     document.getElementById('loginBtn').style.display = 'none';
     document.getElementById('logoutBtn').style.display = '';
-    document.getElementById('headerUser').textContent = savedEmail || '已登录';
+    document.getElementById('headerUser').textContent = savedEmail || 'Logged in';
     document.querySelectorAll('.card').forEach(function(c){
       var href = c.getAttribute('href');
       if (href) c.setAttribute('href', href.split('?')[0] + '?token=' + encodeURIComponent(savedKey));

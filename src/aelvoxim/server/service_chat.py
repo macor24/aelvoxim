@@ -819,6 +819,18 @@ def chat_pipeline(
     text = call_llm(mc, enhanced_system, full_prompt, temperature, _max_tokens_actual)
     _chat_log.info("  LLM call done in %.1fs text_len=%d", _time.time() - _t_before_llm, len(text or ""))
 
+    # Tool execution: scan LLM output for [TOOL:action] markers and execute
+    if text:
+        try:
+            from .tool_use import execute_tool_calls, has_tool_calls, available_tools
+            if has_tool_calls(text):
+                _tool_t0 = _time.time()
+                _chat_log.info("  ⚡ Tool calls detected, executing... tools=%s", available_tools())
+                text = execute_tool_calls(text)
+                _chat_log.info("  ⚡ Tool execution done in %.1fs", _time.time() - _tool_t0)
+        except Exception as _exc:
+            _chat_log.warning("  Tool execution error: %s", _exc)
+
     # Fact check
     if text:
         try:

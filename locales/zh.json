@@ -1,0 +1,13 @@
+{
+  "learner.initialized": "学习引擎已初始化",
+  "learner.add_direction": "添加学习方向: {topic}",
+  "learner.loop_started": "学习循环已启动",
+  "learner.loop_stopped": "学习循环已停止",
+  "learner.idle": "无活跃学习方向，等待中...",
+  "learner.all_completed": "所有学习方向已完成",
+  "learner.auto_discover": "自动发现: {topic}",
+  "selfmodel.snapshot": "SelfModel 快照已生成",
+  "monitor.fix": "自修复: {action}",
+  "monitor.search_fixed": "搜索引擎已修复: mock → {engine}",
+  "monitor.directions_added": "从知识库添加了 {n} 个新方向"
+}

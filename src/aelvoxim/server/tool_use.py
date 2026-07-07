@@ -221,6 +221,105 @@ def gateway_operation(
         return {"success": False, "error": f"Gateway unavailable: {e}"}
 
 
+@register("http_request")
+def http_request(
+    url: str,
+    method: str = "GET",
+    headers: Optional[Dict[str, str]] = None,
+    body: Optional[str] = None,
+    timeout: int = 30,
+) -> Dict[str, Any]:
+    """Make an HTTP request to an external API or service.
+
+    Args:
+        url: Full URL to call.
+        method: HTTP method (GET, POST, PUT, DELETE, PATCH).
+        headers: Optional dict of HTTP headers.
+        body: Request body string (for POST/PUT/PATCH).
+        timeout: Request timeout in seconds (default 30, max 60).
+
+    Returns:
+        Dict with keys: success, status_code, body (str), error (str if failed).
+    """
+    import urllib.request as _ur
+    import urllib.error as _ue
+
+    timeout = min(timeout, 60)
+    data = None
+    if body and method in ("POST", "PUT", "PATCH"):
+        data = body.encode("utf-8")
+
+    req = _ur.Request(url, data=data, method=method)
+    if headers:
+        for k, v in headers.items():
+            req.add_header(k, v)
+
+    try:
+        with _ur.urlopen(req, timeout=timeout) as resp:
+            resp_body = resp.read().decode("utf-8", errors="replace")
+            return {
+                "success": True,
+                "status_code": resp.status,
+                "body": resp_body,
+            }
+    except _ue.HTTPError as e:
+        err_body = e.read().decode("utf-8", errors="replace") if e.fp else ""
+        return {
+            "success": False,
+            "status_code": e.code,
+            "body": err_body,
+            "error": str(e.reason),
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@register("execute_command")
+def execute_command(
+    command: str,
+    args: Optional[List[str]] = None,
+    timeout: int = 30,
+) -> Dict[str, Any]:
+    """Execute a system command or program.
+
+    Args:
+        command: Command or program path to execute.
+        args: Optional list of arguments.
+        timeout: Max execution time in seconds (default 30, max 120).
+
+    Returns:
+        Dict with keys: success, stdout (str), stderr (str), exit_code (int),
+        error (str if failed).
+    """
+    import subprocess as _sp
+    import shlex as _shlex
+
+    timeout = min(timeout, 120)
+    cmd = [command]
+    if args:
+        cmd.extend(args)
+
+    try:
+        result = _sp.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        return {
+            "success": result.returncode == 0,
+            "stdout": result.stdout[-2000:],
+            "stderr": result.stderr[-1000:],
+            "exit_code": result.returncode,
+        }
+    except _sp.TimeoutExpired:
+        return {"success": False, "error": f"Command timed out ({timeout}s)"}
+    except FileNotFoundError:
+        return {"success": False, "error": f"Command not found: {command}"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 # ── Execution ──
 
 

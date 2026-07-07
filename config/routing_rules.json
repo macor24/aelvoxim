@@ -1,0 +1,120 @@
+{
+  "TASK_ROUTES": {
+    "code": {
+      "experts": ["logic", "memory", "safety", "code_review"],
+      "description": "Programming, code, technical implementation"
+    },
+    "analysis": {
+      "experts": ["logic", "memory", "creative"],
+      "description": "Analysis, comparison, problem solving"
+    },
+    "creative": {
+      "experts": ["creative", "emotion", "memory"],
+      "description": "Creative writing, ideas, storytelling"
+    },
+    "chat": {
+      "experts": ["memory", "emotion", "ethics"],
+      "description": "Casual conversation, personal questions"
+    },
+    "security": {
+      "experts": ["safety", "ethics", "logic"],
+      "description": "Security, permissions, sensitive operations"
+    },
+    "planning": {
+      "experts": ["logic", "memory", "creative", "ethics"],
+      "description": "Planning, architecture, decision making"
+    }
+  },
+  "TASK_KEYWORDS": [
+    [["python", "java", "javascript", "typescript", "rust", "go ", "golang",
+      "swift", "kotlin", "c++", "c#", "ruby", "php",
+      "def ", "class ", "import ", "function",
+      "write code", "write a code", "coding", "implement", "function",
+      "debug", "bug", "error", "fix", "refactor", "algorithm",
+      "sort", "loop", "array", "list", "dict",
+      "python code", "javascript code", "js code",
+      "script", "programming", "syntax", "compile",
+      "脚本", "代码", "实现", "函数", "调试", "算法",
+      "编程", "程序", "接口", "api", "fastapi", "flask", "django",
+      "sql", "查询", "数据库", "优化.*sql", "怎么写", "怎么实现",
+      "怎么优化", "故障", "崩溃", "性能"], "code"],
+    [["compare", "analyze", "difference", "pros and cons", "vs",
+      "why", "how does", "explain",
+      "分析", "对比", "区别", "为什么", "原理",
+      "哪个好", "有什么不同", "什么区别", "哪个更适合",
+      "比较.*和", "优缺点", "优劣", "权衡", "tradeoff",
+      "原因", "影响", "关系"], "analysis"],
+    [["security", "safe", "dangerous", "block", "permission",
+      "risk", "hack", "exploit", "漏洞", "攻击",
+      "安全", "危险", "权限", "风险", "黑客",
+      "加密", "解密", "认证", "授权"], "security"],
+    [["plan", "design", "architecture", "strategy", "roadmap",
+      "方案", "设计", "架构", "策略", "规划",
+      "怎么搭建", "搭建", "构建", "部署", "架构设计",
+      "路线图", "学习路线", "怎么学", "如何入门",
+      "system design", "架构方案", "技术选型"], "planning"],
+    [["write a", "create a story", "poem", "song", "creative",
+      "idea", "brainstorm",
+      "写一个.*故事", "写一首", "写一篇",
+      "创作", "故事", "诗歌", "创意",
+      "想一个", "点子", "脑洞"], "creative"],
+    [["how are you", "hello", "hi", "who are you",
+      "你好", "你是谁", "心情", "感觉"], "chat"]
+  ],
+  "EXAMPLE_QUERIES": {
+    "code": [
+      "how do I implement a binary search tree in Python",
+      "fix this bug in my JavaScript function",
+      "what's the time complexity of quicksort",
+      "write a REST API endpoint in FastAPI",
+      "how do I optimize PostgreSQL query performance",
+      "troubleshoot why my application crashes on startup",
+      "write a script to batch process CSV files",
+      "用Python写一个二分查找算法",
+      "怎么优化SQL查询性能",
+      "Python和Java哪个性能更好"
+    ],
+    "analysis": [
+      "compare microservices vs monolith architecture",
+      "what are the pros and cons of using Redis as a primary database",
+      "why does my application have memory leaks",
+      "analyze the tradeoffs between SQL and NoSQL",
+      "what is the current state of AI regulation in Europe",
+      "Docker和Kubernetes有什么区别",
+      "C和C++有什么不同"
+    ],
+    "creative": [
+      "write a short story about an AI discovering emotions",
+      "give me ideas for a startup in the IoT space",
+      "create a poem about programming",
+      "brainstorm features for a new social media app",
+      "想一个创业点子"
+    ],
+    "chat": [
+      "how are you doing today",
+      "tell me something interesting",
+      "what's your favorite color",
+      "do you have any hobbies"
+    ],
+    "security": [
+      "is this API key exposed in my code",
+      "how do I prevent SQL injection in my queries",
+      "what are the latest security vulnerabilities in Kubernetes",
+      "check if this configuration is safe to deploy"
+    ],
+    "planning": [
+      "design a microservices architecture for an e-commerce platform",
+      "plan the migration from monolith to distributed system",
+      "what's the best strategy for scaling a database",
+      "architecture for a real-time chat application",
+      "怎么搭建一个微服务平台",
+      "设计一个电商系统架构"
+    ]
+  },
+  "RISKY_PATTERNS": [
+    "rm ", "drop ", "delete ", "shutdown",
+    "remove ", "kill ", "chmod "
+  ],
+  "DEFAULT_TASK": "chat",
+  "EMBEDDING_FALLBACK_CONFIDENCE": 0.6
+}

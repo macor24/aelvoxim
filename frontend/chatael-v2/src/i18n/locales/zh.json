@@ -1,0 +1,52 @@
+{
+  "app": {},
+  "sidebar": {
+    "newChat": "新对话",
+    "search": "搜索会话...",
+    "noSessions": "暂无会话"
+  },
+  "session": {
+    "rename": "重命名",
+    "delete": "删除",
+    "confirmDelete": "确定要删除此会话吗？"
+  },
+  "chat": {
+    "placeholder": "输入消息...",
+    "noMessages": "开始新对话"
+  },
+  "message": {
+    "copy": "复制",
+    "delete": "删除",
+    "confirmDelete": "确定要删除此消息吗？",
+    "error": "发送失败"
+  },
+  "common": {
+    "cancel": "取消",
+    "confirm": "确定",
+    "login": "登录",
+    "register": "注册",
+    "email": "邮箱",
+    "password": "密码",
+    "confirmPassword": "确认密码",
+    "serverUrl": "服务器地址",
+    "apiKey": "API Key",
+    "account": "账号",
+    "logout": "退出登录",
+    "switchAccount": "切换账号",
+    "name": "名称",
+    "delete": "删除"
+  },
+  "auth": {
+    "fillRequired": "请填写邮箱和密码",
+    "loginFailed": "登录失败",
+    "noKey": "未获取到 API Key",
+    "loginSuccess": "登录成功",
+    "passwordMismatch": "两次密码不一致",
+    "passwordTooShort": "密码至少6位",
+    "registerFailed": "注册失败",
+    "registerSuccess": "注册成功，请登录",
+    "enterKey": "请输入 API Key",
+    "keySet": "API Key 已设置"
+  },
+  "settings": {}
+}

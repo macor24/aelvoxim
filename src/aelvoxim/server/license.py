@@ -160,3 +160,69 @@ def current_edition() -> str:
     if lic.get("is_valid"):
         return lic["plan"]
     return "community"
+
+
+# ── Trial license for self-hosted new users ──
+from .auth import TRIAL_DAYS
+
+TRIAL_DIR = DATA_DIR / "trials"
+
+
+def create_trial_license(email: str) -> int:
+    """Create a 30-day full-feature trial for a new user.
+
+    Args:
+        email: User's email address.
+
+    Returns:
+        expires_at (unix timestamp). Existing trial is not overwritten.
+    """
+    TRIAL_DIR.mkdir(parents=True, exist_ok=True)
+    trial_file = TRIAL_DIR / f"{email.lower().strip()}.json"
+    if trial_file.exists():
+        # Already has a trial — return existing expiry
+        try:
+            data = json.loads(trial_file.read_text())
+            return data.get("expires_at", 0)
+        except Exception:
+            pass
+    expires_at = int(time.time()) + TRIAL_DAYS * 86400
+    record = {
+        "email": email.lower().strip(),
+        "plan": "trial",
+        "created_at": int(time.time()),
+        "expires_at": expires_at,
+    }
+    trial_file.write_text(json.dumps(record, indent=2))
+    from .audit import log as _audit_log
+    _audit_log("user.trial_created", user=email, detail={"days": TRIAL_DAYS, "expires_at": expires_at})
+    return expires_at
+
+
+def check_trial_expiry(user: dict) -> dict:
+    """Check if a user's trial has expired and downgrade if so.
+
+    Args:
+        user: User dict with 'email' and 'plan' keys.
+
+    Returns:
+        Updated user dict (plan may be downgraded to 'community').
+    """
+    if user.get("plan") != "trial":
+        return user
+    email = user.get("email", "").lower().strip()
+    trial_file = TRIAL_DIR / f"{email}.json"
+    if not trial_file.exists():
+        # No trial record — shouldn't happen, but downgrade safely
+        user["plan"] = "community"
+        return user
+    try:
+        data = json.loads(trial_file.read_text())
+        expires_at = data.get("expires_at", 0)
+        if time.time() > expires_at:
+            user["plan"] = "community"
+            from .audit import log as _audit_log
+            _audit_log("user.trial_expired", user=email)
+    except Exception:
+        user["plan"] = "community"
+    return user
