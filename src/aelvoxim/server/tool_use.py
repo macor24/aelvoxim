@@ -12,6 +12,7 @@ Tools available:
   run_code     — Execute Python code (timeout 15s, no network)
   web_search   — Search the web
   gateway      — Execute Desktop Gateway operation
+  ocr_screenshot — Screenshot a window and run OCR, returns text blocks with coordinates
 
 Path authorization: first access to a path auto-authorizes its parent
 directory. Authorized paths persist to ~/.metacore/tool_allowed.json.
