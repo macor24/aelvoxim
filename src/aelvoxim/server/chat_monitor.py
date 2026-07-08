@@ -26,6 +26,9 @@ _DATA_DIR = _DATA_ROOT / "chat_monitor"
 def _daily_path(date_str: Optional[str] = None) -> Path:
     _DATA_DIR.mkdir(parents=True, exist_ok=True)
     d = date_str or datetime.now().strftime("%Y-%m-%d")
+    # Guard: only allow safe date pattern to prevent path traversal
+    if date_str is not None and not re.match(r'^\d{4}-\d{2}-\d{2}$', date_str):
+        raise ValueError(f"Invalid date format: {date_str}")
     return _DATA_DIR / f"{d}.jsonl"
 
 
