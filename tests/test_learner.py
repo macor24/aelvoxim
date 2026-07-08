@@ -28,9 +28,9 @@ def test_pause_resume():
     assert l._directions["FastAPI Optimization"].status == "active"
 
 
-def test_list_directions():
+def test_list_directions(monkeypatch):
+    monkeypatch.setenv("AELVOXIM_EDITION", "enterprise")
     l = Learner(skip_load=True)
-    l._current_plan = "enterprise"
     l.add_direction("FastAPI Optimization")
     l.add_direction("Docker Deployment")
     dirs = l.list_directions()
