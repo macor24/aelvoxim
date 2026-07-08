@@ -228,7 +228,10 @@ def _handle_message():
 
     try:
         raw_xml = request.data.decode("utf-8")
-        root = ET.fromstring(raw_xml)
+        # Disable external entity resolution to prevent XXE (CWE-611)
+        parser = ET.XMLParser()
+        parser.entity = {}  # no external entities
+        root = ET.fromstring(raw_xml, parser)
 
         # Check for Encrypt field (production message encryption)
         enc_el = root.find("Encrypt")
