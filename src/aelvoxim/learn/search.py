@@ -21,6 +21,8 @@ import re
 import time
 import urllib.parse
 import urllib.request
+import urllib.error
+import random
 from typing import Any, Dict, List, Optional
 
 # ── Engine config ───────────────────────────────
@@ -30,6 +32,58 @@ BING_ENDPOINT = os.environ.get("METACORE_BING_ENDPOINT",
                                "https://api.bing.microsoft.com/v7.0/search")
 _ACTIVE_ENGINE = os.environ.get("METACORE_SEARCH_ENGINE", "bing_cn").lower()
 
+# ── Rate limiting ──
+_last_search_time: float = 0.0
+_MIN_SEARCH_INTERVAL = 0.3  # 300ms between searches
+
+_USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+]
+
+
+def _rate_limit():
+    """Ensure minimum interval between external HTTP requests."""
+    global _last_search_time
+    now = time.time()
+    elapsed = now - _last_search_time
+    if elapsed < _MIN_SEARCH_INTERVAL:
+        time.sleep(_MIN_SEARCH_INTERVAL - elapsed)
+    _last_search_time = time.time()
+
+
+def _random_ua() -> str:
+    """Pick a random User-Agent from the pool."""
+    return random.choice(_USER_AGENTS)
+
+
+def _safe_request(url: str, data: Optional[bytes] = None,
+                  headers: Optional[Dict] = None, timeout: int = 8,
+                  max_attempts: int = 2) -> Optional[str]:
+    """Make HTTP request with rate limiting, retry, and UA rotation."""
+    _rate_limit()
+    attempt = 0
+    while attempt < max_attempts:
+        attempt += 1
+        req_headers = headers or {}
+        if "User-Agent" not in req_headers:
+            req_headers["User-Agent"] = _random_ua()
+        try:
+            req = urllib.request.Request(url, data=data, headers=req_headers)
+            resp = urllib.request.urlopen(req, timeout=timeout)
+            return resp.read().decode("utf-8", errors="replace")
+        except urllib.error.HTTPError as e:
+            if e.code in (429, 503) and attempt < max_attempts:
+                time.sleep(1.0 * attempt)  # backoff 1s, 2s
+                continue
+            return None
+        except Exception:
+            return None
+    return None
+
 
 def _bing_search(query: str, max_results: int = 5) -> Optional[List[Dict[str, str]]]:
     """Bing Web Search API v7. Requires METACORE_BING_API_KEY."""
@@ -37,12 +91,12 @@ def _bing_search(query: str, max_results: int = 5) -> Optional[List[Dict[str, st
         return None
     try:
         url = f"{BING_ENDPOINT}?q={urllib.parse.quote(query)}&count={max_results}&mkt=zh-CN"
-        req = urllib.request.Request(url, headers={
+        html = _safe_request(url, headers={
             "Ocp-Apim-Subscription-Key": BING_API_KEY,
-            "User-Agent": "Mozilla/5.0",
-        })
-        resp = urllib.request.urlopen(req, timeout=10)
-        data = json.loads(resp.read().decode("utf-8"))
+        }, timeout=10)
+        if not html:
+            return None
+        data = json.loads(html)
         results = []
         for item in data.get("webPages", {}).get("value", [])[:max_results]:
             results.append({
@@ -60,11 +114,9 @@ def _duckduckgo_search(query: str, max_results: int = 5) -> Optional[List[Dict[s
     try:
         url = "https://html.duckduckgo.com/html/"
         data = urllib.parse.urlencode({"q": query}).encode()
-        req = urllib.request.Request(url, data=data, headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        })
-        resp = urllib.request.urlopen(req, timeout=5)
-        html = resp.read().decode("utf-8", errors="replace")
+        html = _safe_request(url, data=data, timeout=5)
+        if not html:
+            return None
 
         results = []
         links = re.findall(r'<a[^>]*href="(https?://[^"]+)"[^>]*>(.*?)</a>', html)
@@ -91,12 +143,9 @@ def _bing_cn_search(query: str, max_results: int = 5) -> Optional[List[Dict[str,
     """Bing China (cn.bing.com) HTML search. No API key, works on China networks."""
     try:
         url = "https://cn.bing.com/search?q=" + urllib.parse.quote(query) + "&count=" + str(max_results)
-        req = urllib.request.Request(url, headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Accept-Language": "zh-CN,zh;q=0.9",
-        })
-        resp = urllib.request.urlopen(req, timeout=8)
-        html = resp.read().decode("utf-8", errors="replace")
+        html = _safe_request(url, timeout=8)
+        if not html:
+            return None
 
         results = []
         # Bing China: match h2 > a + adjacent p.b_lineclamp
@@ -120,13 +169,9 @@ def _so_search(query: str, max_results: int = 5) -> Optional[List[Dict[str, str]
     """360 Search (so.com) HTML search. Direct access, no API key."""
     try:
         url = "https://www.so.com/s?q=" + urllib.parse.quote(query) + "&num=" + str(max_results)
-        req = urllib.request.Request(url, headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Accept-Language": "zh-CN,zh;q=0.9",
-            "Referer": "https://www.so.com/",
-        })
-        resp = urllib.request.urlopen(req, timeout=8)
-        html = resp.read().decode("utf-8", errors="replace")
+        html = _safe_request(url, timeout=8)
+        if not html:
+            return None
 
         results = []
         # 360 Search: <h3 class="res-title"> <a href="...">title</a> + adjacent <p class="res-desc">snippet</p>
@@ -213,12 +258,9 @@ def _media_search(query: str, max_results: int = 5) -> Optional[List[Dict[str, s
         sites = " OR ".join(f"site:{d}" for d in top_domains)
         full_query = f"({query}) ({sites})"
         url = "https://cn.bing.com/search?q=" + urllib.parse.quote(full_query) + "&count=" + str(max_results * 3)
-        req = urllib.request.Request(url, headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Accept-Language": "zh-CN,zh;q=0.9",
-        })
-        resp = urllib.request.urlopen(req, timeout=8)
-        html = resp.read().decode("utf-8", errors="replace")
+        html = _safe_request(url, timeout=8)
+        if not html:
+            return None
 
         results = []
         from urllib.parse import urlparse

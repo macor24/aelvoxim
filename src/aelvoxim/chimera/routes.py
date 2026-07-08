@@ -111,28 +111,57 @@ async def handle_intent(request: Dict[str, Any]) -> Dict[str, Any]:
     if intent.is_execute:
         action = intent.action
         if action:
-            # Execute via Serpent API
-            serpent_url = os.environ.get("SERPENT_API_URL", "http://127.0.0.1:8877")
-            from .serpent_client import SerpentClient
-            serpent = SerpentClient(base_url=serpent_url)
-            result = await serpent.execute(
-                task=action.task,
-                target_app=action.target_app,
-                target_element=action.target_element or "",
-                params=action.params,
-            )
-            if result.success:
-                response_text = _execute_success_message(action.task, action.target_app, language)
-                expected_delay = 0  # Already done
-                logger.info("Serpent execute OK: %s/%s", action.task, action.target_app)
-            else:
+            # Execute via Desktop Gateway (replaces legacy Serpent API)
+            import urllib.request as _ur
+            import urllib.error as _ue
+
+            _win_host = "127.0.0.1"
+            try:
+                import subprocess as _sp
+                _r = _sp.run(["ip", "route"], capture_output=True, text=True, timeout=3)
+                for _line in _r.stdout.splitlines():
+                    if _line.startswith("default"):
+                        _parts = _line.split()
+                        if len(_parts) > 2:
+                            _win_host = _parts[2]
+                            break
+            except Exception:
+                pass
+
+            _gw_payload = json.dumps({
+                "operation": {
+                    "action": getattr(action, "task", ""),
+                    "target": getattr(action, "target_app", ""),
+                    "params": getattr(action, "params", {}),
+                }
+            }).encode()
+            _gw_url = f"http://{_win_host}:9705/api/execute"
+            try:
+                _req = _ur.Request(_gw_url, data=_gw_payload,
+                                    headers={"Content-Type": "application/json"}, method="POST")
+                with _ur.urlopen(_req, timeout=60) as _resp:
+                    _gw_result = json.loads(_resp.read().decode())
+                if _gw_result.get("success"):
+                    response_text = _execute_success_message(action.task, action.target_app, language)
+                    expected_delay = 0
+                    logger.info("Gateway execute OK: %s/%s", action.task, action.target_app)
+                else:
+                    response_text = _bilingual(
+                        f"操作失败：{_gw_result.get('error', 'unknown error')}",
+                        f"Operation failed: {_gw_result.get('error', 'unknown error')}",
+                        language,
+                    )
+                    expected_delay = 0
+                    logger.warning("Gateway execute FAIL: %s/%s → %s",
+                                   action.task, action.target_app, _gw_result.get("error", ""))
+            except Exception as _e:
                 response_text = _bilingual(
-                    f"操作失败：{result.error}",
-                    f"Operation failed: {result.error}",
+                    f"操作失败：Gateway 连接错误 — {_e}",
+                    f"Operation failed: Gateway connection error — {_e}",
                     language,
                 )
                 expected_delay = 0
-                logger.warning("Serpent execute FAIL: %s/%s → %s", action.task, action.target_app, result.error)
+                logger.warning("Gateway unavailable: %s", _e)
         else:
             response_text = _bilingual("收到指令", "Got it", language)
     elif intent.is_query:

@@ -27,4 +27,5 @@ if __name__ == "__main__":
     print(f"  Register: http://127.0.0.1:{port}/register")
     print(f"  API docs: http://127.0.0.1:{port}/docs")
     print(f"  Press Ctrl+C to stop.")
-    uvicorn.run(app, host="0.0.0.0", port=port, reload=reload_enabled)
+    host = os.environ.get("AELVOXIM_HOST", "127.0.0.1")
+    uvicorn.run(app, host=host, port=port, reload=reload_enabled)
