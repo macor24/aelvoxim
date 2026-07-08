@@ -1,15 +1,18 @@
-# Aelvoxim — Cognitive Self-Learning AI Brain
+# Aelvoxim — 不止是聊天机器人，更是一个会学习的大脑
 
 <p align="center">
   <img src="docs/Aelvoxim2.jpg" alt="Aelvoxim" width="600">
+</p>
+
+<p align="center">
+  <strong>Not just a chatbot. A brain that learns.</strong><br>
+  具备记忆、推理、工具调用和自主学习能力的自托管AI决策层
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![PyPI](https://img.shields.io/pypi/v/aelvoxim)](https://pypi.org/project/aelvoxim/)
 [![GitHub Repo](https://img.shields.io/badge/GitHub-macor24%2Faelvoxim-181717?logo=github)](https://github.com/macor24/aelvoxim)
-
-> `pip install aelvoxim` — Not a chatbot. A brain that learns.
 
 ---
 
