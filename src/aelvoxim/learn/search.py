@@ -36,6 +36,10 @@ _ACTIVE_ENGINE = os.environ.get("METACORE_SEARCH_ENGINE", "bing_cn").lower()
 _last_search_time: float = 0.0
 _MIN_SEARCH_INTERVAL = 0.3  # 300ms between searches
 
+# HTML scrape search — disabled by default. Set to "true" to enable.
+# When disabled, only Bing API (with key) and Mock are available.
+_HTML_SCRAPE_ENABLED = os.environ.get("AELVOXIM_HTML_SEARCH", "").lower() in ("true", "1", "yes")
+
 _USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
@@ -392,10 +396,15 @@ def search(query: str, max_results: int = 5,
       2. Env var METACORE_SEARCH_ENGINE
       3. Auto degrade: Bing -> DuckDuckGo -> Bing CN -> Mock
     """
-    # Default (China priority: bing_cn -> so -> duckduckgo -> bing)
+    # Default: Bing API -> Mock (no HTML scrape unless explicitly enabled)
     if engine == "default":
-        for fn in [_bing_cn_search, _so_search, _duckduckgo_search, _bing_search]:
-            r = fn(query, max_results)
+        if _HTML_SCRAPE_ENABLED:
+            for fn in [_bing_cn_search, _so_search, _duckduckgo_search, _bing_search]:
+                r = fn(query, max_results)
+                if r:
+                    return r
+        else:
+            r = _bing_search(query, max_results)
             if r:
                 return r
         return []
@@ -407,6 +416,11 @@ def search(query: str, max_results: int = 5,
 
     # Authoritative media search (whitelist domains only)
     if engine == "media":
+        if not _HTML_SCRAPE_ENABLED:
+            r = _bing_search(query, max_results)
+            if r:
+                return r
+            return []  # reject Mock
         results = _media_search(query, max_results)
         if results:
             return results
@@ -421,6 +435,8 @@ def search(query: str, max_results: int = 5,
         results = _bing_search(query, max_results)
         if results:
             return results
+        if not _HTML_SCRAPE_ENABLED:
+            return []
         for fn in [_duckduckgo_search, _bing_cn_search, _so_search]:
             r = fn(query, max_results)
             if r:
@@ -429,6 +445,11 @@ def search(query: str, max_results: int = 5,
 
     # Bing China (direct access from China)
     if engine == "bing_cn":
+        if not _HTML_SCRAPE_ENABLED:
+            r = _bing_search(query, max_results)
+            if r:
+                return r
+            return []
         results = _bing_cn_search(query, max_results)
         if results:
             return results
@@ -440,6 +461,11 @@ def search(query: str, max_results: int = 5,
 
     # DuckDuckGo
     if engine == "duckduckgo":
+        if not _HTML_SCRAPE_ENABLED:
+            r = _bing_search(query, max_results)
+            if r:
+                return r
+            return []
         results = _duckduckgo_search(query, max_results)
         if results:
             return results
@@ -450,20 +476,26 @@ def search(query: str, max_results: int = 5,
         return []
 
     # Unknown engine -> auto degrade
-    for fn in [_bing_search, _duckduckgo_search, _bing_cn_search, _so_search]:
-        results = fn(query, max_results)
-        if results:
-            return results
+    if _HTML_SCRAPE_ENABLED:
+        for fn in [_bing_search, _duckduckgo_search, _bing_cn_search, _so_search]:
+            results = fn(query, max_results)
+            if results:
+                return results
+    else:
+        r = _bing_search(query, max_results)
+        if r:
+            return r
     return []
 
 
 def get_available_engines() -> list:
     """Return list of available search engines."""
     engines = [{"id": "mock", "name": "Mock data (dev)", "available": True}]
-    engines.append({"id": "media", "name": "Authoritative media (whitelist)", "available": True})
-    engines.append({"id": "bing_cn", "name": "Bing China", "available": True})
-    engines.append({"id": "so", "name": "360 Search (so.com)", "available": True})
-    engines.append({"id": "duckduckgo", "name": "DuckDuckGo", "available": True})
+    if _HTML_SCRAPE_ENABLED:
+        engines.append({"id": "media", "name": "Authoritative media (whitelist)", "available": True})
+        engines.append({"id": "bing_cn", "name": "Bing China", "available": True})
+        engines.append({"id": "so", "name": "360 Search (so.com)", "available": True})
+        engines.append({"id": "duckduckgo", "name": "DuckDuckGo", "available": True})
     engines.append({
         "id": "bing",
         "name": "Bing Web Search (API key required)",
