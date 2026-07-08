@@ -7,6 +7,8 @@ Mode B: VLM — Visual Language Model fallback (Pro feature).
 """
 from . import _uia
 from typing import Any, Dict
+import subprocess
+import shlex
 
 # ── VLM mode (Pro feature) ──
 
@@ -39,8 +41,25 @@ ACTIONS = {
         op.get("params", {}).get("x2", 0),
         op.get("params", {}).get("y2", 0)),
     "wait": lambda op: _uia.send_keys("", delay_ms=int(op.get("params", {}).get("seconds", 1) * 1000)),
-    "run_script": lambda op: _uia.send_keys(""),  # handled by executor.py
+    "run_script": lambda op: _uia.send_keys(""),
+    "run": lambda op: _exec_app(op.get("target", "")),
+    "open": lambda op: _exec_app(op.get("params", {}).get("path", op.get("target", ""))),
 }
+
+
+# ── Helper: launch app / executable ──
+
+
+def _exec_app(path: str) -> Dict[str, Any]:
+    """Launch an app or executable. Uses shlex.split + shell=False to prevent injection."""
+    if not path:
+        return {"success": False, "error": "exec requires path or target"}
+    try:
+        parts = shlex.split(path)
+        r = subprocess.Popen(parts)
+        return {"success": True, "output": f"Started: {path} (PID {r.pid})"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 def execute(operation: Dict[str, Any], mode: str = "uia") -> Dict[str, Any]:
@@ -69,26 +88,11 @@ def execute(operation: Dict[str, Any], mode: str = "uia") -> Dict[str, Any]:
         return handler(operation)
 
     if action == "exec":
-        import subprocess
-        _path = operation.get("params", {}).get("path", operation.get("target", ""))
-        if not _path:
-            return {"success": False, "error": "exec requires path param"}
-        try:
-            _r = subprocess.Popen(_path, shell=True)
-            return {"success": True, "output": f"Started: {_path} (PID {_r.pid})"}
-        except Exception as _e:
-            return {"success": False, "error": str(_e)}
+        return _exec_app(operation.get("params", {}).get("path", operation.get("target", "")))
     if action == "open_notepad":
-        import subprocess
-        _r = subprocess.Popen("notepad.exe", shell=True)
-        return {"success": True, "output": f"Notepad started (PID {_r.pid})"}
+        return _exec_app("notepad.exe")
     if action == "open":
-        _path = op.get("params", {}).get("path", op.get("target", ""))
-        if not _path:
-            return {"success": False, "error": "open requires path or target"}
-        import subprocess
-        _r = subprocess.Popen(_path, shell=True)
-        return {"success": True, "output": f"Started: {_path} (PID {_r.pid})"}
+        return _exec_app(operation.get("params", {}).get("path", operation.get("target", "")))
     return {"success": False, "error": f"Unknown UIA action: {action}"}
 
 

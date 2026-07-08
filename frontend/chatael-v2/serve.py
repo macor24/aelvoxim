@@ -331,8 +331,14 @@ class SpaHandler(SimpleHTTPRequestHandler):
         path = self.path.split("?")[0].lstrip("/")
         if not path:
             path = "index.html"
-        file = DIST / path
-        if file.exists() and file.is_file():
+        # Path traversal protection: resolve and verify it stays inside DIST
+        try:
+            full_path = (DIST / path).resolve()
+            full_path.relative_to(DIST.resolve())
+        except (ValueError, RuntimeError):
+            self._send(b"Not found", 404)
+            return
+        if full_path.exists() and full_path.is_file():
             content_type = {
                 ".html": "text/html",
                 ".js": "application/javascript",
@@ -341,8 +347,8 @@ class SpaHandler(SimpleHTTPRequestHandler):
                 ".png": "image/png",
                 ".svg": "image/svg+xml",
                 ".ico": "image/x-icon",
-            }.get(file.suffix, "application/octet-stream")
-            self._send(file.read_bytes(), content_type=content_type)
+            }.get(full_path.suffix, "application/octet-stream")
+            self._send(full_path.read_bytes(), content_type=content_type)
         else:
             # SPA fallback
             self._send((DIST / "index.html").read_bytes(), content_type="text/html")
