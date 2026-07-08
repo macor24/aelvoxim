@@ -6,6 +6,8 @@ Aggregates all route modules and creates the FastAPI application.
 
 from __future__ import annotations
 
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
