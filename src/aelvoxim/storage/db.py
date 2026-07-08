@@ -493,12 +493,12 @@ def get_sessions_from_pg(user_id: str = "", email: str = "", limit: int = 50) ->
                 LIMIT %s
             """, (email, limit))
         else:
-            cur.execute(f"""
+            cur.execute("""
                 SELECT id, title, message_count, created_at, updated_at
                 FROM chat_sessions
                 ORDER BY updated_at DESC
-                LIMIT {limit}
-            """)
+                LIMIT %s
+            """, (limit,))
         rows = [{
             "id": r[0], "title": r[1], "message_count": r[2],
             "created_at": str(r[3]) if r[3] else "",
