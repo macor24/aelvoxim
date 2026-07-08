@@ -28,6 +28,9 @@ src/aelvoxim_orchestrator/scheduler.py
 *.log
 *.log.*
 *.pid
+
+# User data — never commit real conversations
+frontend/chatael-v2/data/messages/
 secrets.json
 *.pem
 
