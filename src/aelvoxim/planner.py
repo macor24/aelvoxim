@@ -304,9 +304,9 @@ class LongTermPlanner:
                 content=summary[:500],
                 source="plan_complete",
             )
-            # Auto-suggest next goal: if there are other unfinished plans, suggest continuing one
+            # Auto-suggest next goal: only once — never re-trigger from auto_suggest plans
             _unfinished = [p for p in self._plans.values() if p.status == "active" and p.id != plan.id]
-            if not _unfinished:
+            if not _unfinished and plan.source != "auto_suggest":
                 # No other plans — suggest expanding in a related direction
                 _related = self._suggest_next_goal(plan.goal)
                 if _related:
