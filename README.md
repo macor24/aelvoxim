@@ -1,12 +1,11 @@
-# Aelvoxim — 不止是聊天机器人，更是一个会学习的大脑
+# Aelvoxim — More than a chatbot. A brain that learns.
 
 <p align="center">
   <img src="docs/Aelvoxim2.jpg" alt="Aelvoxim" width="600">
 </p>
 
 <p align="center">
-  <strong>Not just a chatbot. A brain that learns.</strong><br>
-  具备记忆、推理、工具调用和自主学习能力的自托管AI决策层
+  A self-hosted AI decision layer with memory, reasoning, tool calling, and autonomous learning.
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
