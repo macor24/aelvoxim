@@ -129,7 +129,10 @@ class Learner:
         return DirectionManager.is_valid_direction(topic)
 
     def add_direction(self, topic: str) -> bool:
-        plan = getattr(self, '_current_plan', 'community')
+        import os
+        _ed = os.environ.get("AELVOXIM_EDITION", "community")
+        _plan_map = {"enterprise": "enterprise", "pro": "pro", "trial": "enterprise"}
+        plan = _plan_map.get(_ed, "community")
         result = self._dir_mgr.add(topic, plan=plan)
         if result:
             self._dir_mgr.save()
