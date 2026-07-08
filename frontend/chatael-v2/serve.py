@@ -46,13 +46,22 @@ def _ensure_dirs():
 
 
 def _session_path(session_id: str) -> Path:
-    """Path to JSON session file."""
+    """Path to JSON session file. Validates session_id to prevent path traversal."""
+    _validate_session_id(session_id)
     return _SESSIONS_DIR / f"{session_id}.json"
 
 
 def _messages_path(session_id: str) -> Path:
     """Path to JSON messages file for a session."""
+    _validate_session_id(session_id)
     return _MESSAGES_DIR / f"{session_id}.json"
+
+
+def _validate_session_id(session_id: str) -> None:
+    """Ensure session_id contains only safe characters (alphanumeric, underscore, colon, hyphen)."""
+    import re
+    if not re.match(r'^[\w.:-]+$', session_id):
+        raise ValueError(f"Invalid session_id: {session_id}")
 
 
 def _save_session_json(session: dict):
