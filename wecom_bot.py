@@ -213,7 +213,10 @@ def _handle_message():
         # Extract Encrypt field from XML (if present)
         xml_data = request.data.decode("utf-8")
         try:
-            root = ET.fromstring(xml_data)
+            # Disable external entity resolution to prevent XXE (CWE-611)
+            parser = ET.XMLParser()
+            parser.entity = {}
+            root = ET.fromstring(xml_data, parser)
             enc_el = root.find("Encrypt")
             encrypt_text = enc_el.text if enc_el is not None else ""
         except Exception:
