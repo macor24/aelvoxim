@@ -31,6 +31,9 @@ src/aelvoxim_orchestrator/scheduler.py
 
 # User data — never commit real conversations
 frontend/chatael-v2/data/messages/
+
+# Old backup — contents superseded by current src/
+aelvoxim-1.0.1/
 secrets.json
 *.pem
 
