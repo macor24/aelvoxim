@@ -33,19 +33,15 @@ docker compose up -d
 ```bash
 pip install aelvoxim
 
-# Start the server (from the repo directory)
-python src/run_server.py 9701
-
-# Or via the aelvoxim CLI:
-aelvoxim ui --port 9700
+# Start the API server
+aelvoxim server --port 9701
 ```
 
 ### Windows
 
 ```powershell
 pip install aelvoxim
-cd aelvoxim  # clone first, then
-python src\run_server.py 9701
+aelvoxim server --port 9701
 # Open browser at http://localhost:9701
 ```
 
