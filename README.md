@@ -5,7 +5,8 @@
 </p>
 
 <p align="center">
-  A self-hosted AI decision layer with memory, reasoning, tool calling, and autonomous learning.
+  A self-hosted AI decision layer with multi-agent orchestration, anti-hallucination, 
+  memory, tool calling, desktop control, and autonomous learning.
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -17,19 +18,35 @@
 
 ## Quick Start
 
+### Docker (recommended)
+
 ```bash
-# Install
+git clone https://github.com/macor24/aelvoxim.git
+cd aelvoxim
+export LLM_PROVIDER=openai LLM_API_KEY=sk-xxxxx
+docker compose up -d
+# Open http://localhost:9701
+```
+
+### Pip
+
+```bash
 pip install aelvoxim
 
-# Start the server
-aelvoxim server --port 9701
+# Start the server (from the repo directory)
+python src/run_server.py 9701
 
-# Open in browser
-open http://localhost:9701
+# Or via the aelvoxim CLI:
+aelvoxim ui --port 9700
+```
 
-# Or use the ChatAEL frontend (dedicated chat UI)
-python serve_chatael.py
-# Open http://localhost:9702
+### Windows
+
+```powershell
+pip install aelvoxim
+cd aelvoxim  # clone first, then
+python src\run_server.py 9701
+# Open browser at http://localhost:9701
 ```
 
 ### From source
