@@ -139,6 +139,14 @@ def create_app() -> FastAPI:
             import logging
             logging.getLogger("aelvoxim.server").exception("startup: cortex scheduler failed")
 
+        # Start daily backup scheduler
+        try:
+            from aelvoxim.utils.backup import start_scheduler as _start_backup
+            _start_backup()
+        except Exception:
+            import logging
+            logging.getLogger("aelvoxim.server").exception("startup: backup scheduler failed")
+
     @app.get("/")
     async def root():
         from fastapi.responses import HTMLResponse
@@ -226,5 +234,25 @@ def create_app() -> FastAPI:
         except Exception:
             pass
         return result
+
+
+        return result
+
+    # Serve ChatAEL frontend (built SPA) at /chatael
+    _chatael_dist = Path(__file__).parent.parent.parent / "frontend" / "chatael-v2" / "dist"
+    if _chatael_dist.exists():
+        @app.get("/chatael")
+        async def chatael_index():
+            from fastapi.responses import HTMLResponse
+            return HTMLResponse(content=(_chatael_dist / "index.html").read_text(encoding="utf-8"))
+
+        @app.get("/chatael/{path:path}")
+        async def chatael_spa(path: str):
+            from fastapi.responses import HTMLResponse
+            _file = _chatael_dist / path
+            if _file.exists() and _file.is_file():
+                _content_type = {".html": "text/html", ".js": "application/javascript", ".css": "text/css", ".json": "application/json", ".png": "image/png", ".svg": "image/svg+xml", ".ico": "image/x-icon"}.get(_file.suffix, "application/octet-stream")
+                return HTMLResponse(content=_file.read_bytes(), status_code=200, media_type=_content_type)
+            return HTMLResponse(content=(_chatael_dist / "index.html").read_text(encoding="utf-8"))
 
     return app
