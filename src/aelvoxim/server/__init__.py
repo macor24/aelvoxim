@@ -239,7 +239,8 @@ def create_app() -> FastAPI:
         return result
 
     # Serve ChatAEL frontend (built SPA) at /chatael
-    _chatael_dist = Path(__file__).parent.parent.parent / "frontend" / "chatael-v2" / "dist"
+    from pathlib import Path as _Path
+    _chatael_dist = _Path(__file__).resolve().parent.parent.parent.parent / "frontend" / "chatael-v2" / "dist"
     if _chatael_dist.exists():
         @app.get("/chatael")
         async def chatael_index():
