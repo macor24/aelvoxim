@@ -340,7 +340,13 @@ class SpaHandler(SimpleHTTPRequestHandler):
         path = self.path.split("?")[0].lstrip("/")
         if not path:
             path = "index.html"
-        file = DIST / path
+        file = (DIST / path).resolve()
+        # Path traversal guard
+        try:
+            file.relative_to(DIST.resolve())
+        except ValueError:
+            self._send(b"Not found", 404)
+            return
         if file.exists() and file.is_file():
             content_type = {
                 ".html": "text/html",
