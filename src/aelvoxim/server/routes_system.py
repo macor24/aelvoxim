@@ -320,7 +320,7 @@ async def health_check():
         result["dependencies"]["sqlite"] = {"status": "ok", "entities": ec}
         result["dependencies"]["memory_layers"] = get_layer_stats()
     except Exception as e:
-        result["dependencies"]["sqlite"] = {"status": "error", "detail": str(e)}
+        result["dependencies"]["sqlite"] = {"status": "error", "detail": str(type(e).__name__)}
         result["status"] = "degraded"
     try:
         from ..client.sentrikit import is_available
@@ -370,7 +370,7 @@ async def get_logs(source: str = Query("learner"), lines: int = Query(50), _user
         all_lines = text.strip().split("\n")
         return {"lines": all_lines[-lines:]}
     except Exception as e:
-        raise HTTPException(500, detail=str(e))
+        raise HTTPException(500, detail="Failed to read log")
 
 # ── Ethics endpoints ──
 
@@ -730,7 +730,7 @@ async def admin_learner_status(user: dict = Depends(_verify_key)):
             "updated_at": st.get("updated_at", ""),
         }
     except Exception as e:
-        raise HTTPException(500, detail=str(e))
+        raise HTTPException(500, detail="Failed to read log")
 
 @router.post("/admin/learner/start")
 async def admin_learner_start(user: dict = Depends(_require_admin)):
@@ -746,7 +746,7 @@ async def admin_learner_start(user: dict = Depends(_require_admin)):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(500, detail=str(e))
+        raise HTTPException(500, detail="Failed to read log")
 
 @router.post("/admin/learner/stop")
 async def admin_learner_stop(user: dict = Depends(_require_admin)):
@@ -756,7 +756,7 @@ async def admin_learner_stop(user: dict = Depends(_require_admin)):
         get_learner().stop()
         return {"success": True, "message": "Learning loop stopped"}
     except Exception as e:
-        raise HTTPException(500, detail=str(e))
+        raise HTTPException(500, detail="Failed to read log")
 
 @router.get("/admin/skill-timeline")
 async def admin_skill_timeline(months: int = 6, user: dict = Depends(_verify_key)):

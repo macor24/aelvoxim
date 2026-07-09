@@ -77,7 +77,7 @@ async def test_llm(body: dict, user: dict = Depends(_verify_key)):
             provider = model.get("provider", "deepseek") if isinstance(model, dict) else "configured"
             return {"status": "ok", "response": (text or "")[:100], "provider": provider}
         except Exception as e:
-            raise HTTPException(502, detail=f"LLM call failed: {e}")
+            raise HTTPException(502, detail="LLM call failed")
 
     api_key = body.get("api_key", "").strip()
     if not api_key:
@@ -434,7 +434,7 @@ async def llm_chat_stream(
                     yield f"data: {json.dumps({'token': chunk})}\n\n"
             yield "data: [DONE]\n\n"
         except Exception as e:
-            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            yield f"data: {json.dumps({'error': 'Internal error'})}\n\n"
         # Save assistant response after stream finishes (best-effort)
         if _pg_collected and _pg_email:
             _text = "".join(_pg_collected)

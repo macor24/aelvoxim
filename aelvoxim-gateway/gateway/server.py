@@ -254,8 +254,8 @@ async def post_execute(body: ExecuteRequest):
     try:
         result = _exec_op(body.operation)
         return result
-    except Exception as e:
-        raise HTTPException(500, detail=str(e))
+    except Exception:
+        raise HTTPException(500, detail="Execution failed")
 
 
 @app.post("/api/execute-plan")
@@ -265,8 +265,8 @@ async def post_execute_plan(body: ExecutePlanRequest):
             raise HTTPException(400, detail="plan required")
         result = _task_ctrl.execute_plan(body.plan)
         return result
-    except Exception as e:
-        raise HTTPException(500, detail=str(e))
+    except Exception:
+        raise HTTPException(500, detail="Plan execution failed")
 
 
 @app.post("/api/run-script")
@@ -279,8 +279,8 @@ async def post_run_script(body: RunScriptRequest):
         from .executor import execute
         result = execute({"action": "run_script", "params": {"path": full_path}})
         return result
-    except Exception as e:
-        raise HTTPException(500, detail=str(e))
+    except Exception:
+        raise HTTPException(500, detail="Script execution failed")
 
 
 @app.post("/api/screenshot")
