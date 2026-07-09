@@ -686,12 +686,12 @@ class Learner:
                 if action in _current_skip:
                     continue
                 if action == "switch_search_engine":
-                    current = os.environ.get("METACORE_SEARCH_ENGINE", "bing_cn")
+                    current = os.environ.get("AELVOXIM_SEARCH_ENGINE", "bing_cn")
                     engines = ["bing_cn", "duckduckgo", "so"]
                     if current in engines:
                         idx = engines.index(current)
                         new_engine = engines[(idx + 1) % len(engines)]
-                        os.environ["METACORE_SEARCH_ENGINE"] = new_engine
+                        os.environ["AELVOXIM_SEARCH_ENGINE"] = new_engine
                         self._log(f"  🔄 Cognition: switched search engine {current} → {new_engine}")
                 elif action == "cleanup_low_confidence_kb":
                     if _current_focus == "cleanup":

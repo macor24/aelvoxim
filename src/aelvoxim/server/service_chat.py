@@ -1,7 +1,9 @@
 """metacore.server.service_chat — Chat pipeline and service functions."""
 from __future__ import annotations
 
+import json
 import logging
+import os
 import re
 import time as _time
 from datetime import datetime
@@ -64,7 +66,7 @@ def _mask_api_key(text: str) -> str:
 def run_safety_check(user_msg: str, user: dict) -> Optional[dict]:
     """Local safety check — block common dangerous patterns.
     Falls back silently when SentriKit is unavailable.
-    Also checks prompt injection via content_filter (env-toggle: METACORE_CONTENT_FILTER).
+    # Also checks prompt injection via content_filter (env-toggle: AELVOXIM_CONTENT_FILTER).
     """
     try:
         from ..client.sentrikit import check_user_input as _sk_check
@@ -75,7 +77,7 @@ def run_safety_check(user_msg: str, user: dict) -> Optional[dict]:
         pass
     # Content filter prompt injection check
     try:
-        if os.environ.get("METACORE_CONTENT_FILTER", "").lower() in ("true", "1", "yes"):
+        if os.environ.get("AELVOXIM_CONTENT_FILTER", "").lower() in ("true", "1", "yes"):
             from ..core.content_filter import filter_input
             verdict = filter_input(user_msg)
             if not verdict.passed:
@@ -591,6 +593,7 @@ def chat_pipeline(
     skip_memory: bool = False,
     mode: str = "simple",
 ) -> dict:
+    global _LAST_PLAN_CHECK
     t0 = _time.time()
     _confidence_score = 0.5
     _uid = (user or {}).get("email", "")[:20]
@@ -638,9 +641,10 @@ def chat_pipeline(
             _chat_log.info("  +real_time_search %d chars", len(rt_context))
 
     # Track topic frequency for autonomous planning (per-user)
+    _now = _time.time()
     if search_query and len(search_query) > 3:
         _key = search_query.lower().strip()[:50]
-        _now = __import__("time").time()
+        _now = _time.time()
         _user_topic_freq = _topic_freq.get(user)
         if _key not in _user_topic_freq:
             _user_topic_freq[_key] = []
@@ -664,8 +668,7 @@ def chat_pipeline(
                         _existing_plans = {p["goal"].lower() for p in _planner.list_plans()}
                         if _t not in _existing_plans:
                             _planner.create_plan(_t, source="auto_detect")
-                            import logging
-                            logging.getLogger("aelvoxim.chat").info(
+                            _log.info(
                                 "📋 Auto-created learning plan: %s (asked %d times)", _t, len(_user_topic_freq[_t]))
                     break  # one plan per check
         except Exception:
@@ -1061,7 +1064,7 @@ def get_confidence_trend() -> dict:
 
 # ── Curiosity list for autonomous learning ──
 
-def _add_curiosity_topic(topic: str) -> None:
+def _add_curiosity_topic(topic: str, user: dict = None) -> None:
     """Add a topic to the curiosity list (persisted to JSON)."""
     from pathlib import Path as _P
     fp = _P.home() / ".aelvoxim" / "curiosity.json"
@@ -1072,7 +1075,7 @@ def _add_curiosity_topic(topic: str) -> None:
         if topic[:80] not in existing:
             topics.append({
                 "topic": topic[:80],
-                "asked_at": __import__("time").time(),
+                "asked_at": _time.time(),
                 "learned": False,
             })
             fp.write_text(json.dumps(topics, ensure_ascii=False, indent=2, default=str))
@@ -1093,7 +1096,7 @@ def _pop_curiosity_topic() -> str:
             return ""
         oldest = unlearned[0]
         oldest["learned"] = True
-        oldest["learned_at"] = __import__("time").time()
+        oldest["learned_at"] = _time.time()
         fp.write_text(json.dumps(topics, ensure_ascii=False, indent=2, default=str))
         return oldest["topic"]
     except Exception:
@@ -1108,7 +1111,7 @@ def _get_recently_learned_topics(hours: int = 24) -> list:
         return []
     try:
         topics = json.loads(fp.read_text())
-        now = __import__("time").time()
+        now = _time.time()
         return [
             t["topic"] for t in topics
             if t.get("learned") and now - t.get("learned_at", 0) < hours * 3600

@@ -291,7 +291,7 @@ def rule_extract(task: str, topic: str = "") -> Optional[str]:
 def is_search_mock() -> bool:
     """Check if the current search engine is configured as mock or is returning mock data."""
     import os as _os
-    engine = _os.environ.get("METACORE_SEARCH_ENGINE", "").lower()
+    engine = _os.environ.get("AELVOXIM_SEARCH_ENGINE", _os.environ.get("METACORE_SEARCH_ENGINE", "")).lower()
     if engine == "mock":
         return True
     # Also check search-config.json

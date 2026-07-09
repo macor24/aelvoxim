@@ -844,7 +844,7 @@ function loadDashboard() {
       html += '<div style="font-size:13px;font-weight:600;margin-bottom:8px;color:#1a1a2e">服务状态</div>';
       html += '<div class="health-grid" style="margin-bottom:16px">';
       var services = d.services || {};
-      var svcOrder = ['9700 Dashboard','9701 API','9702 ChatAEL','9705 Gateway','8899 SentriKit','5432 PostgreSQL'];
+      var svcOrder = ['9701 API','9702 ChatAEL','9705 Gateway','8899 SentriKit','5432 PostgreSQL'];
       svcOrder.forEach(function(name){
         var status = services[name] || 'offline';
         var dotColor = status === 'online' ? 'green' : (status === 'offline' ? 'red' : 'yellow');
@@ -886,7 +886,6 @@ function loadDashboard() {
 // ── 服务健康 ──
 function checkHealth() {
   var services = [
-    {name:'Dashboard', port:9700, desc:'管理面板'},
     {name:'API Server', port:9701, desc:'Aelvoxim API'},
     {name:'ChatAEL', port:9702, desc:'前端页面'},
     {name:'Gateway', port:9705, desc:'桌面控制'},

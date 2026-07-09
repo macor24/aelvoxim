@@ -1,0 +1,19 @@
+version: "3.9"
+
+services:
+  aelvoxim:
+    build: .
+    container_name: aelvoxim
+    ports:
+      - "9701:9701"
+    environment:
+      - AELVOXIM_EDITION=${AELVOXIM_EDITION:-community}
+      - AELVOXIM_LICENSE_KEY=${AELVOXIM_LICENSE_KEY:-}
+      - LLM_PROVIDER=${LLM_PROVIDER:-}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+    volumes:
+      - aelvoxim_data:/root/.aelvoxim
+    restart: unless-stopped
+
+volumes:
+  aelvoxim_data:

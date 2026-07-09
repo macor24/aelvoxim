@@ -269,8 +269,8 @@ def call_llm(
         except Exception:
             pass  # non-critical: safety module unavailable, continue without intercept
 
-        # Content safety filter (only checked when enabled via env var METACORE_CONTENT_FILTER=true)
-        if os.environ.get("METACORE_CONTENT_FILTER", "").lower() in ("true", "1", "yes"):
+        # Content safety filter (only checked when enabled via env var AELVOXIM_CONTENT_FILTER=true)
+        if os.environ.get("AELVOXIM_CONTENT_FILTER", "").lower() in ("true", "1", "yes"):
             from ..core.content_filter import filter_output, sanitize_output
             verdict = filter_output(text, check_pii=True)
             if not verdict.passed:

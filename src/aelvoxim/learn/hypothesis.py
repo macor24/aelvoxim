@@ -280,7 +280,7 @@ class HypothesisVerifier:
         import os
         configured_engines = [
             e for e in ["bing", "duckduckgo", "bing_cn", "so"]
-            if os.environ.get(f"METACORE_{e.upper()}_API_KEY")
+            if os.environ.get(f"AELVOXIM_{e.upper()}_API_KEY") or os.environ.get(f"METACORE_{e.upper()}_API_KEY")
         ]
         if configured_engines:
             h.status = "confirmed"

@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # ── Aelvoxim start script ─────────────────────────────────
-# Starts the 2 Aelvoxim services: Dashboard (9700) + API (9701).
-# SentriKit and ChatAEL are independent projects — start them separately.
+# Starts the main API service (9701).
+# Dashboard merged into 9701 at /v1/admin/panel.
+# SentriKit, ChatAEL, and Gateway are independent projects — start separately.
 #
 # Usage:
-#   ./start.sh              # start both services
+#   ./start.sh              # start API on 9701
 #   ./start.sh --daemon     # start in background, no logs to terminal
 #   ./start.sh --help       # show usage
 
@@ -32,21 +33,19 @@ if [ -z "$PYTHON" ]; then
   exit 1
 fi
 
-PORTS=(9700 9701)
-for port in "${PORTS[@]}"; do
-  if lsof -ti:"$port" >/dev/null 2>&1; then
-    echo "⚠️  Port $port already in use by PID $(lsof -ti:$port)"
-  fi
-done
+if lsof -ti:9701 >/dev/null 2>&1; then
+  echo "⚠️  Port 9701 already in use by PID $(lsof -ti:9701)"
+fi
 
 # Verify imports
 echo "🔍 Verifying imports..."
 $PYTHON -c "from aelvoxim import __version__; print(f'  Aelvoxim v{__version__}')" 2>/dev/null || {
   echo "❌ Cannot import aelvoxim — check PYTHONPATH"
+  echo "   Try: pip install -e .  or  export PYTHONPATH=src"
   exit 1
 }
 
-echo "🚀 Starting Aelvoxim services..."
+echo "🚀 Starting Aelvoxim API..."
 
 start_service() {
   local name="$1" cmd="$2" port="$3"
@@ -61,19 +60,17 @@ start_service() {
 
 mkdir -p logs
 
-start_service "Dashboard" "$PYTHON -B -m aelvoxim ui --port 9700" 9700
-sleep 2
 start_service "API" "$PYTHON -B $SRC_DIR/run_server.py 9701" 9701
 
 echo ""
-echo "✅ Aelvoxim v$($PYTHON -c 'from aelvoxim.__version__ import __version__; print(__version__)') started"
-echo "   Dashboard:    http://0.0.0.0:9700/"
-echo "   API:          http://0.0.0.0:9701/ (cortex merged — formerly 9703)"
+echo "✅ Aelvoxim v$($PYTHON -c 'from aelvoxim import __version__; print(__version__)') started"
+echo "   API:          http://0.0.0.0:9701/ (admin panel at /v1/admin/panel)"
+echo "   API docs:     http://0.0.0.0:9701/docs"
 echo ""
 echo "📌 Independent services (start separately):"
+echo "   ChatAEL:      cd frontend/chatael-v2 && python ../../serve_chatael.py"
 echo "   SentriKit:    cd /mnt/c/SentriKit/src && python -m sentrikit.api --port 8899"
-echo "   ChatAEL:      cd /mnt/c/Aelvoxim/frontend/chatael-v2 && python serve.py --port 9702"
-
+echo "   Gateway:      cd aelvoxim-gateway && python start_gateway.py"
 if [ "$DAEMON" = false ]; then
   echo ""
   echo "Press Ctrl+C to stop all services"

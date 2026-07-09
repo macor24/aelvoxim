@@ -141,6 +141,7 @@ async def register(body: dict):
     _audit_log("user.register", user=email, status="failure", detail={"reason": "creation failed"})
     raise HTTPException(500, detail="user creation failed")
 
+
 @router.post("/auth/send-verification")
 async def send_verification(body: dict):
     """Send email verification code (file-level, no SMTP needed)."""
@@ -357,8 +358,9 @@ async def get_logs(source: str = Query("learner"), lines: int = Query(50), _user
     from ..utils import DATA_DIR
     sources = {
         "learner": DATA_DIR / "learner" / "learner.log",
-        "chat_monitor": DATA_DIR / "chat_monitor",
-        "health": DATA_DIR / "health",
+        "chat_monitor": DATA_DIR / "chat_monitor" / "monitor.jsonl",
+        "health": DATA_DIR / "heal_log.jsonl",
+        "server": Path.home() / ".aelvoxim" / "logs" / "server.log",
     }
     path = sources.get(source)
     if not path:

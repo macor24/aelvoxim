@@ -15,7 +15,7 @@ from fastapi import APIRouter, Query
 
 router = APIRouter(tags=["brain"])
 
-_REPORTS_DIR = Path.home() / ".metacore" / "reports" / "daily"
+_REPORTS_DIR = Path.home() / ".aelvoxim" / "reports" / "daily"
 
 from .routes import _verify_key, _require_admin
 from fastapi import Depends

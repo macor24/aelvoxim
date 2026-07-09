@@ -196,17 +196,11 @@ def create_app() -> FastAPI:
 
     @app.get("/v1/admin/dash-full")
     async def admin_dash_full(token: str = ""):
-        from pathlib import Path
-        from fastapi.responses import HTMLResponse
-        _dash = Path(__file__).parent.parent / "ui" / "dashboard.html"
-        if _dash.exists():
-            html = _dash.read_text(encoding="utf-8")
-            if token:
-                safe = token.replace('"', '&quot;').replace('<', '&lt;')
-                auth = '<script>var _t="' + safe + '";var _dashToken=_t;var _f=window.fetch;window.fetch=function(u,o){if(typeof u=="string"&&u.indexOf("/v1/admin/")===0){o=o||{};o.headers=o.headers||{};o.headers["Authorization"]="Bearer "+_t;}return _f(u,o);};</script>'
-                html = html.replace("</head>", auth + "</head>")
-            return HTMLResponse(content=html)
-        return {"error": "not found"}
+        # Dashboard merged into admin_panel at /v1/admin/panel
+        from fastapi.responses import RedirectResponse
+        if token:
+            return RedirectResponse(url=f"/v1/admin/panel?token={token}")
+        return RedirectResponse(url="/v1/admin/panel")
 
     @app.get("/v1/status/planner")
     async def planner_status():
@@ -250,7 +244,12 @@ def create_app() -> FastAPI:
         @app.get("/chatael/{path:path}")
         async def chatael_spa(path: str):
             from fastapi.responses import HTMLResponse
-            _file = _chatael_dist / path
+            _file = (_chatael_dist / path).resolve()
+            # Path traversal guard: ensure file is within dist directory
+            try:
+                _file.relative_to(_chatael_dist.resolve())
+            except ValueError:
+                return HTMLResponse(content=(_chatael_dist / "index.html").read_text(encoding="utf-8"))
             if _file.exists() and _file.is_file():
                 _content_type = {".html": "text/html", ".js": "application/javascript", ".css": "text/css", ".json": "application/json", ".png": "image/png", ".svg": "image/svg+xml", ".ico": "image/x-icon"}.get(_file.suffix, "application/octet-stream")
                 return HTMLResponse(content=_file.read_bytes(), status_code=200, media_type=_content_type)

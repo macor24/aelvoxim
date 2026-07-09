@@ -20,7 +20,7 @@ from ..utils import METACORE_DIR, ensure_dir
 from ..storage.db import execute, fetch_one, fetch_all, use_pg, get_pool
 
 # ── Admin key ──
-ADMIN_KEY = os.environ.get("AELVOXIM_ADMIN_KEY") or os.environ.get("METACORE_ADMIN_KEY", "")
+ADMIN_KEY = os.environ.get("AELVOXIM_ADMIN_KEY", "")
 
 USERS_DIR = METACORE_DIR / "users"
 ensure_dir(USERS_DIR)
@@ -203,23 +203,50 @@ def find_by_username(username: str) -> Optional[dict]:
     return None
 
 
-def create_user(email: str, password: str, username: str = "", plan: str = "community") -> dict:
+def create_user(user_or_email, password="", username="", plan="community"):
+    """Create a new user account.
+
+    Accepts either:
+        create_user(email, password, username='', plan='community')
+        create_user(user_dict)  -- where user_dict has 'email', 'password_hash', etc.
+    """
     api_key = generate_api_key()
     now = datetime.now().isoformat()
-    pw_hash = hash_password(password)
-    user = {
-        "api_key": api_key,
-        "email": email.lower().strip(),
-        "username": (username.strip() or email.lower().split("@")[0]),
-        "password_hash": pw_hash,
-        "plan": plan,
-        "role": "user",
-        "verified": False,
-        "api_keys": [api_key],
-        "created_at": now,
-        "updated_at": now,
-        "monthly_usage": {"month": _current_month(), "tasks": 0, "searches": 0, "queries": 0},
-    }
+    if isinstance(user_or_email, dict):
+        d = user_or_email
+        api_key = d.get("api_keys", [api_key])[0]
+        now = d.get("created_at", now)
+        pw_hash = d.get("password_hash", hash_password(""))
+        email = d.get("email", "").lower().strip()
+        user = {
+            "api_key": api_key,
+            "email": email,
+            "username": d.get("username", "") or email.split("@")[0],
+            "password_hash": pw_hash,
+            "plan": d.get("plan", "community"),
+            "role": d.get("role", "user"),
+            "verified": d.get("verified", False),
+            "api_keys": d.get("api_keys", [api_key]),
+            "created_at": now,
+            "updated_at": now,
+            "monthly_usage": {"month": _current_month(), "tasks": 0, "searches": 0, "queries": 0},
+        }
+    else:
+        pw_hash = hash_password(password)
+        email = user_or_email.lower().strip()
+        user = {
+            "api_key": api_key,
+            "email": email,
+            "username": (username.strip() or email.split("@")[0]),
+            "password_hash": pw_hash,
+            "plan": plan,
+            "role": "user",
+            "verified": False,
+            "api_keys": [api_key],
+            "created_at": now,
+            "updated_at": now,
+            "monthly_usage": {"month": _current_month(), "tasks": 0, "searches": 0, "queries": 0},
+        }
     if use_pg():
         try:
             execute("""

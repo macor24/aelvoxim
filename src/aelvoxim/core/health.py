@@ -22,7 +22,9 @@ from ..utils import METACORE_DIR
 
 # ── Config ──
 
-_BASE = Path("/mnt/c/Aelvoxim")
+# Auto-detect project root — supports both WSL and native Linux
+_HERE = Path(__file__).resolve().parent.parent.parent.parent  # src/aelvoxim/core/../../../ → project root
+_BASE = Path(os.environ.get("AELVOXIM_ROOT", str(_HERE)))
 _PYTHON = "python3 -B"
 
 SERVICES: Dict[str, Dict[str, Any]] = {

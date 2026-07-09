@@ -76,12 +76,13 @@ def mark_user_verified(email: str) -> bool:
     """
     try:
         from .auth import find_by_email, _save_user
+        from datetime import datetime
 
         user = find_by_email(email)
         if not user:
             return False
         user["verified"] = True
-        user["updated_at"] = __import__("datetime").datetime.now().isoformat()
+        user["updated_at"] = datetime.now().isoformat()
         _save_user(user)
         return True
     except Exception:

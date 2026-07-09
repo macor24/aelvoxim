@@ -836,11 +836,9 @@
                     <div class="card">
                         <h3>Service Status</h3>
                         <p style="color:#475569;font-size:13px;">Aelvoxim API 基于 WSL 本地部署，可用性取决于你的服务器状态。</p>
-                        <div style="margin-top:8px;">
-                            <span class="badge-link" onclick="window.open('http://localhost:9700/')">Dashboard 9700</span>
-                            <span class="badge-link" onclick="window.open('http://localhost:9701/')">API 9701</span>
-                            <span class="badge-link" onclick="window.open('http://localhost:9702/')">ChatAEL 9702</span>
-                        </div>
+                        <span class="badge-link" onclick="window.open('/v1/admin/panel')">管理面板 9701</span>
+                        <span class="badge-link" onclick="window.open('http://localhost:9701/')">API 9701</span>
+                        <span class="badge-link" onclick="window.open('http://localhost:9702/')">ChatAEL 9702</span>
                     </div>
                 </div>
             </div>
@@ -926,7 +924,7 @@
 
                 <!-- Service Status卡片 -->
                 <div class="dashboard-grid" id="monitorServices">
-                    <div class="card"><h3>Dashboard 9700</h3><div class="monitor-status"><i class="fas fa-spinner fa-pulse"></i> 检测中...</div></div>
+                    <div class="card"><h3>管理面板 9701</h3><div class="monitor-status"><i class="fas fa-spinner fa-pulse"></i> 检测中...</div></div>
                     <div class="card"><h3>API 9701</h3><div class="monitor-status"><i class="fas fa-spinner fa-pulse"></i> 检测中...</div></div>
                     <div class="card"><h3>ChatAEL 9702</h3><div class="monitor-status"><i class="fas fa-spinner fa-pulse"></i> 检测中...</div></div>
                     <div class="card"><h3>PostgreSQL</h3><div class="monitor-status"><i class="fas fa-spinner fa-pulse"></i> 检测中...</div></div>
@@ -1167,7 +1165,7 @@ function showLogin() {
         'bill-page': { title: '账单记录', desc: '账单功能开发中。', bread: '账户 / 账单' },
         'profile-edit': { title: '个人信息', desc: 'Login后Email即作为身份标识。', bread: '账户 / 个人信息' },
         'faq-common': { title: 'FAQ', desc: 'API 调用错误排查。确保 API Key 正确且套餐有剩余配额。', bread: '帮助 / FAQ' },
-        'service-status': { title: 'Service Status', desc: '本地部署服务，检查 9700/9701/9702 端口是否正常。', bread: '系统 / Service Status' },
+        'service-status': { title: 'Service Status', desc: '本地部署服务，检查 9701/9702 端口是否正常。', bread: '系统 / Service Status' },
         'about': { title: '关于 Aelvoxim', desc: '通用人工智能（AGI）平台 — 自我进化、跨会话记忆、多专家协作。', bread: '公司信息 / 关于我们' },
         'join-us': { title: 'Careers', desc: '开源社区，欢迎贡献。', bread: '生态 / Careers' }
     };
@@ -1432,7 +1430,6 @@ function showLogin() {
         });
     }
     function checkAllPorts() {
-        checkPort(9700, 'port9700');
         checkPort(9701, 'port9701');
         checkPort(9702, 'port9702');
     }
@@ -1526,7 +1523,6 @@ function showLogin() {
             var services = data.services || {};
             var html = '';
             var svcList = [
-                {key:'dashboard', label:'Dashboard 9700', port:9700},
                 {key:'api', label:'API 9701', port:9701},
                 {key:'chatael', label:'ChatAEL 9702', port:9702},
             ];
@@ -1954,7 +1950,6 @@ function initLangSwitch() {
                             <button class="badge-link" onclick="checkAllPorts()"><i class="fas fa-sync"></i> 刷新状态</button>
                         </div>
                         <div style="margin-top:12px;font-size:13px;">
-                            <div id="port9700"><i class="fas fa-spinner fa-pulse"></i> 检测中...</div>
                             <div id="port9701"><i class="fas fa-spinner fa-pulse"></i> 检测中...</div>
                             <div id="port9702"><i class="fas fa-spinner fa-pulse"></i> 检测中...</div>
                         </div>TYPE html>
@@ -2768,11 +2763,9 @@ function initLangSwitch() {
                     <div class="card">
                         <h3>Service Status</h3>
                         <p style="color:#475569;font-size:13px;">Aelvoxim API 基于 WSL 本地部署，可用性取决于你的服务器状态。</p>
-                        <div style="margin-top:8px;">
-                            <span class="badge-link" onclick="window.open('http://localhost:9700/')">Dashboard 9700</span>
-                            <span class="badge-link" onclick="window.open('http://localhost:9701/')">API 9701</span>
-                            <span class="badge-link" onclick="window.open('http://localhost:9702/')">ChatAEL 9702</span>
-                        </div>
+                        <span class="badge-link" onclick="window.open('/v1/admin/panel')">管理面板 9701</span>
+                        <span class="badge-link" onclick="window.open('http://localhost:9701/')">API 9701</span>
+                        <span class="badge-link" onclick="window.open('http://localhost:9702/')">ChatAEL 9702</span>
                     </div>
                 </div>
             </div>

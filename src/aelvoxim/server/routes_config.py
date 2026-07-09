@@ -49,7 +49,7 @@ async def set_config_value(
     if not key:
         raise HTTPException(400, detail="key is required")
     from ..api import set_config
-    set_config(key, value, user_id=user.get("user_id", ""))
+    set_config(key, value)
     return {"status": "ok"}
 
 

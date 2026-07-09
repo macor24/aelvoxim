@@ -627,21 +627,8 @@ class KnowledgeBase:
             entry["_validated_count"] = count
 
             auto_contrib = 0
-            try:
-                from aelvoxim.evolve.validator import get_validator
-                auto_result = get_validator().verify(entry)
-                auto_contrib = auto_result.get("contribution", 0)
-                if auto_contrib > 0:
-                    entry["_auto_contrib"] = round(
-                        entry.get("_auto_contrib", 0) + auto_contrib, 2
-                    )
-                    entry["_last_auto_result"] = {
-                        "combined_score": auto_result.get("combined_score", 0),
-                        "search_score": auto_result.get("search", {}).get("score", 0),
-                        "debate_score": auto_result.get("debate", {}).get("score", 0),
-                    }
-            except Exception:
-                pass  # non-critical, continue
+
+            # Auto-validator not available — skip
 
             _write_pending(pending_data)
 

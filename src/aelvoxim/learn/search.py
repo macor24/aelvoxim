@@ -5,8 +5,8 @@ Bing API → DuckDuckGo HTML → Bing CN (no key) → Media search → Mock (dev
 Pure stdlib, zero external dependencies.
 
 Environment variables:
-  METACORE_SEARCH_ENGINE    — bing / duckduckgo / baidu / mock
-  METACORE_BING_API_KEY     — Bing Search API Key
+  AELVOXIM_SEARCH_ENGINE    — bing / duckduckgo / baidu / mock
+  AELVOXIM_BING_API_KEY     — Bing Search API Key
 
 Usage:
   from aelvoxim.learn.search import search
@@ -27,10 +27,10 @@ from typing import Any, Dict, List, Optional
 
 # ── Engine config ───────────────────────────────
 
-BING_API_KEY = os.environ.get("METACORE_BING_API_KEY", "")
-BING_ENDPOINT = os.environ.get("METACORE_BING_ENDPOINT",
-                               "https://api.bing.microsoft.com/v7.0/search")
-_ACTIVE_ENGINE = os.environ.get("METACORE_SEARCH_ENGINE", "bing_cn").lower()
+BING_API_KEY = os.environ.get("AELVOXIM_BING_API_KEY", os.environ.get("METACORE_BING_API_KEY", ""))
+BING_ENDPOINT = os.environ.get("AELVOXIM_BING_ENDPOINT", os.environ.get("METACORE_BING_ENDPOINT",
+    "https://api.bing.microsoft.com/v7.0/search"))
+_ACTIVE_ENGINE = os.environ.get("AELVOXIM_SEARCH_ENGINE", os.environ.get("METACORE_SEARCH_ENGINE", "bing_cn")).lower()
 
 # ── Rate limiting ──
 _last_search_time: float = 0.0
@@ -393,7 +393,7 @@ def search(query: str, max_results: int = 5,
 
     Degradation chain:
       1. Specified engine (bing/duckduckgo/bing_cn/media/mock)
-      2. Env var METACORE_SEARCH_ENGINE
+      2. Env var AELVOXIM_SEARCH_ENGINE
       3. Auto degrade: Bing -> DuckDuckGo -> Bing CN -> Mock
     """
     # Default: Bing API -> Mock (no HTML scrape unless explicitly enabled)

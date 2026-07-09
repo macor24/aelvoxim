@@ -12,11 +12,23 @@ except ImportError:
     sys.exit(1)
 
 from aelvoxim.server import create_app
+from pathlib import Path
 
-# Set up logging for non-learner modules (chat, planner, scheduler)
+# Set up logging with rotation
 import logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s %(message)s",
-                    datefmt="%Y-%m-%d %H:%M:%S")
+from logging.handlers import RotatingFileHandler
+
+_log_dir = Path.home() / ".aelvoxim" / "logs"
+_log_dir.mkdir(parents=True, exist_ok=True)
+_log_file = _log_dir / "server.log"
+_handler = RotatingFileHandler(_log_file, maxBytes=10_485_760, backupCount=5)  # 10MB per file, keep 5
+_handler.setFormatter(logging.Formatter("%(asctime)s [%(name)s] %(levelname)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S"))
+logging.basicConfig(level=logging.INFO, handlers=[_handler])
+
+# Also log to console
+_console = logging.StreamHandler()
+_console.setFormatter(logging.Formatter("%(asctime)s [%(name)s] %(levelname)s %(message)s"))
+logging.getLogger().addHandler(_console)
 
 app = create_app()
 

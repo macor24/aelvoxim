@@ -133,10 +133,10 @@ def execute_reflection(
     elif action == "switch_engine":
         import os as _os
         _engines = ["bing_cn", "duckduckgo", "so"]
-        _current = _os.environ.get("METACORE_SEARCH_ENGINE", "bing_cn")
+        _current = _os.environ.get("AELVOXIM_SEARCH_ENGINE", _os.environ.get("METACORE_SEARCH_ENGINE", "bing_cn"))
         if _current in _engines:
             _new = _engines[(_engines.index(_current) + 1) % len(_engines)]
-            _os.environ["METACORE_SEARCH_ENGINE"] = _new
+            _os.environ["AELVOXIM_SEARCH_ENGINE"] = _new
             log_func(f"  🧠 Reflected: switch search {_current}→{_new} — {analysis.get('detail','')}")
     elif action == "tighten_gate":
         log_func(f"  🧠 Reflected: tightening quality gates — {analysis.get('detail','')}")

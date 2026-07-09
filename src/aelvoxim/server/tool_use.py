@@ -210,9 +210,10 @@ def gateway_operation(
         "operation": {"action": action, "target": target, "params": _merged_params}
     }).encode()
     req = _ur.Request(
-        "http://127.0.0.1:9705/api/execute",
+        f"http://{_win_host}:9705/api/execute",
         data=body,
-        headers={"Content-Type": "application/json"},
+        headers={"Content-Type": "application/json",
+                 "Authorization": f"Bearer {os.environ.get('AELVOXIM_GATEWAY_KEY', '')}"},
         method="POST",
     )
     try:

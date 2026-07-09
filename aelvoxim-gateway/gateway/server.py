@@ -50,12 +50,14 @@ async def _lifespan(_app):
     temp_dir.mkdir(parents=True, exist_ok=True)
     interval = _cfg.refresh_interval()
     push_task = asyncio.create_task(_context_push_loop(interval))
+    heartbeat_task = asyncio.create_task(_heartbeat_loop())
     print("  Gateway HTTP: FastAPI")
     print(f"  Context refresh: every {interval}s")
     print(f"  Temp dir: {temp_dir}")
     yield
-    # Shutdown: cancel background task
+    # Shutdown: cancel background tasks
     push_task.cancel()
+    heartbeat_task.cancel()
 
 
 # ── FastAPI app ──
@@ -74,6 +76,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── API Key auth ──
+_GATEWAY_API_KEY = os.environ.get("AELVOXIM_GATEWAY_KEY", "")
+
+
+@app.middleware("http")
+async def _auth_middleware(request: Request, call_next):
+    # No auth for health check and root
+    if request.url.path in ("/", "/api/status"):
+        return await call_next(request)
+    # If a key is configured, validate it
+    if _GATEWAY_API_KEY:
+        auth = request.headers.get("Authorization", "")
+        if not auth.startswith("Bearer ") or auth[7:] != _GATEWAY_API_KEY:
+            return JSONResponse(status_code=403, content={"error": "Forbidden"})
+    return await call_next(request)
 
 # ── Globals ──
 _task_ctrl = _controller.TaskController()
@@ -142,6 +160,30 @@ async def _context_push_loop(interval: float = 3.0):
                 await _manager.broadcast({"type": "context", "contexts": contexts, "ts": time.time()})
         except Exception:
             log.exception("context push error")
+
+
+async def _heartbeat_loop(interval: float = 30.0):
+    """Periodically report Gateway health to Aelvoxim brain."""
+    import urllib.request as _ur
+    import json as _js
+    _brain_url = f"http://127.0.0.1:9701/v1/heartbeat"
+    _payload = _js.dumps({
+        "service": "gateway",
+        "port": _cfg.gateway_port(),
+        "version": "0.2.0",
+    }).encode()
+    while True:
+        await asyncio.sleep(interval)
+        try:
+            req = _ur.Request(
+                _brain_url, data=_payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with _ur.urlopen(req, timeout=5):
+                pass
+        except Exception:
+            pass
 
 
 # ═══════════════════════════════════════════
