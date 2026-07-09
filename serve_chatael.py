@@ -370,6 +370,7 @@ class SpaHandler(SimpleHTTPRequestHandler):
 
     def _handle_get_session(self):
         session_id = self.path.rstrip("/").split("/")[-1]
+        _validate_session_id(session_id)
         key = self._get_auth_key()
         uid = _verify_and_get_user_id(key) if key else ""
         session = _load_session(session_id, user_id=uid)

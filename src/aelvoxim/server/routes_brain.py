@@ -87,5 +87,5 @@ async def get_brain_status(_user: dict = Depends(_verify_key)):
                 for name, cap in (caps or {}).items()
             },
         }
-    except Exception as e:
-        return {"error": str(e)}
+    except Exception:
+        return {"error": "Status unavailable"}

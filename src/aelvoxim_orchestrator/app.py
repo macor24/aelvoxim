@@ -249,8 +249,8 @@ def create_app() -> FastAPI:
         try:
             mc = _call_aelvoxim("GET", "/v1/health")
             result["dependencies"]["aelvoxim"] = {"status": "ok"}
-        except Exception as e:
-            result["dependencies"]["aelvoxim"] = {"status": "error", "detail": str(e)[:100]}
+        except Exception:
+            result["dependencies"]["aelvoxim"] = {"status": "error"}
             result["status"] = "degraded"
         # Check SentriKit
         try:
