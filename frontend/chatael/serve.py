@@ -13,8 +13,8 @@ import time
 import urllib.request
 import uuid
 
-DIST = Path(__file__).parent / "frontend" / "chatael-v2" / "dist"
-DATA_DIR = Path(__file__).parent / "frontend" / "chatael-v2" / "data"
+DIST = Path(__file__).parent / "dist"
+DATA_DIR = Path(__file__).parent / "data"
 PORT = 9702
 
 # ── PG connection (optional) ──
@@ -348,14 +348,14 @@ class SpaHandler(SimpleHTTPRequestHandler):
         if ".." in path or path.startswith("/") or path.startswith("~"):
             self._send(b"Not found", 404)
             return
-        file = (DIST / path).resolve()
-        # Path traversal guard
+        # Path traversal protection: resolve and verify it stays inside DIST
         try:
-            file.relative_to(DIST.resolve())
-        except ValueError:
+            full_path = (DIST / path).resolve()
+            full_path.relative_to(DIST.resolve())
+        except (ValueError, RuntimeError):
             self._send(b"Not found", 404)
             return
-        if file.exists() and file.is_file():
+        if full_path.exists() and full_path.is_file():
             content_type = {
                 ".html": "text/html",
                 ".js": "application/javascript",
@@ -364,8 +364,8 @@ class SpaHandler(SimpleHTTPRequestHandler):
                 ".png": "image/png",
                 ".svg": "image/svg+xml",
                 ".ico": "image/x-icon",
-            }.get(file.suffix, "application/octet-stream")
-            self._send(file.read_bytes(), content_type=content_type)
+            }.get(full_path.suffix, "application/octet-stream")
+            self._send(full_path.read_bytes(), content_type=content_type)
         else:
             # SPA fallback
             self._send((DIST / "index.html").read_bytes(), content_type="text/html")
@@ -378,7 +378,6 @@ class SpaHandler(SimpleHTTPRequestHandler):
 
     def _handle_get_session(self):
         session_id = self.path.rstrip("/").split("/")[-1]
-        _validate_session_id(session_id)
         key = self._get_auth_key()
         uid = _verify_and_get_user_id(key) if key else ""
         session = _load_session(session_id, user_id=uid)

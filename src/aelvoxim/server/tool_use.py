@@ -37,6 +37,28 @@ log = logging.getLogger("aelvoxim.tool_use")
 
 _TOOLS: Dict[str, Callable] = {}
 
+# ── Windows Gateway host auto-detection ──
+# Desktop Gateway(9705) runs on the Windows host, reachable via the WSL default gateway IP.
+# 2026-07-12: Gateway(9705) must run on the Windows host (WSL can't control desktop).
+# Old code referenced an undefined _win_host variable → NameError.
+# Changed to auto-detect WSL default gateway (= Windows host IP),
+# with env var override support.
+_GATEWAY_HOST: str = os.environ.get("AELVOXIM_GATEWAY_HOST", "")
+if not _GATEWAY_HOST:
+    _GATEWAY_HOST = "127.0.0.1"  # fallback: same machine
+    try:
+        _r = subprocess.run(
+            ["ip", "route"], capture_output=True, text=True, timeout=3,
+        )
+        for _line in _r.stdout.splitlines():
+            if _line.startswith("default"):
+                _parts = _line.split()
+                if len(_parts) > 2:
+                    _GATEWAY_HOST = _parts[2]
+                    break
+    except Exception:
+        pass
+
 def register(name: str):
     """Decorator to register a tool function."""
     def decorator(fn):
@@ -48,6 +70,18 @@ def register(name: str):
 def available_tools() -> List[str]:
     """Return list of registered tool names."""
     return list(_TOOLS.keys())
+
+
+def check_gateway() -> bool:
+    """Check if Desktop Gateway (9705) is reachable on the local network."""
+    try:
+        import urllib.request as _ur
+        req = _ur.Request(f"http://{_GATEWAY_HOST}:9705/api/status",
+                         method="GET")
+        with _ur.urlopen(req, timeout=3) as resp:
+            return resp.status == 200
+    except Exception:
+        return False
 
 
 # ── Path authorization (auto-grant, persistent) ──
@@ -204,13 +238,35 @@ def gateway_operation(
     Accepts additional kwargs (path, text, etc.) forwarded to Gateway."""
     import urllib.request as _ur
 
+    # Alias map: common LLM-generated action names → real Gateway actions
+    _ACTION_ALIASES = {
+        "open_app": "open",
+        "open_application": "open",
+        "launch_app": "open",
+        "launch": "open",
+        "start_app": "open",
+        "click": "mouse_click",
+        "click_at": "mouse_click",
+        "type": "type_text",
+        "input_text": "type_text",
+        "write_text": "type_text",
+        "press_key": "send_keys",
+        "press_keys": "send_keys",
+        "keyboard": "send_keys",
+        "take_screenshot": "screenshot",
+        "capture_screen": "screenshot",
+    }
+    _resolved = _ACTION_ALIASES.get(action, action)
+    if _resolved != action:
+        log.info("Gateway action alias: %s -> %s", action, _resolved)
+
     _merged_params = dict(params or {})
     _merged_params.update({k: v for k, v in kwargs.items() if v is not None})
     body = json.dumps({
-        "operation": {"action": action, "target": target, "params": _merged_params}
+        "operation": {"action": _resolved, "target": target, "params": _merged_params}
     }).encode()
     req = _ur.Request(
-        f"http://{_win_host}:9705/api/execute",
+        f"http://{_GATEWAY_HOST}:9705/api/execute",
         data=body,
         headers={"Content-Type": "application/json",
                  "Authorization": f"Bearer {os.environ.get('AELVOXIM_GATEWAY_KEY', '')}"},
@@ -221,6 +277,35 @@ def gateway_operation(
             return json.loads(resp.read().decode())
     except Exception as e:
         return {"success": False, "error": f"Gateway unavailable: {e}"}
+
+
+@register("ocr_screenshot")
+def ocr_screenshot(target: str = "") -> Dict[str, Any]:
+    """Screenshot a window and run OCR. Returns text blocks with coordinates.
+
+    Args:
+        target: Window title to capture (empty = fullscreen).
+
+    Returns:
+        {"success": bool, "text_blocks": [...], "full_text": str, "error": str}
+    """
+    import urllib.request as _ur
+
+    body = json.dumps({
+        "operation": {"action": "ocr_screenshot", "target": target}
+    }).encode()
+    req = _ur.Request(
+        f"http://{_GATEWAY_HOST}:9705/api/execute",
+        data=body,
+        headers={"Content-Type": "application/json",
+                 "Authorization": f"Bearer {os.environ.get('AELVOXIM_GATEWAY_KEY', '')}"},
+        method="POST",
+    )
+    try:
+        with _ur.urlopen(req, timeout=120) as resp:
+            return json.loads(resp.read().decode())
+    except Exception as e:
+        return {"success": False, "error": f"OCR Gateway unavailable: {e}"}
 
 
 @register("http_request")
@@ -325,7 +410,42 @@ def execute_command(
 # ── Execution ──
 
 
-TOOL_PATTERN = re.compile(r'\[TOOL:(\w+)\]\s*(\{.*?\})', re.DOTALL)
+# Match [TOOL:xxx]{...} with flexible whitespace (streaming may insert newlines)
+# Each character in "TOOL" can be separated by whitespace due to token-level streaming.
+TOOL_PATTERN = re.compile(
+    r'\['         # [
+    r'\s*'        # optional whitespace
+    r'T\s*O\s*O\s*L'  # T O O L with optional whitespace between chars
+    r'\s*'        #
+    r':'          # :
+    r'\s*'        #
+    r'(\w+)'      # tool name
+    r'\s*'        #
+    r'\]'         # ]
+    r'\s*'        #
+    r'(\{.*?\})'  # JSON params
+, re.DOTALL)
+
+
+def _clean_tool_markers(text: str) -> str:
+    """Remove whitespace that streaming may insert inside [TOOL:xxx]{...} blocks."""
+    import re as _re
+    def _clean_one(m: _re.Match) -> str:
+        full = m.group(0)
+        return "".join(full.split())
+    # Match [TO...]{...} — remove ALL whitespace inside the match regardless of token boundaries
+    return _re.sub(
+        r'\[\s*T\s*[^]]*\]\s*\{[^}]*\}',
+        _clean_one,
+        text,
+        flags=re.DOTALL,
+    )
+
+
+def has_tool_calls(text: str) -> bool:
+    """Check if text contains any tool markers."""
+    # Strip all whitespace for detection (streaming may split tokens across chunks)
+    return bool(TOOL_PATTERN.search("".join(text.split())))
 
 
 def execute_tool_calls(text: str) -> str:
@@ -337,14 +457,59 @@ def execute_tool_calls(text: str) -> str:
     Returns:
         Updated text with tool markers replaced by execution results.
     """
+    # Remove whitespace from tool markers (streaming may split tokens across chunks)
+    text = _clean_tool_markers(text)
+
     def _replace(match: re.Match) -> str:
         action = match.group(1)
         params_str = match.group(2)
         try:
             params = json.loads(params_str)
         except json.JSONDecodeError as e:
-            log.warning("Tool %s: invalid JSON params: %s", action, e)
-            return f'[Tool {action}: invalid params]'
+            # Try fixing backslash Windows paths: C:\2.txt is invalid JSON
+            if "\\" in params_str:
+                try:
+                    _fixed = params_str.replace("\\", "\\\\")
+                    # But don't double-escape already-escaped chars
+                    _fixed = _fixed.replace('\\\\\\"', '\\"')
+                    params = json.loads(_fixed)
+                except json.JSONDecodeError:
+                    log.warning("Tool %s: invalid JSON params: %s", action, e)
+                    return f'[Tool {action}: invalid params]'
+            else:
+                log.warning("Tool %s: invalid JSON params: %s", action, e)
+                return f'[Tool {action}: invalid params]'
+
+        # Redirect: [TOOL:gateway] {action:"read_file"...} → use local read_file
+        if action == "gateway" and isinstance(params, dict):
+            inner_action = params.get("action", "")
+            if inner_action in ("read_file", "write_file", "run_code"):
+                log.info("Redirecting [TOOL:gateway] %s → local %s", inner_action, inner_action)
+                # Map common LLM key names to function parameters
+                inner_params = dict(params)
+                # Remove Gateway-level keys before forwarding
+                inner_params.pop("action", None)
+                inner_params.pop("mode", None)
+                # Convert Windows paths to WSL paths
+                _path = inner_params.get("target") or inner_params.get("path", "")
+                if _path:
+                    import re as _p_re
+                    _m = _p_re.match(r'^([A-Za-z]):\\\\(.*)', _path)
+                    if _m:
+                        _path = f"/mnt/{_m.group(1).lower()}/{_m.group(2).replace('\\\\', '/')}"
+                    elif _p_re.match(r'^[A-Za-z]:\\', _path):
+                        _drive = _path[0].lower()
+                        _rest = _path[3:].replace('\\', '/')
+                        _path = f"/mnt/{_drive}/{_rest}"
+                    inner_params["path"] = _path
+                    inner_params.pop("target", None)
+                inner_handler = _TOOLS.get(inner_action)
+                if inner_handler:
+                    try:
+                        inner_result = inner_handler(**inner_params)
+                        return json.dumps(inner_result, ensure_ascii=False)
+                    except Exception as e:
+                        return json.dumps({"success": False, "error": str(e)}, ensure_ascii=False)
 
         handler = _TOOLS.get(action)
         if not handler:
@@ -364,8 +529,3 @@ def execute_tool_calls(text: str) -> str:
             return json.dumps({"success": False, "error": str(e)}, ensure_ascii=False)
 
     return TOOL_PATTERN.sub(_replace, text)
-
-
-def has_tool_calls(text: str) -> bool:
-    """Check if text contains any tool markers."""
-    return bool(TOOL_PATTERN.search(text))

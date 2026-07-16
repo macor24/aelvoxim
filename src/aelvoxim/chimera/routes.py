@@ -419,7 +419,7 @@ def _extract_text_params(content: str) -> Dict[str, str]:
             parts = content.rsplit(prefix, 1)
             if len(parts) > 1 and parts[1].strip():
                 return {"text": parts[1].strip()}
-    m = re.search(r"给(.+?)(说|发|发送)", content)
+    m = re.search(r"给(.{1,20}?)(说|发|发送)", content)
     if m:
         recipient = m.group(1).strip()
         return {"recipient": recipient}

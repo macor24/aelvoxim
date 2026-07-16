@@ -431,14 +431,17 @@ def extract_feedback_signals(query: str, answer: str) -> dict:
 
     # 2. Explicit correction extraction: "not A but B"
     correction_match = re.search(
-        r"(?i)不是\s*['\u201c]?(.+?)['\u201d]?\s*而是\s*['\u201c]?(.+?)['\u201d]?(?:\s*[。，]|$)",
+        r"(?i)不是\s*(.+?)\s*而是\s*(.+?)(?:\s*[。，]|$)",
         query,
     )
     if correction_match:
-        signals["correction"] = {
-            "old_term": correction_match.group(1).strip(),
-            "new_term": correction_match.group(2).strip(),
-        }
+        _old = correction_match.group(1).strip()
+        _new = correction_match.group(2).strip()
+        if len(_old) <= 30 and len(_new) <= 30:
+            signals["correction"] = {
+                "old_term": _old,
+                "new_term": _new,
+            }
 
     # 3. Repeat question detection
     for pattern in _REPEAT_QUESTION_PATTERNS:

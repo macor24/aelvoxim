@@ -31,6 +31,7 @@ Routes:
     GET  /v1/admin/users                — List users (admin)
     GET  /v1/admin/user/{email}         — Get user detail (admin)
     POST /v1/admin/update-user          — Update user (admin)
+    DELETE /v1/admin/user/{email}       — Delete user (admin)
     POST /v1/admin/migrate-users        — Migrate users to PG (admin)
     GET  /v1/admin/stats                — System stats (admin)
     GET  /v1/admin/overview             — System overview
@@ -51,9 +52,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 from urllib.error import URLError
-from urllib.request import Request, urlopen
+from urllib.request import Request as UrlLibRequest, urlopen
 
-from fastapi import APIRouter, Depends, HTTPException, Header, Query
+from fastapi import APIRouter, Depends, HTTPException, Header, Query, Request
 from pathlib import Path
 
 from .routes import _verify_key, _require_admin
@@ -72,7 +73,7 @@ _SAFETY_RESPONSE = "I'm sorry, but I cannot assist with that request."
 # ── Auth endpoints ──
 
 @router.post("/auth/login")
-async def login(body: dict):
+async def login(body: dict, request: Request = None):
     """Login with email + password. Returns api_key for subsequent API calls."""
     email = body.get("email", "").strip().lower()
     # Rate limit by email (5 attempts per minute)
@@ -97,6 +98,21 @@ async def login(body: dict):
         _save_user(user)
     from .audit import log as _audit_log
     _audit_log("user.login", user=email, status="success")
+    # Record session: track IP for single-device enforcement
+    try:
+        from ..storage.db import execute as _db_exec
+        # Get client IP from request headers
+        _ip = ""
+        if request:
+            _ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() if request.headers.get("x-forwarded-for") else (request.client.host if request.client else "")
+        if _ip:
+            _db_exec(
+                "INSERT INTO user_sessions (email, api_key, ip_address, login_at) VALUES (%s, %s, %s, NOW()) "
+                "ON CONFLICT (email) DO UPDATE SET api_key=EXCLUDED.api_key, ip_address=EXCLUDED.ip_address, login_at=NOW()",
+                (email, user.get("api_keys", [None])[0] or "", _ip),
+            )
+    except Exception:
+        pass  # Non-critical
     return {"api_key": user.get("api_keys", [None])[0] or "", "plan": user.get("plan", "free"), "email": email}
 
 @router.post("/auth/register")
@@ -334,6 +350,9 @@ async def health_check():
             result["dependencies"]["learner"] = {"running": l.is_running()}
     except Exception:
         result["dependencies"]["learner"] = {"running": False}
+        import logging
+        logging.getLogger("aelvoxim.routes").warning("learner check failed")
+
     result["confidence"] = {"current": 0.5, "avg_50": 0.5, "trend": "stable", "samples": 0}
     try:
         from ..server.service_chat import get_confidence_trend
@@ -408,8 +427,10 @@ async def get_selfmodel(user: dict = Depends(_verify_key)):
             "capabilities": len(sm._capabilities),
             "snapshots": len(sm._snapshots),
         }
-    except Exception as e:
-        raise HTTPException(500, detail=f"selfmodel unavailable: {e}")
+    except Exception:
+        import logging
+        logging.getLogger("aelvoxim.routes").exception("selfmodel unavailable")
+        raise HTTPException(500, detail="selfmodel unavailable")
 
 # ── Webhook endpoints ──
 
@@ -448,15 +469,22 @@ async def webhook_list_subs(current_user: dict = Depends(_verify_key)):
 async def webhook_delete_sub(sub_id: str, current_user: dict = Depends(_verify_key)):
     """Delete a webhook subscription."""
     from .webhook import unsubscribe, get_subscription
-    email = current_user.get("email", "")
-    role = current_user.get("role", "")
-    sub = get_subscription(sub_id)
-    if not sub:
-        raise HTTPException(404, detail="subscription not found")
-    if role != "admin" and sub.get("user_id", "") != email:
-        raise HTTPException(403, detail="not authorized")
-    unsubscribe(sub_id)
-    return {"detail": "deleted"}
+    try:
+        email = current_user.get("email", "")
+        role = current_user.get("role", "")
+        sub = get_subscription(sub_id)
+        if not sub:
+            raise HTTPException(404, detail="subscription not found")
+        if role != "admin" and sub.get("user_id", "") != email:
+            raise HTTPException(403, detail="not authorized")
+        unsubscribe(sub_id)
+        return {"detail": "deleted"}
+    except HTTPException:
+        raise
+    except Exception:
+        import logging
+        logging.getLogger("aelvoxim.routes").exception("webhook_delete_sub failed")
+        raise HTTPException(500, detail="Failed to delete subscription")
 
 @router.post("/webhook/test-delivery")
 async def webhook_test_delivery(body: dict, current_user: dict = Depends(_verify_key)):
@@ -573,20 +601,42 @@ async def migrate_users(body: dict, admin: dict = Depends(_require_admin)):
                   json.dumps(data.get("api_keys", [data.get("api_key", "")])),
                   data.get("created_at", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))))
             migrated += 1
-        except Exception as e:
-            errors.append(str(e))
+        except Exception:
+            _uid = "unknown"
+            try:
+                _uid = data.get("email", "unknown")
+            except Exception:
+                pass
+            errors.append("migration error for " + _uid)
     return {"migrated": migrated, "errors": errors, "total_users_in_pg_plus_json": migrated}
+
+
+@router.delete("/admin/user/{email}")
+async def delete_user_route(email: str, admin: dict = Depends(_require_admin)):
+    """Delete a user and all their data. Admin only."""
+    from .auth import find_by_email, delete_user
+    user = find_by_email(email)
+    if not user:
+        raise HTTPException(404, detail="user not found")
+    # Don't allow deleting yourself
+    if user.get("email", "").lower() == admin.get("email", "").lower():
+        raise HTTPException(400, detail="cannot delete yourself")
+    ok = delete_user(email)
+    if not ok:
+        raise HTTPException(500, detail="failed to delete user")
+    return {"message": f"user {email} deleted"}
+
 
 @router.get("/admin/stats")
 async def admin_stats(admin: dict = Depends(_require_admin)):
-    """Get system-wide statistics. Admin only."""
-    from .auth import list_all_users
-    users = list_all_users()
-    by_plan = {}
-    for u in users:
-        p = u.get("plan", "community")
-        by_plan[p] = by_plan.get(p, 0) + 1
-    return {
+            """Get system-wide statistics. Admin only."""
+            from .auth import list_all_users
+            users = list_all_users()
+            by_plan = {}
+            for u in users:
+                p = u.get("plan", "community")
+                by_plan[p] = by_plan.get(p, 0) + 1
+            return {
         "total_users": len(users),
         "users_by_plan": by_plan,
         "total_monthly_tasks": 0,
@@ -672,16 +722,55 @@ async def admin_overview(user: dict = Depends(_verify_key)):
 @router.get("/admin/data")
 async def admin_dashboard(user: dict = Depends(_verify_key)):
     """Return dashboard data: learner status + system overview."""
-    result = {"services": {}, "learner": {}}
+    result = {"services": {}, "learner": {}, "knowledge": {}}
     from ..core.health import get_watchdog
     wd = get_watchdog()
-    for name, info in wd._services.items():
+    for name, info in wd._status.items():
         result["services"][info.get("label", name)] = "online" if info.get("up") else "offline"
     try:
-        from ..utils import read_json, LEARNER_STATUS
+        from ..utils import read_json, LEARNER_STATUS, LEARNER_CONFIG
         st = read_json(LEARNER_STATUS) or {}
         result["learner"]["running"] = st.get("running", False)
         result["learner"]["total_cycles"] = st.get("cycles_completed", 0)
+        cfg = read_json(LEARNER_CONFIG) or {}
+        dirs = []
+        result["learner"]["active"] = 0
+        for t, c in cfg.items():
+            if isinstance(c, dict):
+                dirs.append({
+                    "topic": t, "status": c.get("status", "unknown"),
+                    "entries_created": c.get("entries_created", 0),
+                    "saturation": c.get("saturation", 0),
+                })
+                if c.get("status") == "active":
+                    result["learner"]["active"] = result["learner"].get("active", 0) + 1
+        result["learner"]["total"] = len(dirs)
+        result["learner"]["completed"] = sum(1 for d in dirs if d["status"] in ("completed", "mastery"))
+        result["learner"]["paused"] = sum(1 for d in dirs if d["status"] in ("paused", "pending"))
+        # 知识库条目数：用真实 DB 计数替代 Learner 碎片记录
+        try:
+            from ..storage.db import fetch_dict
+            _kr = fetch_dict("SELECT count(*) as cnt FROM knowledge_entries")
+            result["learner"]["total_entries"] = _kr[0]["cnt"] if _kr else 0
+        except Exception:
+            result["learner"]["total_entries"] = sum(d.get("entries_created", 0) for d in dirs)
+    except Exception:
+        pass
+    # Knowledge: real DB count
+    try:
+        from ..learn.knowledge import KnowledgeBase
+        kb = KnowledgeBase()
+        active_entries = list(kb.get_all_active())
+        result["knowledge"]["active"] = len(active_entries)
+        # Also get total (including pending)
+        from ..storage.db import fetch_dict
+        _rows = fetch_dict("SELECT status, count(*) as cnt FROM knowledge_entries GROUP BY status")
+        if _rows:
+            result["knowledge"]["total"] = sum(r["cnt"] for r in _rows)
+            result["knowledge"]["pending"] = sum(r["cnt"] for r in _rows if r["status"] == "pending")
+        else:
+            result["knowledge"]["total"] = len(active_entries)
+            result["knowledge"]["pending"] = 0
     except Exception:
         pass
     return result
@@ -800,3 +889,116 @@ async def admin_skill_timeline(months: int = 6, user: dict = Depends(_verify_key
     )
     return {"timeline": months_data, "total_completed": sum(m["completed"] for m in months_data),
             "total_entries": sum(m["entries"] for m in months_data), "active_entries": active_entries}
+
+
+# ═══ 知识库目录学习 API ═══
+
+
+@router.post("/admin/learn-directory")
+async def learn_directory(body: dict, admin: dict = Depends(_require_admin)):
+    """Configure and trigger a knowledge directory scan."""
+    from ..learn.directory_learner import scan_directory, save_config, load_config, get_config
+
+    path = body.get("path", "").strip()
+    action = body.get("action", "scan")  # scan, config, status
+
+    if action == "config":
+        # Save scan configuration
+        config = {
+            "directory": path,
+            "recursive": body.get("recursive", True),
+            "source": body.get("source", "server"),
+            "user_id": body.get("user_id", ""),
+            "interval_minutes": body.get("interval_minutes", 0),
+        }
+        save_config(config)
+        return {"message": "Configuration saved", "config": config}
+
+    if action == "status":
+        cfg = get_config()
+        from ..storage.db import fetch_dict
+        stats = fetch_dict(
+            "SELECT COUNT(*) as total, "
+            "COUNT(DISTINCT sha256) as unique_files "
+            "FROM knowledge_files WHERE source = %s",
+            (cfg.get("source", "server"),),
+        ) or [{"total": 0, "unique_files": 0}]
+        return {
+            "config": cfg,
+            "stats": stats[0] if stats else {},
+        }
+
+    # Default: run scan
+    if not path:
+        cfg = get_config()
+        path = cfg.get("directory", "")
+
+    if not path:
+        raise HTTPException(400, detail="path is required")
+
+    recursive = body.get("recursive", True)
+    source = body.get("source", "server")
+    user_id = body.get("user_id", "")
+    dry_run = body.get("dry_run", False)
+
+    result = scan_directory(
+        path, recursive=recursive, user_id=user_id,
+        source=source, dry_run=dry_run,
+    )
+    return result
+
+
+@router.get("/admin/learn-directory/status")
+async def learn_directory_status(admin: dict = Depends(_require_admin)):
+    """Get current knowledge directory scan status and stats."""
+    from ..learn.directory_learner import get_config, load_config
+    cfg = get_config() or load_config()
+    from ..storage.db import fetch_dict
+
+    stats = fetch_dict(
+        "SELECT "
+        "  COUNT(*) as total_files, "
+        "  COUNT(DISTINCT sha256) as unique_files, "
+        "  SUM(file_size) as total_bytes "
+        "FROM knowledge_files",
+    ) or [{"total_files": 0, "unique_files": 0, "total_bytes": 0}]
+
+    by_type = fetch_dict(
+        "SELECT file_type, COUNT(*) as cnt FROM knowledge_files GROUP BY file_type ORDER BY cnt DESC",
+    ) or []
+
+    return {
+        "config": cfg,
+        "stats": stats[0] if stats else {},
+        "by_type": by_type or [],
+    }
+
+
+@router.post("/admin/learn-directory/scan-now")
+async def learn_directory_scan_now(admin: dict = Depends(_require_admin)):
+    """Trigger an immediate scan of the configured directory."""
+    from ..learn.directory_learner import run_scheduled_scan
+    result = run_scheduled_scan()
+    return result
+
+
+@router.delete("/admin/learn-directory")
+async def learn_directory_clear(admin: dict = Depends(_require_admin)):
+    """Clear scan configuration and stop scheduled scans."""
+    from ..learn.directory_learner import save_config
+    save_config({})
+    return {"message": "Configuration cleared"}
+
+
+@router.get("/admin/gateway/connections")
+async def admin_gateway_connections(admin: dict = Depends(_require_admin)):
+    """List active Gateway WebSocket connections. Admin only."""
+    from ..server.gateway_ws import get_pool
+    pool = get_pool()
+    connections = {}
+    for email, info in pool.items():
+        connections[email] = {
+            "connected_at": info.get("connected_at", 0),
+            "version": info.get("version", ""),
+        }
+    return {"connections": connections, "count": len(pool)}

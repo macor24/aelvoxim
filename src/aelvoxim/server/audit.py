@@ -48,10 +48,17 @@ def log(
         if detail:
             # Mask sensitive fields
             safe = dict(detail)
-            for sensitive in ("password", "api_key", "token", "secret", "key"):
+            for sensitive in ("password", "api_key", "token", "secret", "key", "credential", "auth"):
                 if sensitive in safe:
                     safe[sensitive] = "***"
+                # Also check nested dicts
+                if isinstance(safe.get(sensitive), dict):
+                    for k in safe[sensitive]:
+                        safe[sensitive][k] = "***"
             entry["detail"] = safe
+        # Remove any raw sensitive fields before logging
+        for field in ("password", "api_key", "token", "secret", "key", "credential"):
+            entry.pop(field, None)
         with open(str(_AUDIT_LOG), "a") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
     except Exception:

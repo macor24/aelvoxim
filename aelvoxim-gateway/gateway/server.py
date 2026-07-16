@@ -33,6 +33,8 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPExcept
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+__version__ = "1.0.0"
+
 from .context import scan_snapshots, normalize, get_latest, cleanup_old
 from .executor import execute as _exec_op
 from . import controller as _controller
@@ -255,6 +257,7 @@ async def post_execute(body: ExecuteRequest):
         result = _exec_op(body.operation)
         return result
     except Exception:
+        log.exception("execute failed")
         raise HTTPException(500, detail="Execution failed")
 
 
@@ -266,6 +269,7 @@ async def post_execute_plan(body: ExecutePlanRequest):
         result = _task_ctrl.execute_plan(body.plan)
         return result
     except Exception:
+        log.exception("plan execution failed")
         raise HTTPException(500, detail="Plan execution failed")
 
 
@@ -280,6 +284,7 @@ async def post_run_script(body: RunScriptRequest):
         result = execute({"action": "run_script", "params": {"path": full_path}})
         return result
     except Exception:
+        log.exception("run_script failed")
         raise HTTPException(500, detail="Script execution failed")
 
 
@@ -289,8 +294,9 @@ async def post_screenshot(body: ScreenshotRequest):
         from .executor._uia import screenshot
         result = screenshot(body.window_title)
         return result
-    except Exception as e:
-        raise HTTPException(500, detail=str(e))
+    except Exception:
+        log.exception("screenshot failed")
+        raise HTTPException(500, detail="Screenshot failed")
 
 
 @app.post("/api/history")
@@ -356,8 +362,9 @@ async def websocket_endpoint(ws: WebSocket):
 def start_server(host: str = "127.0.0.1", port: int = 9705):
     """Start Gateway FastAPI server via uvicorn."""
     import uvicorn
+    from gateway.server import app as _app
     uvicorn.run(
-        "gateway.server:app",
+        _app,
         host=host,
         port=port,
         log_level="info",

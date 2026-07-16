@@ -44,15 +44,22 @@ async def brain_think(request: dict):
     )
 
     mode = request.get("mode", "full")
-    if mode == "fast":
-        result = _orch.think_fast(inp)
-    else:
-        result = _orch.think(inp)
+    try:
+        if mode == "fast":
+            result = _orch.think_fast(inp)
+        else:
+            result = _orch.think(inp)
 
-    if result.get("blocked"):
-        raise HTTPException(403, detail=result.get("opinion", "Blocked by ethics expert"))
+        if result.get("blocked"):
+            raise HTTPException(403, detail=result.get("opinion", "Blocked by ethics expert"))
 
-    return result
+        return result
+    except HTTPException:
+        raise
+    except Exception:
+        import logging
+        logging.getLogger("aelvoxim.orchestrator").exception("brain_think failed")
+        raise HTTPException(500, detail="Brain processing failed")
 
 
 @router.get("/experts")

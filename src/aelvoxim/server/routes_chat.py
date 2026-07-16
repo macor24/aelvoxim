@@ -8,6 +8,7 @@ Routes:
 
 from __future__ import annotations
 
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 from .routes import _verify_key
 
@@ -50,12 +51,16 @@ async def llm_chat(
                            skip_experts=skip_experts, skip_memory=skip_memory, mode=mode)
 
     if result.get("blocked"):
-        raise HTTPException(403, detail=str(result.get("reason", "Blocked by safety rules")))
+        _reason = result.get("reason", "Blocked by safety rules")
+        if not isinstance(_reason, str):
+            _reason = "Blocked"
+        raise HTTPException(403, detail=_reason)
 
     return {
         "content": result.get("text") or "",
         "model": model.name if hasattr(model, 'name') else "deepseek-chat",
     }
+
 
 
 @router.post("/llm/test")
@@ -250,6 +255,56 @@ async def llm_chat_stream(
     user_msg = next((m["content"] for m in reversed(messages) if m.get("role") == "user"), "")
     extra_context = ""
 
+    # Quick file read: detect "读/读取/打开" + file path → bypass LLM tool calling
+    import re as _qf_re
+    _qf_match = _qf_re.search(
+        r'(?:读\s*取|读\s*一\s*下|读\s*文\s*件|打\s*开\s*文\s*件|查\s*看\s*文\s*件|打\s*开)\s*([A-Za-z]:[\\/][^\s)]+|[A-Za-z]:[^\s)]+\.\w+)',
+        user_msg,
+    )
+    if not _qf_match:
+        # Also match "文件 C:\xxx" or "内容 C:\xxx"
+        _qf_match = _qf_re.search(
+            r'(?:文\s*件|内\s*容|看\s*看)\s*[:：]?\s*([A-Za-z]:[\\/][^\s)]+|[A-Za-z]:[^\s)]+\.\w+)',
+            user_msg,
+        )
+    if not _qf_match:
+        # Bare path with read intent: match any "C:\xxx" after 读/看/打开
+        _qf_match = _qf_re.search(
+            r'(?:读|看|打\s*开|查\s*看).{0,10}?([A-Za-z]:[\\/][^\s)]+)',
+            user_msg,
+        )
+    if _qf_match:
+        import os as _qf_os
+        _qf_path_raw = _qf_match.group(1).strip()
+        if _qf_re.match(r'^[A-Za-z]:', _qf_path_raw):
+            _drive = _qf_path_raw[0].lower()
+            _rest = _qf_path_raw[3:].replace("\\", "/")
+            _qf_path = f"/mnt/{_drive}/{_rest}"
+        else:
+            _qf_path = _qf_path_raw
+        if _qf_os.path.exists(_qf_path):
+            try:
+                # Security: block system paths (same as resolve_path in tool_use.py)
+                _qf_blocked = ("/etc", "/usr", "/boot", "/dev", "/proc", "/sys", "/var", "/bin", "/sbin")
+                if any(_qf_path.startswith(p) for p in _qf_blocked):
+                    extra_context += f"\n[User requested to read file: {_qf_path_raw} — access denied (system path)]\n"
+                else:
+                    with open(_qf_path, "r", encoding="utf-8", errors="replace") as _qf_f:
+                        _qf_content = _qf_f.read(5000)
+                    _qf_lines = _qf_content.count("\n") + 1
+                    extra_context += (
+                        f"\n[User requested to read file: {_qf_path_raw}]\n"
+                        f"[File contents ({_qf_lines} lines, first 5000 chars):\n"
+                        f"{_qf_content[:2000]}\n"
+                        f"... (truncated to 2000 chars by pre-processor)]\n"
+                        f"[Please present the file contents to the user naturally. "
+                        f"Do NOT use [TOOL:] markers — the file is already read.]\n"
+                    )
+            except Exception as _qf_e:
+                extra_context += f"\n[Error reading {_qf_path_raw}: {_qf_e}]\n"
+        else:
+            extra_context += f"\n[File not found: {_qf_path_raw}]\n"
+
     # Reference phrase
     if _is_reference_phrase(user_msg):
         refs = []
@@ -410,6 +465,7 @@ async def llm_chat_stream(
     _pg_email = user.get("email", "") if user else ""
     _pg_uid = str(user.get("id") or user.get("user_id", "")) if user else ""
     _pg_msg = user_msg or ""
+    _chat_log = logging.getLogger("aelvoxim.chat")
 
     # Generate a session ID upfront so user message is saved immediately
     # — this prevents data loss when user switches sessions mid-stream
@@ -422,22 +478,54 @@ async def llm_chat_stream(
             from ..storage.db import save_session_to_pg, save_message_to_pg
             save_session_to_pg({"id": _pg_sid, "user_id": _pg_uid,
                                 "title": _pg_msg[:100] or "新对话", "messages": []})
-            save_message_to_pg(_pg_sid, "user", _pg_msg or "")
+            save_message_to_pg(_pg_sid, "user", _pg_msg or "", user_id=str(_pg_uid) if _pg_uid else "")
         except Exception:
             pass
 
     def _generate():
         try:
+            import re as _re
+            _tool_seen = False
             for chunk in stream:
                 if chunk:
                     _pg_collected.append(chunk)
-                    yield f"data: {json.dumps({'token': chunk})}\n\n"
+                    if not _tool_seen:
+                        _acc = "".join(_pg_collected)
+                        _norm = "".join(_acc.split())
+                        if _re.search(r'\[TOOL:\w+\]\s*\{', _norm):
+                            _tool_seen = True
+                            continue
+                        yield f"data: {json.dumps({'token': chunk})}\n\n"
+            _full_text = "".join(_pg_collected)
+            if _full_text:
+                try:
+                    from .tool_use import execute_tool_calls, has_tool_calls
+                    if has_tool_calls(_full_text):
+                        _chat_log.info("  Stream: tool calls detected, executing...")
+                        _result_text = execute_tool_calls(_full_text)
+                        if _result_text and _result_text != _full_text:
+                            _pg_collected.clear()
+                            _pg_collected.append(_result_text)
+                            # Yield the clean result — replace raw [TOOL:...] with execution output
+                            # Pre-tool text was already streamed; tool portion is replaced inline
+                            yield f"data: {json.dumps({'token': _result_text + chr(10)})}\n\n"
+                            # Save tool result before returning
+                            if _pg_email and _result_text:
+                                try:
+                                    from ..storage.db import save_message_to_pg
+                                    save_message_to_pg(_pg_sid, "assistant", _result_text)
+                                except Exception:
+                                    pass
+                            yield "data: [DONE]\n\n"
+                            return
+                except Exception as _exc:
+                    _chat_log.warning("  Stream tool execution error: %s", _exc)
             yield "data: [DONE]\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'error': 'Internal error'})}\n\n"
         # Save assistant response after stream finishes (best-effort)
-        if _pg_collected and _pg_email:
-            _text = "".join(_pg_collected)
+        _text = "".join(_pg_collected)
+        if _pg_email and _text:
             try:
                 from ..storage.db import save_message_to_pg
                 save_message_to_pg(_pg_sid, "assistant", _text)

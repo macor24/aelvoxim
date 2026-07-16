@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 
 from fastapi import FastAPI
+from fastapi import Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
 # Import base routes first (defines _verify_key, router, public_router)
@@ -58,6 +59,47 @@ def create_app() -> FastAPI:
     app.include_router(public_router)
     app.include_router(chimera_router)
     app.include_router(brain_router)
+
+    # Gateway WebSocket — inline in create_app to avoid decorator scope issues
+    from aelvoxim.server.gateway_ws import handle_gateway_ws
+
+    @app.websocket("/v1/gateway/ws")
+    async def gateway_ws_route(ws: WebSocket):
+        await handle_gateway_ws(ws)
+
+    # Session IP check middleware (single-device login enforcement)
+    @app.middleware("http")
+    async def _session_ip_check(request: Request, call_next):
+        response = await call_next(request)
+        path = request.url.path
+        # Skip WebSocket upgrade requests and public paths
+        if (request.headers.get("upgrade", "").lower() == "websocket"
+            or not path.startswith("/v1/")
+            or path in ("/v1/auth/login", "/v1/auth/register", "/v1/health")):
+            return response
+        auth = request.headers.get("authorization", "")
+        if not auth.startswith("bearer "):
+            return response
+        api_key = auth[7:]
+        if not api_key:
+            return response
+        try:
+            from ..storage.db import fetch_one
+            row = fetch_one(
+                "SELECT ip_address FROM user_sessions WHERE api_key = %s",
+                (api_key,),
+            )
+            if row:
+                session_ip = row[0]
+                req_ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (
+                    request.client.host if request.client else ""
+                )
+                if req_ip and req_ip != session_ip:
+                    response.status_code = 401
+                    response.headers["X-Session-Conflict"] = "true"
+        except Exception:
+            pass
+        return response
 
     # Forward-compat: /orchestrate without /v1 prefix (for ChatAEL-v2 frontend)
     @app.post("/orchestrate")
@@ -202,6 +244,13 @@ def create_app() -> FastAPI:
             return RedirectResponse(url=f"/v1/admin/panel?token={token}")
         return RedirectResponse(url="/v1/admin/panel")
 
+    # Static file serving for downloads (Gateway installer, etc.)
+    from fastapi.staticfiles import StaticFiles
+    from pathlib import Path
+    _static_dir = str(Path(__file__).resolve().parent.parent.parent.parent / "static")
+    if os.path.isdir(_static_dir):
+        app.mount("/static", StaticFiles(directory=_static_dir), name="static")
+
     @app.get("/v1/status/planner")
     async def planner_status():
         """Report learner status for the Orchestrator's LongTermPlanner."""
@@ -229,9 +278,6 @@ def create_app() -> FastAPI:
             pass
         return result
 
-
-        return result
-
     # Serve ChatAEL frontend (built SPA) at /chatael
     from pathlib import Path as _Path
     _chatael_dist = _Path(__file__).resolve().parent.parent.parent.parent / "frontend" / "chatael-v2" / "dist"
@@ -244,6 +290,9 @@ def create_app() -> FastAPI:
         @app.get("/chatael/{path:path}")
         async def chatael_spa(path: str):
             from fastapi.responses import HTMLResponse
+            # Block path traversal characters early
+            if ".." in path or path.startswith("/") or path.startswith("~"):
+                return HTMLResponse(content=(_chatael_dist / "index.html").read_text(encoding="utf-8"))
             _file = (_chatael_dist / path).resolve()
             # Path traversal guard: ensure file is within dist directory
             try:

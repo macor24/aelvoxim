@@ -8,8 +8,6 @@ updates:
       time: "09:00"
       timezone: "Asia/Shanghai"
     open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
     commit-message:
       prefix: "deps"
       include: "scope"
@@ -25,8 +23,6 @@ updates:
       day: "monday"
       time: "09:00"
       timezone: "Asia/Shanghai"
-    labels:
-      - "dependencies"
     commit-message:
       prefix: "ci"
       include: "scope"

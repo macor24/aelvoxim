@@ -235,7 +235,7 @@ def _check_content_sanity(topic: str, text: str) -> Optional[str]:
             return f"Value raised: {day_vals[0]} days (over 100 years, clearly unreasonable)"
     
     # Year spans
-    year_span = re.findall(r'(\d+)\s*年\s*(?:后|内|以[内上]|左右|时间|周期|期|限|历史|寿命|保修|有效)', text)
+    year_span = re.findall(r'(\d+)\s*年\s*(?:后|内|左右|时间|周期|历史|寿命|保修|有效)', text)
     for ys in year_span:
         val = int(ys[0]) if isinstance(ys, tuple) else int(ys)
         if val > 200:
@@ -244,14 +244,14 @@ def _check_content_sanity(topic: str, text: str) -> Optional[str]:
     # Monetary amounts
     money_match = re.findall(r'[¥$￥](\d+)\s*[万亿]?', text)
     if not money_match:
-        money_match = re.findall(r'(\d+)\s*(元|美元|美金|块)', text)
+        money_match = re.findall(r'(\d+)\s*(?:元|美元|美金|块)', text)
     for m in money_match:
-        val = int(m[0]) if isinstance(m, tuple) else int(m)
+        val = int(m) if isinstance(m, str) else int(m[0])
         if val > 1000000000:
             return f"Monetary value raised: {val} (over 1 billion, unreasonable)"
     
     # Percentage / multiplier
-    pct = re.findall(r'(\d+)\s*%', text)
+    pct = re.findall(r'\d+\s*%', text)
     for p in pct:
         if int(p) > 5000:
             return f"Percentage raised: {int(p)}% (over 5000%, unreasonable)"
@@ -327,6 +327,11 @@ def _build_vocab(entries: List[dict]) -> dict:
     # Filter low-frequency words (occurrence < 2)
     vocab = {w: i for i, (w, freq) in enumerate(sorted(word_freq.items(), key=lambda x: -x[1]))
              if freq >= 2}
+    # Cap vocabulary to prevent vector bloat (old entries with oversized vectors
+    # caused embeddings.json to balloon to 1.2GB for 2402 entries)
+    MAX_VOCAB = 2048
+    if len(vocab) > MAX_VOCAB:
+        vocab = dict(list(vocab.items())[:MAX_VOCAB])
     return vocab
 
 
@@ -1080,8 +1085,11 @@ class KnowledgeBase:
                     _params.append(topic)
                 if _conds:
                     _sql += " AND " + " AND ".join(_conds)
-                _sql += " ORDER BY ts_rank(to_tsvector('simple', coalesce(title,'') || ' ' || coalesce(topic,'') || ' ' || coalesce(content,'')), plainto_tsquery('simple', %s)) DESC LIMIT " + str(limit)
-                _params.append(query.replace("'", "''"))
+                if query:
+                    _sql += " ORDER BY ts_rank(to_tsvector('simple', coalesce(title,'') || ' ' || coalesce(topic,'') || ' ' || coalesce(content,'')), plainto_tsquery('simple', %s)) DESC LIMIT " + str(limit)
+                    _params.append(query.replace("'", "''"))
+                else:
+                    _sql += " ORDER BY updated_at DESC NULLS LAST LIMIT " + str(limit)
                 _rows = fetch_dict(_sql, tuple(_params))
                 if _rows:
                     _results = []

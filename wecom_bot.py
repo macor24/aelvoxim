@@ -146,11 +146,15 @@ def decrypt_echostr(encoding_aes_key, echostr):
 @app.route("/webhook", methods=["GET", "POST"])
 def webhook():
     """Unified handler: GET verification + POST message reception"""
-    
-    if request.method == "GET":
-        return _handle_verify()
-    else:
-        return _handle_message()
+    try:
+        if request.method == "GET":
+            return _handle_verify()
+        else:
+            return _handle_message()
+    except Exception:
+        import logging
+        logging.getLogger("wecom_bot").exception("webhook handler failed")
+        return "internal error", 500
 
 
 def _handle_verify():
@@ -214,13 +218,8 @@ def _handle_message():
         xml_data = request.data.decode("utf-8")
         try:
             # Disable external entity resolution to prevent XXE (CWE-611)
-            try:
-                from defusedxml.ElementTree import fromstring as _safe_xml
-                root = _safe_xml(xml_data)
-            except ImportError:
-                parser = ET.XMLParser()
-                parser.entity = {}
-                root = ET.fromstring(xml_data, parser)
+            from defusedxml.ElementTree import fromstring as _safe_xml
+            root = _safe_xml(xml_data)
             enc_el = root.find("Encrypt")
             encrypt_text = enc_el.text if enc_el is not None else ""
         except Exception:
@@ -236,14 +235,8 @@ def _handle_message():
     try:
         raw_xml = request.data.decode("utf-8")
         # Disable external entity resolution to prevent XXE (CWE-611)
-        # Use defusedxml if available, otherwise restrict parser manually
-        try:
-            from defusedxml.ElementTree import fromstring as _safe_xml
-            root = _safe_xml(raw_xml)
-        except ImportError:
-            parser = ET.XMLParser()
-            parser.entity = {}
-            root = ET.fromstring(raw_xml, parser)
+        from defusedxml.ElementTree import fromstring as _safe_xml
+        root = _safe_xml(raw_xml)
 
         # Check for Encrypt field (production message encryption)
         enc_el = root.find("Encrypt")
