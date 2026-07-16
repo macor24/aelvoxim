@@ -301,7 +301,10 @@ def create_app() -> FastAPI:
                 return HTMLResponse(content=(_chatael_dist / "index.html").read_text(encoding="utf-8"))
             if _file.exists() and _file.is_file():
                 _content_type = {".html": "text/html", ".js": "application/javascript", ".css": "text/css", ".json": "application/json", ".png": "image/png", ".svg": "image/svg+xml", ".ico": "image/x-icon"}.get(_file.suffix, "application/octet-stream")
-                return HTMLResponse(content=_file.read_bytes(), status_code=200, media_type=_content_type)
+                try:
+                    return HTMLResponse(content=_file.read_bytes(), status_code=200, media_type=_content_type)
+                except OSError:
+                    return HTMLResponse(content=(_chatael_dist / "index.html").read_text(encoding="utf-8"))
             return HTMLResponse(content=(_chatael_dist / "index.html").read_text(encoding="utf-8"))
 
     return app

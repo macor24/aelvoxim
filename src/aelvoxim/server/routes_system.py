@@ -368,7 +368,8 @@ async def health_check():
         result["resources"] = get_resource_usage()
         result["postgres"] = get_pg_status()
     except Exception:
-        pass
+        import logging
+        logging.getLogger("aelvoxim.routes").warning("health check failed")
     return result
 
 @router.get("/logs")
