@@ -78,7 +78,10 @@ def _save_session_json(session: dict):
         "created_at": session.get("created_at", ""),
         "updated_at": session.get("updated_at", ""),
     }
-    _session_path(session["id"]).write_text(json.dumps(meta, indent=2))
+    try:
+        _session_path(session["id"]).write_text(json.dumps(meta, indent=2))
+    except (ValueError, OSError):
+        pass
     msgs = []
     for m in session.get("messages", []):
         msgs.append({
@@ -86,7 +89,10 @@ def _save_session_json(session: dict):
             "content": m.get("content", ""),
             "timestamp": m.get("timestamp", ""),
         })
-    _messages_path(session["id"]).write_text(json.dumps(msgs, indent=2))
+    try:
+        _messages_path(session["id"]).write_text(json.dumps(msgs, indent=2))
+    except (ValueError, OSError):
+        pass
 
 
 def _load_session_json(session_id: str) -> dict | None:

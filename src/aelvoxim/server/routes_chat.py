@@ -258,19 +258,19 @@ async def llm_chat_stream(
     # Quick file read: detect "读/读取/打开" + file path → bypass LLM tool calling
     import re as _qf_re
     _qf_match = _qf_re.search(
-        r'(?:读\s*取|读\s*一\s*下|读\s*文\s*件|打\s*开\s*文\s*件|查\s*看\s*文\s*件|打\s*开)\s*([A-Za-z]:[\\/][^\s)]+|[A-Za-z]:[^\s)]+\.\w+)',
+        r'(?:读\s*取|读\s*一\s*下|读\s*文\s*件|打\s*开\s*文\s*件|查\s*看\s*文\s*件|打\s*开)\s*([A-Za-z]:[\\/][^\s)]{1,260})',
         user_msg,
     )
     if not _qf_match:
         # Also match "文件 C:\xxx" or "内容 C:\xxx"
         _qf_match = _qf_re.search(
-            r'(?:文\s*件|内\s*容|看\s*看)\s*[:：]?\s*([A-Za-z]:[\\/][^\s)]+|[A-Za-z]:[^\s)]+\.\w+)',
+            r'(?:文\s*件|内\s*容|看\s*看)\s*[:：]?\s*([A-Za-z]:[\\/][^\s)]{1,260})',
             user_msg,
         )
     if not _qf_match:
         # Bare path with read intent: match any "C:\xxx" after 读/看/打开
         _qf_match = _qf_re.search(
-            r'(?:读|看|打\s*开|查\s*看).{0,10}?([A-Za-z]:[\\/][^\s)]+)',
+            r'(?:读|看|打\s*开|查\s*看).{0,10}?([A-Za-z]:[\\/][^\s)]{1,260})',
             user_msg,
         )
     if _qf_match:
@@ -282,7 +282,10 @@ async def llm_chat_stream(
             _qf_path = f"/mnt/{_drive}/{_rest}"
         else:
             _qf_path = _qf_path_raw
-        if _qf_os.path.exists(_qf_path):
+        # Block path traversal characters
+        if ".." in _qf_path:
+            _qf_path = ""
+        if _qf_path and _qf_os.path.exists(_qf_path):
             try:
                 # Security: block system paths (same as resolve_path in tool_use.py)
                 _qf_blocked = ("/etc", "/usr", "/boot", "/dev", "/proc", "/sys", "/var", "/bin", "/sbin")
