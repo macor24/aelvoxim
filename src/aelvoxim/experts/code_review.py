@@ -120,16 +120,36 @@ def _check_file_ops(tree: ast.AST) -> List[Dict]:
     """Find risky file operations."""
     issues = []
     for node in ast.walk(tree):
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-            if isinstance(node.func.value, ast.Name):
-                full = f"{node.func.value.id}.{node.func.attr}"
-                if full in _RISKY_FILE_OPS:
+        if isinstance(node, ast.Call):
+            # Detect open(...) with write mode
+            if isinstance(node.func, ast.Name) and node.func.id == "open":
+                _mode = None
+                # Check mode keyword argument
+                for kw in node.keywords:
+                    if kw.arg == "mode" and isinstance(kw.value, ast.Constant):
+                        _mode = str(kw.value.value)
+                # Check mode as second positional argument
+                if _mode is None and len(node.args) >= 2:
+                    if isinstance(node.args[1], ast.Constant):
+                        _mode = str(node.args[1].value)
+                if _mode and ("w" in _mode or "a" in _mode or "+" in _mode):
                     issues.append({
                         "type": "risky_file_op",
                         "severity": "warning",
                         "line": getattr(node, "lineno", 0),
-                        "detail": f"Risky file operation: {full}()",
+                        "detail": "File opened in write/append mode",
                     })
+            # Detect os.remove, shutil.rmtree etc.
+            if isinstance(node.func, ast.Attribute):
+                if isinstance(node.func.value, ast.Name):
+                    full = f"{node.func.value.id}.{node.func.attr}"
+                    if full in _RISKY_FILE_OPS:
+                        issues.append({
+                            "type": "risky_file_op",
+                            "severity": "warning",
+                            "line": getattr(node, "lineno", 0),
+                            "detail": f"Risky file operation: {full}()",
+                        })
     return issues
 
 
@@ -230,7 +250,7 @@ def _check_empty_try_loops(tree: ast.AST) -> List[Dict]:
 
 
 def _check_import_safety(tree: ast.AST) -> List[Dict]:
-    """Check imports of risky modules."""
+    """Check imports: risky modules and wildcard imports."""
     issues = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
@@ -244,6 +264,15 @@ def _check_import_safety(tree: ast.AST) -> List[Dict]:
                         "detail": f"Risky module: {alias.name}",
                     })
         elif isinstance(node, ast.ImportFrom):
+            # Flag wildcard imports (from xxx import *)
+            if any(alias.name == "*" for alias in node.names):
+                issues.append({
+                    "type": "wildcard_import",
+                    "severity": "warning",
+                    "line": getattr(node, "lineno", 0),
+                    "detail": f"Wildcard import: from {node.module} import *",
+                })
+            # Flag risky module imports
             if node.module:
                 root_mod = node.module.split(".")[0]
                 if root_mod in _RISKY_MODULES:

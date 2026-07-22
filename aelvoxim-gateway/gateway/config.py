@@ -21,8 +21,12 @@ def load(path: Optional[str] = None) -> Dict[str, Any]:
     config_path = Path(path) if path else _CONFIG_PATH
 
     if config_path.suffix in (".yaml", ".yml"):
-        # Minimal YAML parser for our simple config
-        data = _parse_yaml(config_path.read_text(encoding="utf-8"))
+        try:
+            import yaml
+            data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+        except ImportError:
+            # Minimal YAML parser for our simple config
+            data = _parse_yaml(config_path.read_text(encoding="utf-8"))
     else:
         data = json.loads(config_path.read_text(encoding="utf-8"))
 
@@ -133,6 +137,10 @@ def refresh_interval() -> int:
 
 def temp_dir() -> Path:
     return Path(get("gateway.temp_dir", "/tmp/aelvoxim_gateway"))
+
+
+def login_url() -> str:
+    return get("gateway.login_url", "http://127.0.0.1:9701")
 
 
 def app_configs() -> List[Dict]:

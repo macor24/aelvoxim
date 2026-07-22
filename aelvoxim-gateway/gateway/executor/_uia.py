@@ -1,3 +1,6 @@
+from __future__ import annotations
+from typing import Any, Dict, Optional, Tuple
+
 # SPDX-License-Identifier: MIT
 """
 aelvoxim_gateway.executor._uia — Windows UI Automation via PowerShell.
@@ -8,16 +11,27 @@ Provides high-precision window manipulation:
     - send_keys(keys) → keyboard input
     - get_window_rect(title_pattern) → window position/size
     - screenshot(window_title) → capture window screenshot (base64)
-
-Uses PowerShell's UIAutomationClient for native accessibility.
-Fallback: SendKeys for keyboard simulation.
 """
-from __future__ import annotations
-
 import base64
 import subprocess
+import threading
 import time
-from typing import Any, Dict, Optional, Tuple
+
+
+# ── Focus cache: auto-reactivate last window for type_text/send_keys ──
+_last_focus: str = ""
+_last_focus_lock = threading.Lock()
+
+
+def _set_last_focus(title: str) -> None:
+    global _last_focus
+    with _last_focus_lock:
+        _last_focus = title
+
+
+def _get_last_focus() -> str:
+    with _last_focus_lock:
+        return _last_focus
 
 
 def _run_ps(script: str, timeout: int = 15) -> Tuple[int, str, str]:
@@ -26,6 +40,10 @@ def _run_ps(script: str, timeout: int = 15) -> Tuple[int, str, str]:
         r = subprocess.run(
             ["powershell", "-NoProfile", "-Command", script],
             capture_output=True, text=True, timeout=timeout,
+            # 2026-07-12: PowerShell outputs Chinese text; default gbk decoding
+            # raises UnicodeDecodeError on certain chars, breaking find_window.
+            # Must set utf-8 encoding with errors="replace".
+            encoding="utf-8", errors="replace",
         )
         return r.returncode, r.stdout.strip(), r.stderr.strip()
     except subprocess.TimeoutExpired:
@@ -39,6 +57,8 @@ def _run_ps(script: str, timeout: int = 15) -> Tuple[int, str, str]:
 
 def activate_window(title_pattern: str) -> Dict[str, Any]:
     """Bring a window to foreground by title pattern."""
+    if title_pattern:
+        _set_last_focus(title_pattern)
     ps = f'''
     $wshell = New-Object -ComObject wscript.shell
     $wshell.AppActivate("{title_pattern}")
@@ -49,19 +69,29 @@ def activate_window(title_pattern: str) -> Dict[str, Any]:
 
 
 def find_window(title_pattern: str) -> Dict[str, Any]:
-    """Find a window and return its handle and title."""
+    """Find a window and return its handle, title and position.
+    Supports partial title matching via -like (PowerShell).
+    """
     ps = f'''
-    Add-Type -AssemblyName UIAutomationClient
-    $root = [System.Windows.Automation.AutomationElement]::RootElement
-    $cond = New-Object System.Windows.Automation.PropertyCondition(
-        [System.Windows.Automation.AutomationElement]::NameProperty, "*{title_pattern}*")
-    $el = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $cond)
-    if ($el) {{
-        $rect = $el.Current.BoundingRectangle
-        Write-Output "FOUND|$($el.Current.Name)|$($rect.X)|$($rect.Y)|$($rect.Width)|$($rect.Height)"
-    }} else {{
-        Write-Output "NOT_FOUND"
-    }}
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type @"
+        using System;
+        using System.Runtime.InteropServices;
+        public class WinAPI {{
+            [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+            [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+            [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder text, int count);
+        }}
+        public struct RECT {{ public int Left; public int Top; public int Right; public int Bottom; }}
+"@
+    $procs = Get-Process | Where-Object {{ $_.MainWindowTitle -match [regex]::Escape("{title_pattern}") }}
+    if (-not $procs) {{ Write-Output "NOT_FOUND"; exit }}
+    $hwnd = $procs[0].MainWindowHandle
+    $sb = New-Object System.Text.StringBuilder 256
+    [WinAPI]::GetWindowText($hwnd, $sb, 256) | Out-Null
+    $r2 = New-Object RECT
+    [WinAPI]::GetWindowRect($hwnd, [ref]$r2) | Out-Null
+    Write-Output "FOUND|$($sb.ToString())|$($r2.Left)|$($r2.Top)|$($r2.Right - $r2.Left)|$($r2.Bottom - $r2.Top)"
     '''
     rc, out, err = _run_ps(ps)
     if rc != 0 or out.startswith("NOT_FOUND"):
@@ -193,8 +223,18 @@ def send_keys(keys: str, delay_ms: int = 100) -> Dict[str, Any]:
     return {"success": rc == 0, "output": out, "error": err}
 
 
-def type_text(text: str) -> Dict[str, Any]:
-    """Type a string of text safely (escapes special chars)."""
+def type_text(text: str, target: str = "") -> Dict[str, Any]:
+    """Type a string of text safely (escapes special chars).
+    
+    If target is given, activate that window first.
+    Otherwise, re-activate the last focused window (focus cache).
+    """
+    if target:
+        activate_window(target)
+    else:
+        _last = _get_last_focus()
+        if _last:
+            activate_window(_last)
     escaped = text.replace("{", "{{}").replace("}", "{}}")
     return send_keys(escaped)
 
@@ -208,36 +248,24 @@ def screenshot(window_title: str = "") -> Dict[str, Any]:
     Returns base64-encoded PNG.
     """
     if window_title:
+        # Window-specific screenshot — use the whole screen area as fallback
+        # (accurate window rect requires Win32 which is fragile in PowerShell)
+        # Best effort: activate window first, then fullscreen screenshot
         ps = f'''
+        $title = "{window_title}"
+        $wshell = New-Object -ComObject wscript.shell
+        # 2026-07-12: AppActivate writes "True" to stdout on success, which
+        # gets prepended to the base64 output → "True\n..." prefix → decode fails.
+        # Pipe to Out-Null to suppress.
+        $wshell.AppActivate($title) | Out-Null
+        Start-Sleep -Milliseconds 500
         Add-Type -AssemblyName System.Windows.Forms
         Add-Type -AssemblyName System.Drawing
-
-        $hwnd = (Get-Process | Where-Object {{ $_.MainWindowTitle -like "*{window_title}*" }}).MainWindowHandle
-        if (-not $hwnd) {{ Write-Output "WINDOW_NOT_FOUND"; exit }}
-
-        $rect = New-Object System.Drawing.Rectangle
-        [System.Windows.Forms.Screen]::AllScreens | ForEach-Object {{
-            $r = $_.Bounds
-            if ($hwnd) {{
-                Add-Type @"
-                    using System;
-                    using System.Runtime.InteropServices;
-                    public class WinAPI {{
-                        [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
-                    }}
-                    public struct RECT {{ public int Left; public int Top; public int Right; public int Bottom; }}
-"@
-                $r2 = New-Object RECT
-                [WinAPI]::GetWindowRect($hwnd, [ref]$r2) | Out-Null
-                $rect = New-Object System.Drawing.Rectangle($r2.Left, $r2.Top, $r2.Right - $r2.Left, $r2.Bottom - $r2.Top)
-            }}
-        }}
-
-        $bmp = New-Object System.Drawing.Bitmap $rect.Width, $rect.Height
+        $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+        $bmp = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
         $g = [System.Drawing.Graphics]::FromImage($bmp)
-        $g.CopyFromScreen($rect.Location, [System.Drawing.Point]::Empty, $rect.Size)
+        $g.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
         $g.Dispose()
-
         $ms = New-Object System.IO.MemoryStream
         $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
         $b64 = [Convert]::ToBase64String($ms.ToArray())
@@ -278,6 +306,11 @@ def mouse_click(x: int, y: int, button: str = "left") -> Dict[str, Any]:
     [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point({x}, {y})
     [System.Windows.Forms.Application]::DoEvents()
     Start-Sleep -Milliseconds 50
+    $sig = '[DllImport("user32.dll")] public static extern void mouse_event(int dwFlags, int dx, int dy, int cButtons, int dwExtraInfo);'
+    Add-Type -MemberDefinition $sig -Name U32 -Namespace WinAPI
+    [WinAPI.U32]::mouse_event(0x0002, 0, 0, 0, 0)  # MOUSEEVENTF_LEFTDOWN
+    Start-Sleep -Milliseconds 30
+    [WinAPI.U32]::mouse_event(0x0004, 0, 0, 0, 0)  # MOUSEEVENTF_LEFTUP
     '''
     rc, out, err = _run_ps(ps)
     return {"success": rc == 0, "output": f"Clicked ({x},{y})"}

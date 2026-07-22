@@ -140,20 +140,38 @@ def default_models() -> List[ModelConfig]:
             priority=4,
         ))
 
-    # 6. Saved config file fallback
+    # 6. Saved config file fallback — supports both old format (api_key directly)
+    #    and new format ({"models": [{"api_key": "...", ...}, ...]})
     try:
         from ..utils import read_json, LLM_CONFIG_FILE
         saved = read_json(LLM_CONFIG_FILE) or {}
-        saved_key = saved.get("api_key", "")
-        saved_provider = saved.get("provider", "deepseek")
-        if saved_key and not any(m.api_key == saved_key for m in models):
-            models.append(ModelConfig(
-                name=saved.get("model_name", "deepseek-chat"),
-                provider=saved_provider,
-                api_key=saved_key,
-                base_url=saved.get("base_url", "https://api.deepseek.com/v1"),
-                priority=1 if saved_provider == "deepseek" else 5,
-            ))
+        # Try new format first: {"models": [...]}
+        saved_models = saved if isinstance(saved, list) else saved.get("models", [])
+        if isinstance(saved_models, list):
+            for _m in saved_models:
+                _key = _m.get("api_key", "") or ""
+                if _key and not any(m.api_key == _key for m in models):
+                    models.append(ModelConfig(
+                        name=_m.get("name", "deepseek-chat"),
+                        provider=_m.get("provider", "deepseek"),
+                        api_key=_key,
+                        base_url=_m.get("base_url", "https://api.deepseek.com/v1"),
+                        temperature=float(_m.get("temperature", 0.7)),
+                        max_tokens=int(_m.get("max_tokens", 4096)),
+                        priority=int(_m.get("priority", 5)),
+                    ))
+        else:
+            # Old format: {"api_key": "...", "provider": "...", ...}
+            saved_key = saved.get("api_key", "")
+            saved_provider = saved.get("provider", "deepseek")
+            if saved_key and not any(m.api_key == saved_key for m in models):
+                models.append(ModelConfig(
+                    name=saved.get("model_name", "deepseek-chat"),
+                    provider=saved_provider,
+                    api_key=saved_key,
+                    base_url=saved.get("base_url", "https://api.deepseek.com/v1"),
+                    priority=1 if saved_provider == "deepseek" else 5,
+                ))
     except Exception:
         pass
 
@@ -334,7 +352,7 @@ def call_llm_stream(
                 yield from _call_openai_compat_stream(model, system_prompt, user_message)
             else:
                 # Non-streaming provider — degrading
-                yield call_llm([model], system_prompt, user_message)
+                yield call_llm(model, system_prompt, user_message)
             return
         except LLMError as e:
             errors.append(str(e))

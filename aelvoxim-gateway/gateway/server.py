@@ -33,7 +33,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPExcept
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-__version__ = "1.0.0"
+__version__ = "0.2.0"
 
 from .context import scan_snapshots, normalize, get_latest, cleanup_old
 from .executor import execute as _exec_op
@@ -168,7 +168,10 @@ async def _heartbeat_loop(interval: float = 30.0):
     """Periodically report Gateway health to Aelvoxim brain."""
     import urllib.request as _ur
     import json as _js
-    _brain_url = f"http://127.0.0.1:9701/v1/heartbeat"
+    _brain_url = _cfg.get("gateway.brain_ws_url", "http://127.0.0.1:9701/v1/gateway/ws")
+    # 从 ws:// 协议提取 HTTP base URL
+    _base = _brain_url.replace("ws://", "http://").replace("/v1/gateway/ws", "")
+    _url = f"{_base}/v1/heartbeat"
     _payload = _js.dumps({
         "service": "gateway",
         "port": _cfg.gateway_port(),
@@ -178,14 +181,14 @@ async def _heartbeat_loop(interval: float = 30.0):
         await asyncio.sleep(interval)
         try:
             req = _ur.Request(
-                _brain_url, data=_payload,
+                _url, data=_payload,
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
             with _ur.urlopen(req, timeout=5):
                 pass
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug("Heartbeat failed: %s", e)
 
 
 # ═══════════════════════════════════════════

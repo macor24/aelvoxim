@@ -57,6 +57,16 @@ from urllib.request import Request as UrlLibRequest, urlopen
 from fastapi import APIRouter, Depends, HTTPException, Header, Query, Request
 from pathlib import Path
 
+PLANS = {
+    "community":  {"tasks_per_month": 1000,   "max_directions": 1,   "max_kb_entries": 500,    "max_api_keys": 1,   "memory_mb": 10},
+    "starter":    {"tasks_per_month": 10000,  "max_directions": 3,   "max_kb_entries": 5000,   "max_api_keys": 3,   "memory_mb": 1000},
+    "growth":     {"tasks_per_month": 50000,  "max_directions": 6,   "max_kb_entries": 20000,  "max_api_keys": 5,   "memory_mb": 5000},
+    "pro":        {"tasks_per_month": 100000, "max_directions": 10,  "max_kb_entries": 100000, "max_api_keys": 10,  "memory_mb": 10000},
+    "enterprise": {"tasks_per_month": 1000000,"max_directions": 999, "max_kb_entries": 999999, "max_api_keys": 999, "memory_mb": 100000},
+    "flagship":   {"tasks_per_month": 9999999,"max_directions": 9999,"max_kb_entries": 9999999,"max_api_keys": 9999,"memory_mb": 999999},
+    "trial":      {"tasks_per_month": 9999999,"max_directions": 9999,"max_kb_entries": 9999999,"max_api_keys": 9999,"memory_mb": 999999},
+}
+
 from .routes import _verify_key, _require_admin
 
 router = APIRouter()
@@ -313,6 +323,8 @@ async def user_me(current_user: dict = Depends(_verify_key)):
         "role": user.get("role", "user"),
         "api_key_count": len(user.get("api_keys", [user.get("api_key", "")])),
         "created_at": user.get("created_at", ""),
+        "monthly_usage": user.get("monthly_usage", {}),
+        "plan_limits": PLANS.get(user.get("plan", "community"), PLANS["community"]),
     }
 
 # ── System endpoints ──

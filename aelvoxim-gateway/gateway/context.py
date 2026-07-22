@@ -12,17 +12,20 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-# ── Snapshot scanning ──
+from .config import temp_dir as _default_temp_dir
 
 
-def scan_snapshots(temp_dir: str = "/tmp/aelvoxim_gateway") -> Dict[str, Any]:
+# ── Snapshot scanning ---
+
+
+def scan_snapshots(temp_dir: str = "") -> Dict[str, Any]:
     """Scan temp directory for the latest snapshot from each software.
 
     Returns dict keyed by software name (e.g. "photoshop"),
     Each value is the parsed JSON snapshot.
     """
+    td = Path(temp_dir or str(_default_temp_dir()))
     results: Dict[str, Any] = {}
-    td = Path(temp_dir)
     if not td.exists():
         return results
 
@@ -38,7 +41,7 @@ def scan_snapshots(temp_dir: str = "/tmp/aelvoxim_gateway") -> Dict[str, Any]:
     return results
 
 
-def get_latest(temp_dir: str = "/tmp/aelvoxim_gateway",
+def get_latest(temp_dir: str = "",
                software: str = "") -> Optional[Dict[str, Any]]:
     """Get the latest snapshot for a specific software."""
     snapshots = scan_snapshots(temp_dir)
@@ -111,7 +114,7 @@ def normalize(snapshot: Dict[str, Any]) -> str:
 # ── Cleanup ──
 
 
-def cleanup_old(temp_dir: str = "/tmp/aelvoxim_gateway",
+def cleanup_old(temp_dir: str = "",
                 max_files: int = 30,
                 max_age_sec: int = 3600) -> int:
     """Delete old snapshot files. Returns count removed."""

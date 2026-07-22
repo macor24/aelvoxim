@@ -57,6 +57,8 @@
   .action-btn{background:none;border:none;color:#6b7280;cursor:pointer;font-size:12px;padding:3px 8px;border-radius:4px}
   .action-btn:hover{background:#f3f4f6;color:#1a1a2e}
   .action-btn.edit:hover{color:#3b82f6}
+  .action-btn.delete{color:#dc2626;margin-left:4px}
+  .action-btn.delete:hover{color:#b91c1c;background:#fef2f2}
   .pagination{display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;font-size:12px;color:#6b7280}
   .pagination button{padding:4px 10px;border:1px solid #d1d5db;border-radius:4px;background:#fff;cursor:pointer;font-size:11px}
   .pagination button:hover{background:#f3f4f6}
@@ -150,6 +152,7 @@
   <button onclick="switchTab('plans')">📋 学习计划</button>
   <button onclick="switchTab('dashboard')">📊 仪表盘</button>
   <button onclick="switchTab('skill')">🧠 技能成长</button>
+  <button onclick="switchTab('learn')">📚 知识库学习</button>
 </div>
 
 <!-- 用户管理 -->
@@ -280,7 +283,11 @@
 
 <!-- 📊 仪表盘 -->
 <div id="tab-dashboard" class="tab-content">
-  <iframe id="dashFrame" src="about:blank" style="width:100%;height:calc(100vh - 120px);border:none;border-radius:8px;background:#0f172a"></iframe>
+  <div class="container">
+    <div id="dashboardContainer">
+      <p style="color:#6b7280;font-size:13px">加载中...</p>
+    </div>
+  </div>
 </div>
 
 <!-- 🧠 技能成长 -->
@@ -292,6 +299,51 @@
     </div>
     <div id="skillTimeline" style="margin-top:16px;">
       <p style="color:#6b7280;font-size:13px">加载中...</p>
+    </div>
+  </div>
+</div>
+
+<!-- 📚 知识库学习 -->
+<div id="tab-learn" class="tab-content">
+  <div class="container" style="max-width:600px">
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px">
+      <h2 style="font-size:14px;font-weight:600;color:#1a1a2e">📚 知识库目录学习</h2>
+      <span style="font-size:12px;color:#6b7280">自动扫描目录文件，提取知识存入知识库</span>
+    </div>
+
+    <div class="card" style="padding:16px;margin-bottom:12px">
+      <div style="font-size:13px;font-weight:500;color:#1a1a2e;margin-bottom:10px">扫描目录配置</div>
+      <div class="fg" style="margin-bottom:8px">
+        <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:4px">目录路径</label>
+        <input type="text" id="learnDir" value="" placeholder="例: /mnt/c/知识库" style="width:100%;padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <label style="font-size:12px;color:#6b7280;display:flex;align-items:center;gap:4px">
+          <input type="checkbox" id="learnRecursive" checked> 递归子目录
+        </label>
+      </div>
+      <div class="fg" style="margin-bottom:8px">
+        <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:4px">扫描间隔（分钟，0=仅手动）</label>
+        <input type="number" id="learnInterval" value="0" min="0" style="width:100px;padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+      </div>
+      <div style="display:flex;gap:6px;margin-top:10px">
+        <button class="action-btn" onclick="saveLearnConfig()" style="background:#3b82f6;color:#fff;padding:6px 14px;border-radius:6px">保存配置</button>
+        <button class="action-btn" onclick="scanNow()" style="background:#10b981;color:#fff;padding:6px 14px;border-radius:6px">立即扫描</button>
+        <button class="action-btn" onclick="loadLearnStatus()" style="background:#6b7280;color:#fff;padding:6px 14px;border-radius:6px">刷新状态</button>
+      </div>
+      <div id="learnMsg" style="margin-top:8px;font-size:12px;color:#6b7280"></div>
+    </div>
+
+    <div class="card" style="padding:16px">
+      <div style="font-size:13px;font-weight:500;color:#1a1a2e;margin-bottom:10px">已学习文件统计</div>
+      <div id="learnStats" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="stat-card blue"><div class="num" id="statTotalFiles">-</div><div class="label">总文件</div></div>
+        <div class="stat-card green"><div class="num" id="statUniqueFiles">-</div><div class="label">独立指纹</div></div>
+        <div class="stat-card" style="grid-column:1/3;background:#f8fafc;padding:10px;border-radius:8px">
+          <div style="font-size:12px;color:#6b7280;margin-bottom:6px">文件类型分布</div>
+          <div id="statByType" style="font-size:12px;color:#374151">加载中...</div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -390,8 +442,7 @@ function switchTab(name) {
   if (name === 'sentrikit' && _apiKey) loadSentrikit();
   if (name === 'plans' && _apiKey) loadPlans();
   if (name === 'dashboard' && _apiKey) {
-    var iframe = document.querySelector('#tab-dashboard iframe');
-    if (iframe) iframe.src = '/v1/admin/dash-full?token=' + encodeURIComponent(_apiKey);
+    loadDashboard();
   }
   if (name === 'skill' && _apiKey) loadSkillTimeline();
 }
@@ -399,9 +450,7 @@ function switchTab(name) {
 function loadDataAll() {
   loadUsers();
   loadStats();
-  // Inject token into dashboard iframe
-  var df = document.getElementById('dashFrame');
-  if (df && _apiKey) df.src = '/v1/admin/dash-full?token=' + encodeURIComponent(_apiKey);
+  loadDashboard();
 }
 
 function loadUsers() {
@@ -468,7 +517,8 @@ function renderTable() {
         + '<td><span class="role-badge ' + roleClass + '">' + esc(u.role || 'user') + '</span></td>'
         + '<td style="font-size:11px;color:#6b7280">' + (usage.tasks||0) + ' 任务</td>'
         + '<td style="font-size:11px;color:#6b7280">' + (u.created_at ? u.created_at.slice(0,10) : '-') + '</td>'
-        + '<td><button class="action-btn edit" onclick="event.stopPropagation();openEdit(\'' + esc(u.email) + '\')">编辑</button></td>'
+        + '<td><button class="action-btn edit" onclick="event.stopPropagation();openEdit(\'' + esc(u.email) + '\')">编辑</button>'
+        + '<button class="action-btn delete" onclick="event.stopPropagation();confirmDelete(\'' + esc(u.email) + '\')">删除</button></td>'
         + '</tr>';
     });
     tbody.innerHTML = html;
@@ -782,50 +832,37 @@ function testSentrikit() {
 // ── 📋 学习计划 ──
 function loadPlans() {
   document.getElementById('plansContainer').innerHTML = '<p style="color:#6b7280;font-size:13px">加载中...</p>';
-  fetch('/v1/cortex/planner/list', {headers: {'Authorization': 'Bearer ' + _apiKey}})
+  fetch('/v1/admin/overview', {headers: {'Authorization': 'Bearer ' + _apiKey}})
     .then(function(r){return r.json();})
     .then(function(d){
-      var plans = d.plans || [];
-      if (plans.length === 0) {
-        document.getElementById('plansContainer').innerHTML = '<p style="color:#6b7280;font-size:13px">暂无学习计划。在 ChatAEL 中发"我想学..."来创建计划。</p>';
+      var dirs = d.learner && d.learner.directions ? d.learner.directions : [];
+      if (dirs.length === 0) {
+        document.getElementById('plansContainer').innerHTML = '<p style="color:#6b7280;font-size:13px">暂无学习方向。系统会自动创建。</p>';
         return;
       }
       var html = '';
-      plans.forEach(function(p){
-        var total = p.milestones ? p.milestones.length : 0;
-        var done = p.milestones ? p.milestones.filter(function(m){return m.status==='done';}).length : 0;
-        var active = p.milestones ? p.milestones.filter(function(m){return m.status==='active'||m.status==='pending';}).length : 0;
-        var stuck = p.milestones ? p.milestones.filter(function(m){return m.status==='stuck';}).length : 0;
+      dirs.forEach(function(p){
+        var total = p.entries_created || 0;
+        var done = p.status === 'completed' || p.status === 'mastery' ? (p.entries || 0) : 0;
+        var active = p.status === 'active' ? 1 : 0;
+        var stuck = (p.status === 'pending' || p.status === 'paused') ? 1 : 0;
         var pct = total > 0 ? Math.round(done/total*100) : 0;
-        var statusColor = p.status === 'done' ? '#10b981' : (stuck > 0 ? '#ef4444' : '#3b82f6');
-        var statusLabel = p.status === 'done' ? '已完成' : (stuck > 0 ? '有卡住' : '进行中');
+        var statusColor = (p.status === 'completed'||p.status === 'mastery') ? '#10b981' : (p.status === 'paused' ? '#f59e0b' : '#3b82f6');
+        var statusLabel = (p.status === 'completed'||p.status === 'mastery') ? '已完成' : (p.status === 'paused' ? '已暂停' : '进行中');
         html += '<div class="llm-card">'
           + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
-          + '<h3 style="font-size:14px;font-weight:600">' + esc(p.goal) + '</h3>'
+          + '<h3 style="font-size:14px;font-weight:600">' + esc(p.topic) + '</h3>'
           + '<span style="font-size:11px;color:'+statusColor+';font-weight:600">' + statusLabel + '</span>'
           + '</div>'
           + '<div style="margin-bottom:8px;height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden">'
           + '<div style="height:100%;width:'+pct+'%;background:'+statusColor+';border-radius:3px;transition:width 0.3s"></div>'
           + '</div>'
           + '<div style="font-size:11px;color:#6b7280;display:flex;gap:12px;margin-bottom:6px">'
-          + '<span>✅ 完成 ' + done + '/' + total + '</span>'
-          + '<span>🔄 活跃 ' + active + '</span>'
-          + (stuck > 0 ? '<span style="color:#ef4444">⚠️ 停滞 ' + stuck + '</span>' : '')
+          + '<span>📝 条目 ' + (p.entries || 0) + '</span>'
+          + '<span>🔄 饱和度 ' + (p.saturation || 0) + '</span>'
+          + (p.completed_at ? '<span>✅ ' + p.completed_at.slice(0,10) + '</span>' : '')
+          + '</div>'
           + '</div>';
-        // Milestone list
-        if (p.milestones) {
-          p.milestones.forEach(function(m){
-            var mIcon = m.status==='done' ? '✅' : (m.status==='stuck' ? '⛔' : (m.status==='active' ? '🔄' : '⏳'));
-            html += '<div style="font-size:12px;padding:4px 8px;margin:2px 0;background:#f8fafc;border-radius:4px">'
-              + '<span>' + mIcon + '</span> '
-              + '<span>' + esc(m.description) + '</span>'
-              + (m.status==='stuck' ? ' <span style="color:#ef4444;font-size:10px">(7天无进展)</span>' : '')
-              + (m.completed_at ? ' <span style="color:#6b7280;font-size:10px">' + m.completed_at.slice(0,10) + '</span>' : '')
-              + '</div>';
-          });
-        }
-        html += '<div style="font-size:10px;color:#9ca3af;margin-top:4px">创建: ' + (p.created_at?p.created_at.slice(0,10):'-') + ' | 来源: ' + esc(p.source||'user') + '</div>';
-        html += '</div>';
       });
       document.getElementById('plansContainer').innerHTML = html;
     }).catch(function(e){
@@ -836,7 +873,7 @@ function loadPlans() {
 // ── 📊 仪表盘 ──
 function loadDashboard() {
   document.getElementById('dashboardContainer').innerHTML = '<p style="color:#6b7280;font-size:13px">加载中...</p>';
-  fetch('/v1/admin/dashboard', {headers: {'Authorization': 'Bearer ' + _apiKey}})
+  fetch('/v1/admin/data', {headers: {'Authorization': 'Bearer ' + _apiKey}})
     .then(function(r){return r.json();})
     .then(function(d){
       var html = '';
@@ -844,7 +881,7 @@ function loadDashboard() {
       html += '<div style="font-size:13px;font-weight:600;margin-bottom:8px;color:#1a1a2e">服务状态</div>';
       html += '<div class="health-grid" style="margin-bottom:16px">';
       var services = d.services || {};
-      var svcOrder = ['9701 API','9702 ChatAEL','9705 Gateway','8899 SentriKit','5432 PostgreSQL'];
+      var svcOrder = ['API 9701','ChatAEL 9702','9705 Gateway','8899 SentriKit','5432 PostgreSQL'];
       svcOrder.forEach(function(name){
         var status = services[name] || 'offline';
         var dotColor = status === 'online' ? 'green' : (status === 'offline' ? 'red' : 'yellow');
@@ -956,6 +993,23 @@ function loadSkillTimeline() {
     });
 }
 
+function confirmDelete(email) {
+  if (!confirm('确定要删除用户 ' + email + ' 吗？\\n\\n这会永久删除该用户的所有数据（会话、消息、知识库、记忆），不可恢复！')) return;
+  fetch('/v1/admin/user/' + encodeURIComponent(email), {
+    method: 'DELETE',
+    headers: {'Authorization': 'Bearer ' + _apiKey}
+  }).then(function(r){
+    if (r.ok) {
+      showToast('用户 ' + email + ' 已删除', 'success');
+      loadUsers();
+    } else {
+      return r.json().then(function(d){ throw new Error(d.detail || '删除失败'); });
+    }
+  }).catch(function(e){
+    showToast('删除失败: ' + e.message, 'error');
+  });
+}
+
 document.addEventListener('DOMContentLoaded', function(){
   document.getElementById('loginBtn').onclick = doLogin;
   var params = new URLSearchParams(window.location.search);
@@ -967,6 +1021,66 @@ document.addEventListener('DOMContentLoaded', function(){
     loadDataAll();
   }
 });
+
+// ── 📚 知识库学习 ──
+function loadLearnStatus() {
+  fetch('/v1/admin/learn-directory/status', {headers: {'Authorization': 'Bearer ' + _apiKey}})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if (d.config) {
+        document.getElementById('learnDir').value = d.config.directory || '';
+        document.getElementById('learnRecursive').checked = d.config.recursive !== false;
+        document.getElementById('learnInterval').value = d.config.interval_minutes || 0;
+      }
+      if (d.stats) {
+        document.getElementById('statTotalFiles').textContent = d.stats.total_files || 0;
+        document.getElementById('statUniqueFiles').textContent = d.stats.unique_files || 0;
+      }
+      if (d.by_type) {
+        var html = d.by_type.map(function(t){
+          return '<span style=\"display:inline-block;background:#e5e7eb;border-radius:4px;padding:2px 8px;margin:2px\">.' + t.file_type + ' <strong>' + t.cnt + '</strong></span>';
+        }).join('');
+        document.getElementById('statByType').innerHTML = html || '暂无数据';
+      }
+    }).catch(function(){});
+}
+
+function saveLearnConfig() {
+  var path = document.getElementById('learnDir').value.trim();
+  if (!path) { document.getElementById('learnMsg').textContent = '请输入目录路径'; return; }
+  document.getElementById('learnMsg').textContent = '保存中...';
+  fetch('/v1/admin/learn-directory', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json', 'Authorization': 'Bearer ' + _apiKey},
+    body: JSON.stringify({
+      action: 'config',
+      path: path,
+      recursive: document.getElementById('learnRecursive').checked,
+      interval_minutes: parseInt(document.getElementById('learnInterval').value) || 0,
+    })
+  }).then(function(r){return r.json();}).then(function(d){
+    document.getElementById('learnMsg').textContent = d.message || '配置已保存';
+    loadLearnStatus();
+  }).catch(function(e){
+    document.getElementById('learnMsg').textContent = '保存失败: ' + e.message;
+  });
+}
+
+function scanNow() {
+  var path = document.getElementById('learnDir').value.trim();
+  if (!path) { document.getElementById('learnMsg').textContent = '请先配置目录路径'; return; }
+  document.getElementById('learnMsg').textContent = '扫描中...';
+  fetch('/v1/admin/learn-directory', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json', 'Authorization': 'Bearer ' + _apiKey},
+    body: JSON.stringify({path: path, recursive: document.getElementById('learnRecursive').checked})
+  }).then(function(r){return r.json();}).then(function(d){
+    document.getElementById('learnMsg').textContent = '扫描完成: 扫描 ' + (d.scanned||0) + ' 个, 新增 ' + (d.new||0) + ' 个, 跳过 ' + (d.skipped||0) + ' 个';
+    loadLearnStatus();
+  }).catch(function(e){
+    document.getElementById('learnMsg').textContent = '扫描失败: ' + e.message;
+  });
+}
 </script>
 </body>
 </html>

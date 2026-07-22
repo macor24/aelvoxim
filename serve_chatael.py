@@ -13,7 +13,7 @@ import time
 import urllib.request
 import uuid
 
-DIST = Path(__file__).parent / "frontend" / "chatael-v2" / "dist"
+DIST = Path(__file__).parent / "frontend" / "chatael" / "dist"
 DATA_DIR = Path(__file__).parent / "frontend" / "chatael-v2" / "data"
 PORT = 9702
 
@@ -312,6 +312,8 @@ class SpaHandler(SimpleHTTPRequestHandler):
             self._handle_new_session()
         elif path == "/api/search":
             self._handle_search_web()
+        elif path == "/api/windows":
+            self._handle_windows_mcp()
         else:
             self._serve_static()
 
@@ -426,6 +428,62 @@ class SpaHandler(SimpleHTTPRequestHandler):
             return
         results = self._search_bing(query)
         self._json({"success": True, "data": results})
+
+    def _handle_windows_mcp(self):
+        """Forward a tool call to Windows-MCP (running on Windows host)."""
+        body = self._read_body()
+        action = body.get("action", "")
+        params = body.get("params", {})
+
+        # Windows-MCP auth key
+        WINDOWS_MCP_KEY = "sk-aelvoxim-38179e1738a8b83daaf8145e5a85f7db5200753ab2100811"
+        WINDOWS_MCP_URL = "http://172.24.80.1:8000"
+
+        try:
+            # First get a session from SSE endpoint
+            sse_req = urllib.request.Request(
+                WINDOWS_MCP_URL + "/sse",
+                headers={"Authorization": f"Bearer {WINDOWS_MCP_KEY}"},
+            )
+            sse_resp = urllib.request.urlopen(sse_req, timeout=5)
+            # Read the first event to get the session endpoint
+            data = sse_resp.read(500).decode("utf-8")
+            msg_endpoint = None
+            for line in data.split("\n"):
+                if line.startswith("data: "):
+                    msg_endpoint = line[6:].strip()
+            sse_resp.close()
+
+            if not msg_endpoint:
+                self._json({"success": False, "error": "Failed to get MCP session"}, 500)
+                return
+
+            # Build the MCP call
+            messages_url = WINDOWS_MCP_URL + msg_endpoint
+            mcp_body = json.dumps({
+                "jsonrpc": "2.0",
+                "id": str(int(time.time() * 1000)),
+                "method": "tools/call",
+                "params": {
+                    "name": action,
+                    "arguments": params,
+                },
+            }).encode()
+
+            mcp_req = urllib.request.Request(
+                messages_url,
+                data=mcp_body,
+                headers={
+                    "Authorization": f"Bearer {WINDOWS_MCP_KEY}",
+                    "Content-Type": "application/json",
+                },
+                method="POST",
+            )
+            mcp_resp = urllib.request.urlopen(mcp_req, timeout=30)
+            result = json.loads(mcp_resp.read().decode("utf-8"))
+            self._json({"success": True, "data": result})
+        except Exception as e:
+            self._json({"success": False, "error": str(e)}, 500)
 
     def _search_bing(self, query: str, max_results: int = 5) -> list:
         import re, urllib.parse

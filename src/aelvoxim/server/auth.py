@@ -210,6 +210,15 @@ def create_user(user_or_email, password="", username="", plan="community"):
         create_user(email, password, username='', plan='community')
         create_user(user_dict)  -- where user_dict has 'email', 'password_hash', etc.
     """
+    # Guard: email must be unique
+    if isinstance(user_or_email, dict):
+        _email = user_or_email.get("email", "").lower().strip()
+    else:
+        _email = user_or_email.lower().strip()
+    if _email:
+        _existing = find_by_email(_email)
+        if _existing:
+            raise ValueError(f"Email already registered: {_email}")
     api_key = generate_api_key()
     now = datetime.now().isoformat()
     if isinstance(user_or_email, dict):
@@ -338,3 +347,128 @@ def _save_user(user: dict) -> None:
             pass
     path = _user_path(user.get("api_key", ""))
     path.write_text(json.dumps(user, indent=2))
+
+
+# ── Password reset tokens ──
+
+_RESET_DIR = METACORE_DIR / "reset_tokens"
+_RESET_EXPIRY = 3600  # 1 hour
+
+
+def set_reset_token(email: str) -> str:
+    """Generate a password reset token for the given email. Returns token string."""
+    _RESET_DIR.mkdir(parents=True, exist_ok=True)
+    token = secrets.token_hex(16)
+    token_data = json.dumps({"email": email, "token": token, "expires": time.time() + _RESET_EXPIRY})
+    (_RESET_DIR / f"{email.replace('/', '_')}.json").write_text(token_data)
+    return token
+
+
+def verify_reset_token(email: str, token: str) -> bool:
+    """Verify a reset token. Consumes it (deletes file) regardless of result."""
+    path = _RESET_DIR / f"{email.replace('/', '_')}.json"
+    if not path.exists():
+        return False
+    try:
+        data = json.loads(path.read_text())
+        path.unlink(missing_ok=True)
+        if data.get("token") != token:
+            return False
+        if time.time() > data.get("expires", 0):
+            return False
+        return True
+    except Exception:
+        path.unlink(missing_ok=True)
+        return False
+
+
+def update_password(email: str, password_hash: str) -> bool:
+    """Update a user's password hash. Works with both PG and JSON storage."""
+    # Check PG first
+    if use_pg():
+        try:
+            execute("UPDATE users SET password_hash = %s, updated_at = NOW() WHERE email = %s",
+                    (password_hash, email))
+            return True
+        except Exception:
+            pass
+    # JSON fallback: find user by email in all JSON files
+    email_lower = email.lower().strip()
+    for f in USERS_DIR.glob("*.json"):
+        try:
+            data = json.loads(f.read_text())
+            if data.get("email", "").lower() == email_lower:
+                data["password_hash"] = password_hash
+                data["updated_at"] = datetime.now().isoformat()
+                f.write_text(json.dumps(data, indent=2))
+                return True
+        except Exception:
+            pass
+    return False
+
+
+# ── Email verification (bridges to email_verify.py) ──
+
+
+def set_verification_code(email: str) -> str:
+    """Generate a 6-char verification code. Delegates to email_verify."""
+    from .email_verify import create_verification
+    return create_verification(email)
+
+
+def verify_email_code(email: str, code: str) -> bool:
+    """Verify a 6-char code. Delegates to email_verify."""
+    from .email_verify import verify_email, mark_user_verified
+    ok = verify_email(email, code)
+    if ok:
+        mark_user_verified(email)
+    return ok
+
+
+def update_user_field(email: str, field: str, value: any) -> bool:
+    """Update a single field on a user. Works with both PG and JSON storage."""
+    email_lower = email.lower().strip()
+    if use_pg():
+        try:
+            execute(f"UPDATE users SET {field} = %s, updated_at = NOW() WHERE email = %s",
+                    (value, email_lower))
+            return True
+        except Exception:
+            return False
+    # JSON fallback
+    for f in USERS_DIR.glob("*.json"):
+        try:
+            data = json.loads(f.read_text())
+            if data.get("email", "").lower() == email_lower:
+                data[field] = value
+                data["updated_at"] = datetime.now().isoformat()
+                f.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+                return True
+        except Exception:
+            pass
+    return False
+
+
+def delete_user(email: str) -> bool:
+    """Delete a user and all their data. Works with both PG and JSON storage."""
+    email_lower = email.lower().strip()
+    if use_pg():
+        try:
+            # Cascade: messages → sessions → user
+            execute("DELETE FROM chat_messages WHERE session_id IN (SELECT id FROM chat_sessions WHERE user_id IN (SELECT id FROM users WHERE email = %s))", (email_lower,))
+            execute("DELETE FROM chat_sessions WHERE user_id IN (SELECT id FROM users WHERE email = %s)", (email_lower,))
+            execute("DELETE FROM proactive_push_log WHERE user_id IN (SELECT id FROM users WHERE email = %s)", (email_lower,))
+            execute("DELETE FROM users WHERE email = %s", (email_lower,))
+            return True
+        except Exception:
+            return False
+    # JSON fallback
+    for f in USERS_DIR.glob("*.json"):
+        try:
+            data = json.loads(f.read_text())
+            if data.get("email", "").lower() == email_lower:
+                f.unlink()
+                return True
+        except Exception:
+            pass
+    return False

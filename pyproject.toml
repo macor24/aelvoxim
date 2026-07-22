@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aelvoxim"
-version = "1.1.1"
+version = "1.1.2"
 description = "Lightweight AI Cognitive Engine Framework — give your AI a memory"
 readme = "README.md"
 license = {text = "MIT"}
@@ -49,3 +49,13 @@ aelvoxim = ["**/*.html"]
 [project.scripts]
 aelvoxim = "aelvoxim.__main__:main"
 aelvoxim-admin = "aelvoxim.admin:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "gateway: marks tests that need Windows Gateway running",
+]
+addopts = "-v --tb=short -q"
+filterwarnings = ["ignore::DeprecationWarning"]

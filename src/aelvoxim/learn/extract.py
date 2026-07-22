@@ -146,9 +146,16 @@ def call_llm_if_available() -> Optional[Tuple[Any, Any]]:
     Filters out unknown fields from config to avoid ModelConfig __init__ errors.
     """
     try:
-        from .llm import call_llm, ModelConfig
+        from .llm import call_llm, ModelConfig, default_models
         config = read_json(LLM_CONFIG_FILE) or {}
         models = config.get("models", [])
+        # Fallback: try default_models() which handles both env vars and both config formats
+        if not models:
+            all_models = default_models()
+            if all_models:
+                model_obj = all_models[0]
+                return (call_llm, model_obj)
+            return None
         if models:
             first = models[0]
             if first.get("api_key", "") and len(first.get("api_key", "")) >= 8:

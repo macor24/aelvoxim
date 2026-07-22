@@ -225,7 +225,7 @@ def create_app() -> FastAPI:
     @app.get("/api")
     async def console_page():
         from pathlib import Path
-        html = Path(__file__).parent.joinpath("console.html").read_text(encoding="utf-8")
+        html = Path(__file__).parent.parent.joinpath("api", "API.html").read_text(encoding="utf-8")
         from fastapi.responses import HTMLResponse
         return HTMLResponse(html)
 
@@ -250,6 +250,67 @@ def create_app() -> FastAPI:
     _static_dir = str(Path(__file__).resolve().parent.parent.parent.parent / "static")
     if os.path.isdir(_static_dir):
         app.mount("/static", StaticFiles(directory=_static_dir), name="static")
+
+    @app.post("/v1/windows-mcp")
+    async def windows_mcp_proxy(body: dict):
+        """Proxy tool calls to Windows-MCP via Streamable HTTP."""
+        import httpx, json, time, asyncio
+        WINDOWS_MCP_KEY = "sk-aelvoxim-38179e1738a8b83daaf8145e5a85f7db5200753ab2100811"
+        WINDOWS_MCP_URL = "http://172.24.80.1:8000"
+
+        action = body.get("action", "")
+        params = body.get("params", {})
+        if not action:
+            from fastapi.responses import JSONResponse
+            return JSONResponse({"success": False, "error": "action required"}, status_code=400)
+
+        async with httpx.AsyncClient(timeout=60) as client:
+            # Step 1: Get session ID
+            init_resp = await client.get(
+                f"{WINDOWS_MCP_URL}/mcp",
+                headers={"Authorization": f"Bearer {WINDOWS_MCP_KEY}"},
+            )
+            session_id = init_resp.headers.get("mcp-session-id", "")
+            if not session_id:
+                from fastapi.responses import JSONResponse
+                return JSONResponse({"success": False, "error": "No MCP session"}, status_code=500)
+
+            headers = {
+                "Authorization": f"Bearer {WINDOWS_MCP_KEY}",
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/event-stream",
+                "Mcp-Session-Id": session_id,
+            }
+
+            # Step 2: Initialize session (MCP protocol handshake)
+            init_body = {
+                "jsonrpc": "2.0", "id": "1",
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {},
+                    "clientInfo": {"name": "aelvoxim", "version": "1.0"},
+                },
+            }
+            await client.post(f"{WINDOWS_MCP_URL}/mcp", json=init_body, headers=headers)
+
+            # Step 3: Call tool
+            mcp_resp = await client.post(
+                f"{WINDOWS_MCP_URL}/mcp",
+                json={
+                    "jsonrpc": "2.0",
+                    "id": "2",
+                    "method": "tools/call",
+                    "params": {"name": action, "arguments": params},
+                },
+                headers=headers,
+            )
+            text = mcp_resp.text
+            for line in text.split("\n"):
+                if line.startswith("data: "):
+                    result = json.loads(line[6:].strip())
+                    return {"success": True, "data": result}
+            return {"success": True, "data": text}
 
     @app.get("/v1/status/planner")
     async def planner_status():

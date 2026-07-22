@@ -1,0 +1,23 @@
+# Aelvoxim core dependencies
+# Locked versions — DO NOT upgrade without testing
+# Last updated: 2026-07-12
+
+# Web framework
+fastapi==0.136.1
+uvicorn==0.46.0
+pydantic>=2.0
+
+# Database
+psycopg2-binary==2.9.12
+
+# Image processing
+Pillow==12.2.0
+numpy==2.4.4
+
+# OCR (Windows Gateway)
+# paddleocr==3.7.0        # uncomment on Windows
+# paddlepaddle==3.2.0     # uncomment on Windows
+# easyocr>=1.7            # uncomment on Windows
+
+# Python standard library overrides (no pip needed)
+# subprocess, re, json, pathlib, etc. — built-in

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Aelvoxim — Cognitive Self-Learning AI Brain</title>
+<title>Aelvoxim — More than a chatbot. A brain that learns.</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -31,6 +31,19 @@
   .logo span{color:#5e6ad2}
   .header-actions{display:flex;gap:8px;align-items:center}
   .header-actions .user{font-size:13px;color:#62666d}
+  .lang-btn{
+    font-family:'Inter',system-ui,sans-serif;
+    font-feature-settings:'cv01','ss03';
+    font-size:11px;font-weight:510;
+    padding:4px 10px;border-radius:5px;
+    border:1px solid rgba(255,255,255,0.08);
+    background:rgba(255,255,255,0.02);
+    color:#62666d;
+    cursor:pointer;
+    transition:all 0.15s;
+  }
+  .lang-btn.active{color:#d0d6e0;border-color:rgba(255,255,255,0.15);background:rgba(255,255,255,0.05)}
+  .lang-btn:hover{color:#f7f8f8;border-color:rgba(255,255,255,0.12)}
   .btn-ghost{
     font-family:'Inter',system-ui,sans-serif;
     font-feature-settings:'cv01','ss03';
@@ -163,6 +176,7 @@
   }
   .modal .fg input:focus{border-color:#5e6ad2}
   .modal .fg input::placeholder{color:#3e3e44}
+  .modal .success{font-size:12px;color:#4ade80;min-height:18px;text-align:center;margin-top:8px}
   .modal .err{font-size:12px;color:#f87171;min-height:18px;text-align:center;margin-top:8px}
   .modal .btn-row{display:flex;gap:8px;margin-top:16px}
   .modal .btn-row button{
@@ -179,13 +193,31 @@
     color:#8a8f98;
   }
   .modal .btn-row .ghost:hover{color:#f7f8f8;border-color:rgba(255,255,255,0.12)}
-  .modal .switch{font-size:12px;color:#5e6ad2;text-align:center;margin-top:12px;cursor:pointer}
-  .modal .switch:hover{color:#7170ff}
+  .modal .link-btn{
+    font-size:12px;color:#5e6ad2;text-align:center;margin-top:12px;cursor:pointer;
+    display:block;
+  }
+  .modal .link-btn:hover{color:#7170ff}
+  .modal .back-link{font-size:12px;color:#8a8f98;text-align:center;margin-top:8px;cursor:pointer}
+  .modal .back-link:hover{color:#d0d6e0}
+  .modal .token-display{
+    background:rgba(255,255,255,0.04);border-radius:6px;
+    padding:10px;font-family:monospace;font-size:12px;word-break:break-all;
+    margin-bottom:14px;color:#8a8f98;
+  }
+  .modal .inline-switch{display:flex;gap:1px;background:rgba(255,255,255,0.04);border-radius:6px;padding:2px;margin-bottom:20px}
+  .modal .inline-switch button{
+    flex:1;padding:6px 12px;border:none;border-radius:5px;
+    cursor:pointer;font-size:12px;font-weight:510;font-family:'Inter',sans-serif;
+    background:transparent;color:#62666d;transition:all 0.15s;
+  }
+  .modal .inline-switch button.active{background:#5e6ad2;color:#fff}
+  .modal .inline-switch button:hover:not(.active){color:#f7f8f8}
   @media(max-width:640px){
     .header{padding:24px 16px 0}
     .hero{padding:48px 16px 40px}
     .hero h1{font-size:28px;letter-spacing:-0.5px}
-    .card-grid{grid-template-columns:1fr;gap:10px}
+    .card-grid{grid-template-columns:repeat(3,1fr);gap:16px}
     .card{padding:24px 16px 20px;flex-direction:row;text-align:left;gap:14px}
     .card .icon{margin-bottom:0;flex-shrink:0}
   }
@@ -196,131 +228,448 @@
 <div class="header">
   <div class="logo">aelvoxim<span>.</span></div>
   <div class="header-actions">
+    <button class="lang-btn" id="langEn" onclick="setLang('en')">EN</button>
+    <button class="lang-btn" id="langZh" onclick="setLang('zh')">中文</button>
     <span class="user" id="headerUser"></span>
-    <button class="btn-ghost" id="logoutBtn" onclick="doLogout()" style="display:none">Logout</button>
-    <button class="btn-primary" id="loginBtn" onclick="showAuth()">Login</button>
+    <button class="btn-ghost" id="logoutBtn" onclick="doLogout()" style="display:none">@@logout@@</button>
+    <button class="btn-primary" id="loginBtn" onclick="showAuth()">@@login@@</button>
   </div>
 </div>
 
 <div class="hero">
-  <div class="hero-label">Cognitive Self-Learning AI Brain</div>
-  <h1>Not a chatbot. <span>A brain that learns.</span></h1>
-  <p>Self-hosted AI decision layer with memory, reasoning, tool calling, and autonomous learning.</p>
+  <div class="hero-label">@@tagline@@</div>
+  <h1>@@headline1@@ <span>@@headline2@@</span></h1>
+  <p>@@subtitle@@</p>
 
   <div class="card-grid">
-    <a class="card" href="/chatael" id="card-chat">
+    <a class="card" href="http://8.134.185.33:9702/" id="card-chat">
       <div class="icon">🧠</div>
       <div class="card-body">
-        <div class="name">AI Brain</div>
-        <div class="desc">Decision / Tool Calling<br>Memory / Learning / Experts</div>
+        <div class="name">@@cardBrain@@</div>
+        <div class="desc">@@cardBrainDesc@@</div>
       </div>
     </a>
-    <a class="card" href="/docs" target="_blank" id="card-api">
+    <a class="card" href="/api" target="_self" id="card-api">
       <div class="icon">🔌</div>
       <div class="card-body">
-        <div class="name">API Docs</div>
-        <div class="desc">Developer portal<br>API Key / Usage / Reference</div>
+        <div class="name">@@cardApi@@</div>
+        <div class="desc">@@cardApiDesc@@</div>
       </div>
     </a>
     <a class="card" href="/v1/admin/panel" id="card-admin">
       <div class="icon">⚙️</div>
       <div class="card-body">
-        <div class="name">Admin Panel</div>
-        <div class="desc">Configuration / Monitoring<br>Pricing &amp; System Management</div>
+        <div class="name">@@cardAdmin@@</div>
+        <div class="desc">@@cardAdminDesc@@</div>
       </div>
     </a>
   </div>
 </div>
 
-<div class="footer">Aelvoxim · v1.0</div>
+<div class="footer" data-i18n="footer">Aelvoxim · v1.0</div>
 
 <!-- Auth Modal -->
 <div class="modal-overlay" id="authModal" onclick="if(event.target===this)closeAuth()">
-  <div class="modal">
-    <h2 id="authTitle">Login</h2>
-    <div class="hint" id="authHint">Sign in to access all features</div>
-    <div class="fg"><label>Email</label><input type="email" id="authEmail" placeholder="your@email.com"></div>
-    <div class="fg"><label>Password</label><input type="password" id="authPassword" placeholder="Password" onkeydown="if(event.key==='Enter')submitAuth()"></div>
-    <div class="err" id="authErr"></div>
-    <div class="btn-row">
-      <button class="primary" onclick="submitAuth()" id="authSubmitBtn">Login</button>
-    </div>
-    <div class="switch" id="authSwitch" onclick="toggleAuthMode()">No account? Sign up</div>
+  <div class="modal" id="authModalContent">
+    <!-- Dynamic content rendered by JS -->
   </div>
 </div>
 
 <script>
-var _key = localStorage.getItem('ael_token') || '';
-var _mode = 'login';
+// ── i18n ──
+var _lang = localStorage.getItem('ael_lang') || 'en';
+var I18N = {
+  en: {
+    login: 'Login', logout: 'Logout', signup: 'Sign Up',
+    forgotPassword: 'Forgot password?', noAccount: 'No account? Sign up',
+    hasAccount: 'Already have an account? Login', backToLogin: 'Back to Login',
+    tagline: 'More than a chatbot. A brain that learns.',
+    headline1: 'More than a chatbot.', headline2: 'A brain that learns.',
+    subtitle: 'A self-hosted AI decision layer with multi-agent orchestration, anti-hallucination, memory, tool calling, desktop control, and autonomous learning.',
+    cardBrain: 'AI Brain', cardBrainDesc: 'Multi-agent reasoning / Memory<br>Tool calling / Anti-hallucination',
+    cardApi: 'API Access', cardApiDesc: 'REST API with API Key auth<br>Usage quota / Developer docs',
+    cardAdmin: 'Control Panel', cardAdminDesc: 'Configuration / Monitoring<br>Agents / Pricing & System',
+    loginTitle: 'Login', loginHint: 'Sign in to access all features',
+    registerTitle: 'Sign Up', registerHint: 'Create a new account',
+    forgotTitle: 'Reset Password', forgotHint: 'Enter your email to receive a reset token',
+    resetTitle: 'Set New Password', resetHint: 'Token verified for',
+    emailLabel: 'Email', passwordLabel: 'Password', confirmLabel: 'Confirm Password',
+    resetTokenLabel: 'Reset Token', newPasswordLabel: 'New Password',
+    sendToken: 'Send Reset Token', resetBtn: 'Reset Password',
+    errRequired: 'Email and password are required',
+    errEmailRequired: 'Email is required',
+    errPwShort: 'Password must be at least 6 characters',
+    errPwMismatch: 'Passwords do not match',
+    errTokenRequired: 'Token and new password are required',
+    requesting: 'Requesting...',
+    resetting: 'Resetting...',
+    resetSuccess: 'Password reset successful! Redirecting to login...',
+    tokenGenerated: 'Reset token generated.',
+    footer: 'Aelvoxim · Self-hosted AI Brain',
+    loggedIn: 'Logged in',
+  },
+  zh: {
+    login: '登录', logout: '退出', signup: '注册',
+    forgotPassword: '忘记密码？', noAccount: '没有账号？去注册',
+    hasAccount: '已有账号？去登录', backToLogin: '返回登录',
+    tagline: '不只是聊天机器人。一个会学习的大脑。',
+    headline1: '不只是聊天机器人，', headline2: '一个会学习的大脑。',
+    subtitle: '自托管 AI 决策层：多智能体编排、防幻觉、记忆系统、工具调用、桌面控制、自主学习。',
+    cardBrain: 'AI 大脑', cardBrainDesc: '多智能体推理 / 记忆<br>工具调用 / 防幻觉',
+    cardApi: 'API 接入', cardApiDesc: 'REST API + API Key 认证<br>用量配额 / 开发者文档',
+    cardAdmin: '控制面板', cardAdminDesc: '配置 / 监控<br>智能体 / 定价与系统管理',
+    loginTitle: '登录', loginHint: '登录以访问全部功能',
+    registerTitle: '注册', registerHint: '创建新账号',
+    forgotTitle: '重置密码', forgotHint: '输入邮箱获取重置令牌',
+    resetTitle: '设置新密码', resetHint: '令牌已验证，属于',
+    emailLabel: '邮箱', passwordLabel: '密码', confirmLabel: '确认密码',
+    resetTokenLabel: '重置令牌', newPasswordLabel: '新密码',
+    sendToken: '发送重置令牌', resetBtn: '重置密码',
+    errRequired: '邮箱和密码不能为空',
+    errEmailRequired: '请输入邮箱',
+    errPwShort: '密码至少6位',
+    errPwMismatch: '两次输入的密码不一致',
+    errTokenRequired: '令牌和新密码不能为空',
+    requesting: '请求中...',
+    resetting: '重置中...',
+    resetSuccess: '密码重置成功！即将跳转登录...',
+    tokenGenerated: '重置令牌已生成。',
+    footer: 'Aelvoxim · 自托管 AI 大脑',
+    loggedIn: '已登录',
+  },
+};
 
-function showAuth() { document.getElementById('authModal').classList.add('active'); }
-function closeAuth() { document.getElementById('authModal').classList.remove('active'); }
+function t(key) { return (I18N[_lang] && I18N[_lang][key]) || I18N.en[key] || key; }
 
-function toggleAuthMode() {
-  _mode = _mode === 'login' ? 'register' : 'login';
-  document.getElementById('authTitle').textContent = _mode === 'login' ? 'Login' : 'Sign Up';
-  document.getElementById('authHint').textContent = _mode === 'login' ? 'Sign in to access all features' : 'Create a new account';
-  document.getElementById('authSubmitBtn').textContent = _mode === 'login' ? 'Login' : 'Sign Up';
-  document.getElementById('authSwitch').textContent = _mode === 'login' ? 'No account? Sign up' : 'Already have an account? Login';
-  document.getElementById('authErr').textContent = '';
+function setLang(lang) {
+  _lang = lang;
+  localStorage.setItem('ael_lang', lang);
+  document.getElementById('langEn').className = lang === 'en' ? 'lang-btn active' : 'lang-btn';
+  document.getElementById('langZh').className = lang === 'zh' ? 'lang-btn active' : 'lang-btn';
+  applyI18n();
+  // Re-render modal if open
+  if (document.getElementById('authModal').classList.contains('active')) renderAuthModal();
 }
 
-function submitAuth() {
+function applyI18n() {
+  // Replace @@placeholders@@ in all text nodes (not innerHTML — preserves bindings)
+  var walker = document.createTreeWalker(document.body, 4 /* NodeFilter.SHOW_TEXT */, null, false);
+  var nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  nodes.forEach(function(n) {
+    if (n.nodeType === 3 && n.nodeValue && n.nodeValue.indexOf('@@') !== -1) {
+      n.nodeValue = n.nodeValue.replace(/@@(\w+)@@/g, function(m, k) { return t(k); });
+    }
+  });
+  // data-i18n attribute elements
+  document.querySelectorAll('[data-i18n]').forEach(function(el) {
+    el.textContent = t(el.getAttribute('data-i18n'));
+  });
+  // Manual overrides for dynamic elements
+  document.getElementById('loginBtn').textContent = t('login');
+  document.getElementById('logoutBtn').textContent = t('logout');
+  var hu = document.getElementById('headerUser');
+  if (_token && hu && !hu.textContent.includes('@')) hu.textContent = t('loggedIn');
+  // Update title
+  document.title = t('tagline') + ' — Aelvoxim';
+}
+
+// ── Constants ──
+var API_BASE = '';
+var STORAGE_KEY = 'ael_token';
+var STORAGE_EMAIL = 'ael_email';
+var STORAGE_PLAN = 'ael_plan';
+var CHATAEL_TENANTS_KEY = 'chatael_tenants';
+var CHATAEL_ACTIVE_KEY = 'chatael_active_id';
+
+// ── State ──
+var _token = localStorage.getItem(STORAGE_KEY) || '';
+var _email = localStorage.getItem(STORAGE_EMAIL) || '';
+
+// ── Initialisation ──
+(function init() {
+  // Init lang buttons
+  document.getElementById('langEn').className = _lang === 'en' ? 'lang-btn active' : 'lang-btn';
+  document.getElementById('langZh').className = _lang === 'zh' ? 'lang-btn active' : 'lang-btn';
+  if (_token) {
+    document.getElementById('loginBtn').style.display = 'none';
+    document.getElementById('logoutBtn').style.display = '';
+    document.getElementById('headerUser').textContent = _email || t('loggedIn');
+    appendTokenToLinks(_token);
+  }
+  applyI18n();
+})();
+
+// ── Modal helpers ──
+function showAuth() { document.getElementById('authModal').classList.add('active'); renderAuthModal(); }
+function closeAuth() { document.getElementById('authModal').classList.remove('active'); }
+
+// ── Render auth modal (3 modes: login / register / forgot) ──
+var _authMode = 'login';
+
+function renderAuthModal() {
+  if (_authMode === 'login') renderLogin();
+  else if (_authMode === 'register') renderRegister();
+  else if (_authMode === 'forgot') renderForgot();
+  else if (_authMode === 'reset') renderReset();
+}
+
+function renderLogin() {
+  var html = [
+    '<h2>' + t('loginTitle') + '</h2>',
+    '<div class="hint">' + t('loginHint') + '</div>',
+    '<div class="fg"><label>' + t('emailLabel') + '</label><input type="email" id="authEmail" placeholder="your@email.com" autocomplete="email"></div>',
+    '<div class="fg"><label>' + t('passwordLabel') + '</label><input type="password" id="authPassword" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key===\'Enter\')submitLogin()"></div>',
+    '<div class="err" id="authErr"></div>',
+    '<div class="btn-row"><button class="primary" onclick="submitLogin()">' + t('login') + '</button></div>',
+    '<span class="link-btn" onclick="_authMode=\'forgot\';renderAuthModal()">' + t('forgotPassword') + '</span>',
+    '<span class="link-btn" onclick="_authMode=\'register\';renderAuthModal()">' + t('noAccount') + '</span>',
+  ].join('\n');
+  document.getElementById('authModalContent').innerHTML = html;
+  setTimeout(function() {
+    var e = document.getElementById('authEmail');
+    if (e) e.focus();
+  }, 100);
+}
+
+function submitLogin() {
   var email = document.getElementById('authEmail').value.trim();
   var pw = document.getElementById('authPassword').value;
-  if (!email || !pw) { document.getElementById('authErr').textContent = 'Email and password are required'; return; }
-  document.getElementById('authErr').textContent = 'Requesting...';
-  var url = _mode === 'login' ? '/v1/auth/login' : '/v1/auth/register';
-  var body = JSON.stringify({email:email, password:pw, plan:'community'});
-  fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:body})
-    .then(function(r){return r.json();})
-    .then(function(d){
-      if (d.api_key) {
-        _key = d.api_key;
-        localStorage.setItem('ael_token', d.api_key);
-        localStorage.setItem('ael_email', email);
-        document.getElementById('loginBtn').style.display = 'none';
-        document.getElementById('logoutBtn').style.display = '';
-        document.getElementById('headerUser').textContent = email;
-        closeAuth();
-        document.querySelectorAll('.card').forEach(function(c){
-          var href = c.getAttribute('href');
-          if (href) c.setAttribute('href', href.split('?')[0] + '?token=' + encodeURIComponent(d.api_key));
-        });
-      } else {
-        document.getElementById('authErr').textContent = d.detail || 'Operation failed';
-      }
-    }).catch(function(){document.getElementById('authErr').textContent = 'Network error';});
+  var errEl = document.getElementById('authErr');
+  if (!email || !pw) { errEl.textContent = t('errRequired'); return; }
+  errEl.textContent = t('requesting');
+  fetch(API_BASE + '/v1/auth/login', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({email: email, password: pw})
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.api_key) {
+      saveSession(d.api_key, d.email || email, d.plan || '');
+      closeAuth();
+    } else {
+      errEl.textContent = d.detail || t('login') + ' failed';
+    }
+  }).catch(function() { errEl.textContent = 'Network error'; });
+}
+
+function renderRegister() {
+  var html = [
+    '<h2>' + t('registerTitle') + '</h2>',
+    '<div class="hint">' + t('registerHint') + '</div>',
+    '<div class="fg"><label>' + t('emailLabel') + '</label><input type="email" id="regEmail" placeholder="your@email.com" autocomplete="email"></div>',
+    '<div class="fg"><label>' + t('passwordLabel') + '</label><input type="password" id="regPassword" placeholder="At least 6 characters" autocomplete="new-password"></div>',
+    '<div class="fg"><label>' + t('confirmLabel') + '</label><input type="password" id="regConfirm" placeholder="Repeat password" onkeydown="if(event.key===\'Enter\')submitRegister()"></div>',
+    '<div class="err" id="authErr"></div>',
+    '<div class="btn-row"><button class="primary" onclick="submitRegister()">' + t('signup') + '</button></div>',
+    '<span class="link-btn" onclick="_authMode=\'login\';renderAuthModal()">' + t('hasAccount') + '</span>',
+  ].join('\n');
+  document.getElementById('authModalContent').innerHTML = html;
+  setTimeout(function() {
+    var e = document.getElementById('regEmail');
+    if (e) e.focus();
+  }, 100);
+}
+
+function submitRegister() {
+  var email = document.getElementById('regEmail').value.trim();
+  var pw = document.getElementById('regPassword').value;
+  var confirm = document.getElementById('regConfirm').value;
+  var errEl = document.getElementById('authErr');
+  if (!email || !pw) { errEl.textContent = t('errRequired'); return; }
+  if (pw.length < 6) { errEl.textContent = t('errPwShort'); return; }
+  if (pw !== confirm) { errEl.textContent = t('errPwMismatch'); return; }
+  errEl.textContent = t('requesting');
+  fetch(API_BASE + '/v1/auth/register', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({email: email, password: pw, plan: 'community'})
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.api_key) {
+      saveSession(d.api_key, d.email || email, d.plan || '');
+      closeAuth();
+    } else {
+      errEl.textContent = d.detail || 'Registration failed';
+    }
+  }).catch(function() { errEl.textContent = 'Network error'; });
+}
+
+function renderForgot() {
+  var html = [
+    '<h2>' + t('forgotTitle') + '</h2>',
+    '<div class="hint">' + t('forgotHint') + '</div>',
+    '<div class="fg"><label>' + t('emailLabel') + '</label><input type="email" id="forgotEmail" placeholder="your@email.com" autocomplete="email" onkeydown="if(event.key===\'Enter\')submitForgot()"></div>',
+    '<div class="success" id="authSuccess"></div>',
+    '<div class="err" id="authErr"></div>',
+    '<div class="btn-row"><button class="primary" onclick="submitForgot()">' + t('sendToken') + '</button></div>',
+    '<span class="back-link" onclick="_authMode=\'login\';renderAuthModal()">' + t('backToLogin') + '</span>',
+  ].join('\n');
+  document.getElementById('authModalContent').innerHTML = html;
+  setTimeout(function() {
+    var e = document.getElementById('forgotEmail');
+    if (e) e.focus();
+  }, 100);
+}
+
+var _resetToken = '';
+
+function submitForgot() {
+  var email = document.getElementById('forgotEmail').value.trim();
+  var errEl = document.getElementById('authErr');
+  var successEl = document.getElementById('authSuccess');
+  if (!email) { errEl.textContent = t('errEmailRequired'); return; }
+  errEl.textContent = '';
+  successEl.textContent = t('requesting');
+  fetch(API_BASE + '/v1/auth/forgot-password', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({email: email})
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.token) {
+      _resetToken = d.token;
+      _resetEmail = email;
+      successEl.textContent = t('tokenGenerated');
+      errEl.textContent = '';
+      _authMode = 'reset';
+      renderAuthModal();
+    } else {
+      successEl.textContent = d.message || 'If the email exists, a reset link has been sent';
+      errEl.textContent = '';
+    }
+  }).catch(function() { errEl.textContent = 'Network error'; });
+}
+
+var _resetEmail = '';
+
+function renderReset() {
+  var html = [
+    '<h2>' + t('resetTitle') + '</h2>',
+    '<div class="hint">' + t('resetHint') + ' <strong>' + escHtml(_resetEmail) + '</strong></div>',
+    '<div class="fg"><label>' + t('resetTokenLabel') + '</label><input type="text" id="resetToken" value="' + escHtml(_resetToken) + '" placeholder="Paste token here"></div>',
+    '<div class="fg"><label>' + t('newPasswordLabel') + '</label><input type="password" id="resetPassword" placeholder="At least 6 characters" autocomplete="new-password" onkeydown="if(event.key===\'Enter\')submitReset()"></div>',
+    '<div class="fg"><label>' + t('confirmLabel') + '</label><input type="password" id="resetConfirm" placeholder="Repeat password"></div>',
+    '<div class="err" id="authErr"></div>',
+    '<div class="success" id="authSuccess"></div>',
+    '<div class="btn-row"><button class="primary" onclick="submitReset()">' + t('resetBtn') + '</button></div>',
+    '<span class="back-link" onclick="_authMode=\'login\';renderAuthModal()">' + t('backToLogin') + '</span>',
+  ].join('\n');
+  document.getElementById('authModalContent').innerHTML = html;
+  setTimeout(function() {
+    var e = document.getElementById('resetPassword');
+    if (e) e.focus();
+  }, 100);
+}
+
+function submitReset() {
+  var token = document.getElementById('resetToken').value.trim();
+  var pw = document.getElementById('resetPassword').value;
+  var confirm = document.getElementById('resetConfirm').value;
+  var errEl = document.getElementById('authErr');
+  var successEl = document.getElementById('authSuccess');
+  if (!token || !pw) { errEl.textContent = t('errTokenRequired'); return; }
+  if (pw.length < 6) { errEl.textContent = t('errPwShort'); return; }
+  if (pw !== confirm) { errEl.textContent = t('errPwMismatch'); return; }
+  errEl.textContent = '';
+  successEl.textContent = t('resetting');
+  fetch(API_BASE + '/v1/auth/reset-password', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({email: _resetEmail, token: token, new_password: pw})
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.message && d.message.indexOf('successful') !== -1) {
+      successEl.textContent = t('resetSuccess');
+      errEl.textContent = '';
+      setTimeout(function() {
+        _authMode = 'login';
+        renderAuthModal();
+        var emailEl = document.getElementById('authEmail');
+        if (emailEl) emailEl.value = _resetEmail;
+      }, 1500);
+    } else {
+      errEl.textContent = d.detail || 'Reset failed';
+      successEl.textContent = '';
+    }
+  }).catch(function() { errEl.textContent = 'Network error'; });
+}
+
+// ── Session persistence ──
+function saveSession(apiKey, email, plan) {
+  _token = apiKey;
+  _email = email;
+  localStorage.setItem(STORAGE_KEY, apiKey);
+  localStorage.setItem(STORAGE_EMAIL, email);
+  if (plan) localStorage.setItem(STORAGE_PLAN, plan);
+  // Update UI
+  document.getElementById('loginBtn').style.display = 'none';
+  document.getElementById('logoutBtn').style.display = '';
+  document.getElementById('headerUser').textContent = _email || t('loggedIn');
+  appendTokenToLinks(apiKey);
+  // Sync to Chatael tenants (cross-entry compatibility)
+  syncToChatael(apiKey, email);
 }
 
 function doLogout() {
-  _key = '';
-  localStorage.removeItem('ael_token');
-  localStorage.removeItem('ael_email');
+  _token = '';
+  _email = '';
+  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(STORAGE_EMAIL);
+  localStorage.removeItem(STORAGE_PLAN);
   document.getElementById('loginBtn').style.display = '';
   document.getElementById('logoutBtn').style.display = 'none';
   document.getElementById('headerUser').textContent = '';
-  document.querySelectorAll('.card').forEach(function(c){
+  removeTokenFromLinks();
+}
+
+function appendTokenToLinks(token) {
+  document.querySelectorAll('.card').forEach(function(c) {
+    var href = c.getAttribute('href');
+    if (href) c.setAttribute('href', href.split('?')[0] + '?token=' + encodeURIComponent(token));
+  });
+}
+
+function removeTokenFromLinks() {
+  document.querySelectorAll('.card').forEach(function(c) {
     var href = c.getAttribute('href');
     if (href) c.setAttribute('href', href.split('?')[0]);
   });
 }
 
-// Restore login state on page load
-(function(){
-  var savedKey = localStorage.getItem('ael_token');
-  var savedEmail = localStorage.getItem('ael_email');
-  if (savedKey) {
-    _key = savedKey;
-    document.getElementById('loginBtn').style.display = 'none';
-    document.getElementById('logoutBtn').style.display = '';
-    document.getElementById('headerUser').textContent = savedEmail || 'Logged in';
-    document.querySelectorAll('.card').forEach(function(c){
-      var href = c.getAttribute('href');
-      if (href) c.setAttribute('href', href.split('?')[0] + '?token=' + encodeURIComponent(savedKey));
-    });
-  }
-})();
+// ── Cross-entry sync: portal login -> Chatael tenant ──
+function syncToChatael(apiKey, email) {
+  try {
+    var raw = localStorage.getItem(CHATAEL_TENANTS_KEY);
+    var tenants = raw ? JSON.parse(raw) : [];
+    // Check if this email already exists as a tenant
+    var existing = false;
+    for (var i = 0; i < tenants.length; i++) {
+      if (tenants[i].email === email) {
+        tenants[i].apiKey = apiKey;
+        existing = true;
+        break;
+      }
+    }
+    if (!existing) {
+      tenants.push({
+        id: 'tenant:' + Date.now(),
+        name: email.split('@')[0],
+        email: email,
+        apiKey: apiKey,
+        apiUrl: 'http://127.0.0.1:9701',
+      });
+    }
+    localStorage.setItem(CHATAEL_TENANTS_KEY, JSON.stringify(tenants));
+    // Set as active tenant
+    var activeId = tenants.length > 0 ? tenants[tenants.length - 1].id : 'default';
+    // Prefer the existing one
+    if (existing) {
+      for (var j = 0; j < tenants.length; j++) {
+        if (tenants[j].email === email) { activeId = tenants[j].id; break; }
+      }
+    }
+    localStorage.setItem(CHATAEL_ACTIVE_KEY, activeId);
+  } catch(e) { /* silently fail — cross-entry sync is best-effort */ }
+}
+
+// ── Helpers ──
+function escHtml(s) {
+  if (!s) return '';
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 </script>
 </body>
 </html>

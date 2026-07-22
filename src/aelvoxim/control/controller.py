@@ -39,6 +39,7 @@ class GenerationController:
         system_prompt: str,
         topic: str = "",
         call_llm: Callable[[str], str] = None,
+        existing_text: str = "",
     ) -> Dict[str, Any]:
         """Generate a response with post-generation metacognition check.
 
@@ -47,6 +48,8 @@ class GenerationController:
             system_prompt: System prompt (passed directly to LLM).
             topic: Topic string for drift detection.
             call_llm: Function that takes a prompt string and returns text.
+            existing_text: If provided, skip initial LLM call and check this text
+                           directly (avoids double LLM call when caller already has a result).
 
         Returns:
             Dict with keys: text, blocked, retries, chunks, issues.
@@ -57,11 +60,14 @@ class GenerationController:
         self.retry_queue.reset()
         llm_check_fn = self._make_llm_check_fn(call_llm)
 
-        # Build the full prompt
-        full_prompt = system_prompt
-
-        # Generate full response (single call)
-        text = call_llm(full_prompt)
+        # Use existing text if provided, otherwise generate
+        if existing_text and existing_text.strip():
+            text = existing_text
+        else:
+            # Build the full prompt
+            full_prompt = system_prompt
+            # Generate full response (single call)
+            text = call_llm(full_prompt)
         if not text or not text.strip():
             return {"text": "", "blocked": False, "chunks": 0, "issues": 0, "retries": 0}
 

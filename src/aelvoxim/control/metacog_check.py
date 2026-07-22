@@ -14,8 +14,11 @@ are disabled unless LLM_CHECK_ENABLED=True.
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any, Dict, List, Optional, Tuple
+
+log = logging.getLogger("aelvoxim.metacog")
 
 # ── Safety keywords (R4) ──
 _SAFETY_PATTERNS = [
@@ -49,6 +52,22 @@ _SUSPECT_NUMBERS = re.compile(
     r"|"
     r"(?:\b\d{1,3}[,.]\d{3}\b)"  # formatted numbers like 1,234 or 1.234
 )
+
+# Known safe patterns to exclude from R3
+_SAFE_NUM_PATTERNS = [
+    # Years (1900-2099)
+    r"\b(?:19\d{2}|20[0-2]\d)\b",
+    # Version numbers (e.g. 3.12.4, 2.0.1)
+    r"\b\d+(?:\.\d+)+\b",
+    # Common port numbers
+    r"\b(?:80|443|8080|3000|5000|8000|5432|6379|27017|970[0-5])\b",
+    # HTTP status codes
+    r"\b(?:200|201|204|301|302|304|400|401|403|404|429|500|502|503)\b",
+    # Time in HH:MM or HH:MM:SS format
+    r"\b(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?\b",
+]
+
+_SAFE_NUM_REGEX = re.compile("|".join(_SAFE_NUM_PATTERNS))
 
 # ── Topic drift keywords (R2 quick check) ──
 _DRIFT_KEYWORDS = {
@@ -143,11 +162,14 @@ def evaluate(
                 severity = _max_severity(severity, "SEVERE")
 
     # ── R3: Unverified data (always on) ──
-    matches = _SUSPECT_NUMBERS.findall(chunk)
-    if len(matches) >= 2:
+    raw_matches = _SUSPECT_NUMBERS.findall(chunk)
+    # Exclude known safe patterns (years, versions, ports, etc.)
+    safe_matches = _SAFE_NUM_REGEX.findall(chunk)
+    suspicious = [m for m in raw_matches if m not in safe_matches]
+    if len(suspicious) >= 2:
         issues.append({
             "type": "unverified_fact",
-            "detail": f"包含 {len(matches)} 个数值，请确认准确性",
+            "detail": f"包含 {len(suspicious)} 个未经验证的数值，请确认准确性",
         })
         severity = _max_severity(severity, "MINOR")
 
@@ -217,8 +239,8 @@ def _llm_contradiction_check(
         result = call_llm_fn(prompt)
         if result and result.strip().upper().startswith("YES"):
             return result.strip()[4:100].lstrip(": ")
-    except Exception:
-        pass
+    except Exception as e:
+        log.warning("LLM contradiction check failed: %s", e)
     return ""
 
 
@@ -236,6 +258,6 @@ def _llm_drift_check(
         result = call_llm_fn(prompt)
         if result and result.strip().upper().startswith("YES"):
             return "LLM 检测到话题偏离"
-    except Exception:
-        pass
+    except Exception as e:
+        log.warning("LLM drift check failed: %s", e)
     return ""

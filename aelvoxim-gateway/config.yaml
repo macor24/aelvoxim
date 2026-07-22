@@ -2,7 +2,10 @@
 gateway:
   port: 9705
   host: "127.0.0.1"
-  aelvoxim_host: "ws://127.0.0.1:9701/ws/gateway"
+  # 云大脑 WebSocket 地址（可通过 AELVOXIM_BRAIN_WS_URL 环境变量覆盖）
+  brain_ws_url: "ws://127.0.0.1:9701/v1/gateway/ws"
+  # 登录 API 地址（可通过 AELVOXIM_LOGIN_URL 环境变量覆盖）
+  login_url: "http://127.0.0.1:9701"
   temp_dir: "/tmp/aelvoxim_gateway"
   refresh_interval_sec: 3
 

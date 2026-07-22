@@ -29,13 +29,16 @@ src/aelvoxim_orchestrator/scheduler.py
 *.log.*
 *.pid
 
-# User data — never commit real conversations
-frontend/chatael-v2/data/messages/
-
 # Old backup — contents superseded by current src/
 aelvoxim-1.0.1/
 secrets.json
 *.pem
+
+# User data — never commit real conversations or local state
+.metacore/
+.aelvoxim/
+frontend/chatael-v2/data/
+frontend/chatael/data/
 
 # Large / binary files (not source)
 *.psd
@@ -46,41 +49,27 @@ secrets.json
 *.tar.gz
 models/
 
-# Data dirs (runtime state, not source)
-.metacore/
-.aelvoxim/
-
 # Internal planning & development docs (not for public)
-docs/plans/
-docs/*plan*.md
-docs/*fix*.md
-docs/*audit*.md
-docs/archive/
-docs/checklist.md
-docs/demo_readme.md
-docs/egg-info-fix-plan.md
-docs/global_analysis.md
-docs/long-term-memory-plan.md
-docs/performance-report.md
-docs/proactive-probe-plan.md
-docs/security_audit.md
-docs/aelvoxim-architecture.html
-docs/decisions/
-docs/real-curiosity-plan.md
-docs/real-long-term-memory-plan.md
-docs/real-self-correction-plan.md
-docs/self-evaluation-fix-plan.md
-docs/self-review-activation-plan.md
-docs/cortex-decision-layer.md
-docs/backup-recovery-plan.md
-docs/metacog-fix-plan.md
-docs/FEATURE_LIST.md
+docs/
 
 # Hermes agent config (local dev only)
 .hermes/
 
-# Old frontend artifacts
-frontend/旧chatAEL.zip
-
 # Vite/Node build artifacts
 node_modules/
+
+# Windows-MCP upstream files (not part of Aelvoxim)
+Windows-MCP/.claude/
+Windows-MCP/.github/
+Windows-MCP/.tau/
+Windows-MCP/.mcpbignore
+Windows-MCP/CLAUDE.md
+Windows-MCP/CONTRIBUTING.md
+Windows-MCP/LICENSE.md
+Windows-MCP/README.md
+Windows-MCP/SECURITY.md
+Windows-MCP/manifest.json
+Windows-MCP/server.json
+Windows-MCP/uv.lock
+Windows-MCP/assets/
+Windows-MCP/docs/

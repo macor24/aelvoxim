@@ -1,15 +1,17 @@
 """
-metacore.core.health — Service watchdog + health monitor.
+metacore.core.health — Service health monitor.
 
 Background thread that checks all Aelvoxim services periodically,
-logs status, auto-recovers dead services, and exposes status data.
+logs status, and exposes status data for the health API.
+
+NOTE: Process management is delegated to supervisor (external daemon).
+This module only monitors — it does NOT auto-restart services.
 """
 
 from __future__ import annotations
 
 import json
 import os
-import subprocess
 import threading
 import time
 from datetime import datetime
@@ -25,24 +27,19 @@ from ..utils import METACORE_DIR
 # Auto-detect project root — supports both WSL and native Linux
 _HERE = Path(__file__).resolve().parent.parent.parent.parent  # src/aelvoxim/core/../../../ → project root
 _BASE = Path(os.environ.get("AELVOXIM_ROOT", str(_HERE)))
-_PYTHON = "python3 -B"
 
 SERVICES: Dict[str, Dict[str, Any]] = {
     "api": {
         "port": 9701,
         "url": "http://127.0.0.1:9701/v1/health",
-        "cmd": f"cd {_BASE} && PYTHONPATH=src {_PYTHON} src/run_server.py 9701",
         "label": "API 9701",
-        "auto_heal": True,
-        "max_retries": 3,
+        "auto_heal": False,  # supervisor manages restarts
     },
     "chatael": {
         "port": 9702,
         "url": "http://127.0.0.1:9702/",
-        "cmd": f"cd {_BASE}/frontend/chatael-v2 && {_PYTHON} {_BASE}/serve_chatael.py",
         "label": "ChatAEL 9702",
-        "auto_heal": True,
-        "max_retries": 3,
+        "auto_heal": False,  # supervisor manages restarts
     },
 }
 
@@ -68,16 +65,13 @@ class Watchdog:
             return
         self._running = True
         self._stop.clear()
+        # Run initial health check immediately (skip self-referencing checks)
+        try:
+            self._tick(skip_self=True)
+        except Exception:
+            pass
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
-
-    def stop(self):
-        self._running = False
-        self._stop.set()
-
-    @property
-    def is_running(self) -> bool:
-        return self._running
 
     def _loop(self):
         while not self._stop.is_set():
@@ -87,9 +81,20 @@ class Watchdog:
                 pass
             self._stop.wait(self._interval)
 
-    def _tick(self):
+    def _tick(self, skip_self: bool = False):
         now = time.time()
         for name, cfg in SERVICES.items():
+            if skip_self and name == "api":
+                # Skip self-check during startup to avoid deadlock
+                self._status[name] = {
+                    "up": True,
+                    "latency_ms": 0,
+                    "label": cfg["label"],
+                    "port": cfg["port"],
+                    "error": "",
+                    "checked_at": datetime.now().isoformat(),
+                }
+                continue
             up, latency, err = self._check(cfg["url"])
             self._status[name] = {
                 "up": up,
@@ -113,24 +118,11 @@ class Watchdog:
             return False, 0, str(e)[:80]
 
     def _heal(self, name: str, cfg: dict):
-        count = self._heal_counts.get(name, 0)
-        if count >= cfg.get("max_retries", 3):
-            return
-        self._heal_counts[name] = count + 1
-        try:
-            subprocess.Popen(
-                cfg["cmd"], shell=True,
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                start_new_session=True,
-            )
-            result = "initiated"
-        except Exception as e:
-            result = f"failed: {e}"
-        self._log_heal({"time": datetime.now().isoformat(), "service": name, "action": "restart", "result": result})
+        # Dead code: auto_heal is False for all services (supervisor manages restarts)
+        pass
 
     def _log_heal(self, record: dict):
-        with open(HEAL_LOG_PATH, "a") as f:
-            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        pass
 
     def get_status(self) -> dict:
         return dict(self._status)

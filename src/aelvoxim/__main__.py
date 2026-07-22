@@ -34,10 +34,6 @@ def main(argv=None):
     learn_sub.add_parser("stop", help="Stop learning loop")
     learn_sub.add_parser("status", help="Show learning status")
 
-    # ui
-    ui_p = sub.add_parser("ui", help="Start read-only dashboard")
-    ui_p.add_argument("--port", type=int, default=9700, help="Dashboard port (default: 9700)")
-
     # status
     sub.add_parser("status", help="Show system status")
 
@@ -47,9 +43,6 @@ def main(argv=None):
     if args.command == "server":
         _start_server(args.host, args.port, args.reload)
         return
-
-    if args.command == "ui":
-        print("Dashboard merged into 9701 at /v1/admin/panel")
 
     if args.command == "learn":
         cmd = getattr(args, "learn_cmd", None)

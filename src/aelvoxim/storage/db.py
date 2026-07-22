@@ -37,7 +37,7 @@ def _get_psycopg2():
 
 PG_DSN = os.environ.get(
     "AELVOXIM_DATABASE_URL",
-    "host=localhost port=5432 dbname=aelvoxim user=aelvoxim password=aelvoxim_pg_pass",
+    "host=localhost port=5432 dbname=aelvoxim user=aelvoxim password=aelvoxim_pg_778af6539f11998d",
 )
 _USE_PG = bool(os.environ.get("AELVOXIM_DATABASE_URL", "true"))  # default to PG
 # For backward compat: if the env var is explicitly set to empty string, disable PG
@@ -46,55 +46,87 @@ if "AELVOXIM_DATABASE_URL" in os.environ and not os.environ["AELVOXIM_DATABASE_U
 
 _POOL: Optional[any] = None  # ThreadedConnectionPool, lazy-initialized
 _POOL_LOCK = threading.Lock()
-_POOL_RETRY_TIME: float = 0  # next retry timestamp (epoch), cooldown 30s
+_POOL_READY = threading.Event()  # set when pool is healthy
+# ── Background retry thread ──
+_POOL_RETRYER_RUNNING = False
 
 
-def get_pool() -> Optional[any]:  # ThreadedConnectionPool
-    """Get the connection pool (lazy init, auto-retry). Returns None if PG is disabled."""
-    import time as _time
-    global _POOL, _POOL_RETRY_TIME
+def _start_pool_retryer():
+    """Background thread: retry PG connection every 30s until healthy."""
+    global _POOL_RETRYER_RUNNING
+    if _POOL_RETRYER_RUNNING:
+        return
+    _POOL_RETRYER_RUNNING = True
+
+    def _retry_loop():
+        import time as _t
+        while True:
+            if _POOL_READY.is_set():
+                # Pool is healthy — check liveness every 60s
+                _t.sleep(60)
+            else:
+                # Pool down — try every 30s
+                _t.sleep(30)
+            get_pool()  # will attempt connect or validate
+
+    t = threading.Thread(target=_retry_loop, daemon=True, name="pg-retryer")
+    t.start()
+
+
+def _init_pool() -> bool:
+    """Try to create the connection pool. Returns True on success."""
+    global _POOL
+    try:
+        _pg2 = _get_psycopg2()
+        if _pg2 is None:
+            print("psycopg2 not installed — falling back to JSON/SQLite storage")
+            return False
+        _POOL = _pg2.pool.ThreadedConnectionPool(1, 20, dsn=PG_DSN)
+        _init_tables()
+        _start_pool_health_check()
+        _POOL_READY.set()
+        return True
+    except Exception as e:
+        print(f"PostgreSQL connection failed: {e}")
+        _POOL_READY.clear()
+        return False
+
+
+def _close_pool():
+    """Close and reset the pool."""
+    global _POOL
+    if _POOL is not None:
+        try:
+            _POOL.close()
+        except Exception:
+            pass
+        _POOL = None
+    _POOL_READY.clear()
+
+
+def get_pool() -> Optional[any]:
+    """Get the connection pool (lazy init + background retry). Returns None if PG is disabled."""
+    global _POOL
     if not _USE_PG:
         return None
 
-    now = _time.time()
-
-    # Lazy init if never tried or marked for retry
+    # Lazy init on first call
     if _POOL is None:
-        # Cooldown: skip retries until POOL_RETRY_TIME
-        if now < _POOL_RETRY_TIME:
-            return None
         with _POOL_LOCK:
             if _POOL is None:
-                try:
-                    _pg2 = _get_psycopg2()
-                    if _pg2 is None:
-                        print("psycopg2 not installed — falling back to JSON/SQLite storage")
-                        return None
-                    _POOL = _pg2.pool.ThreadedConnectionPool(1, 20, dsn=PG_DSN)
-                    _init_tables()
-                    _start_pool_health_check()
-                except Exception as e:
-                    print(f"PostgreSQL connection failed: {e}")
-                    print("   Will retry connection in 30s")
-                    _POOL_RETRY_TIME = now + 30
-                    return None
+                _init_pool()
+                _start_pool_retryer()
         return _POOL
 
-    # Pool exists — verify it's still alive
+    # Pool exists — quick liveness check (only when called, background retryer handles rective)
     try:
         conn = _POOL.getconn()
         conn.cursor().execute("SELECT 1")
         conn.commit()
         _POOL.putconn(conn)
     except Exception:
-        # Pool is dead — reset so next call re-initializes
-        try:
-            _POOL.close()
-        except Exception:
-            pass
-        _POOL = None
-        _POOL_RETRY_TIME = now + 30
-        print("PG connection lost, will retry in 30s")
+        _close_pool()
+        print("PG connection lost, background retryer will reconnect")
         return None
 
     return _POOL
@@ -441,24 +473,35 @@ def save_session_to_pg(session: dict) -> None:
                 title = EXCLUDED.title,
                 message_count = EXCLUDED.message_count,
                 updated_at = NOW()
-        """, (session["id"], _uid, session.get("title", "新对话"), len(session.get("messages", []))))
+        """, (session["id"], _uid, session.get("title") or "新对话", len(session.get("messages", []))))
         conn.commit()
         conn.close()
     except Exception as e:
         print(f"save_session_to_pg error: {e}")
 
 
-def save_message_to_pg(session_id: str, role: str, content: str) -> None:
+def save_message_to_pg(session_id: str, role: str, content: str, user_id: str = "") -> None:
     """Insert a chat message (bypass pool — direct connection)."""
     try:
         conn = _pg_connect()
         cur = conn.cursor()
+        # Verify session belongs to user if user_id is provided
+        if user_id:
+            cur.execute(
+                "SELECT id FROM chat_sessions WHERE id = %s AND user_id = %s::uuid",
+                (session_id, user_id),
+            )
+            if cur.fetchone() is None:
+                conn.close()
+                raise PermissionError(f"Session {session_id} does not belong to user {user_id}")
         cur.execute("""
             INSERT INTO chat_messages (session_id, role, content)
             VALUES (%s, %s, %s)
         """, (session_id, role, content))
         conn.commit()
         conn.close()
+    except PermissionError:
+        raise
     except Exception as e:
         print(f"save_message_to_pg error: {e}")
 
@@ -541,14 +584,25 @@ def delete_session_from_pg(session_id: str, user_id: str = "") -> bool:
     try:
         conn = _pg_connect()
         cur = conn.cursor()
+        # Verify session belongs to user
+        if user_id:
+            cur.execute(
+                "SELECT id FROM chat_sessions WHERE id = %s AND user_id = %s::uuid",
+                (session_id, user_id),
+            )
+            if cur.fetchone() is None:
+                conn.close()
+                raise PermissionError(f"Session {session_id} does not belong to user {user_id}")
         # Delete messages first (FK)
         cur.execute("DELETE FROM chat_messages WHERE session_id = %s", (session_id,))
-        # Delete session (no user_id guard — session_id is already unique)
+        # Delete session
         cur.execute("DELETE FROM chat_sessions WHERE id = %s", (session_id,))
         deleted = cur.rowcount > 0
         conn.commit()
         conn.close()
         return deleted
+    except PermissionError:
+        raise
     except Exception as e:
         print(f"delete_session_from_pg error: {e}")
         return False

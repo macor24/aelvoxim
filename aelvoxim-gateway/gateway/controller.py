@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Callable
 
 from .executor import execute as _exec_op
+from .config import temp_dir as _get_temp_dir
 
 # ── Intervention state ──
 _paused = False
@@ -75,7 +76,7 @@ def save_snapshot(label: str = "auto") -> str:
     """Save a state snapshot for rollback. Returns snapshot ID."""
     snap_id = f"snap_{int(time.time())}_{label}"
     # In future: save canvas JSON + screenshot
-    snap_dir = Path("/tmp/aelvoxim_gateway/snapshots")
+    snap_dir = Path(_get_temp_dir() / "snapshots")
     snap_dir.mkdir(parents=True, exist_ok=True)
     info = {"id": snap_id, "label": label, "timestamp": time.time()}
     (snap_dir / f"{snap_id}.json").write_text(json.dumps(info))

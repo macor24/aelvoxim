@@ -13,9 +13,178 @@ _log = logging.getLogger("aelvoxim.routes")
 
 # ═══ Thread-safe per-user scoped container ═══
 from threading import Lock as _Lock
-from typing import TypeVar, Generic
+from typing import TypeVar, Generic, Set
 
 _T = TypeVar("_T")
+
+
+# ═══ Topic Fuse (话题切换熔断) ═══
+
+class TopicFuse:
+    """Detect consecutive topic switches without explicit signal — fuse old context.
+
+    - Tracks consecutive topic switches per user.
+    - Ignores first N messages (warmup) to let the conversation establish.
+    - If >= max_switches switches and no switch signal word, returns a fuse inquiry
+      instead of letting the LLM answer the new topic directly.
+    """
+
+    def __init__(self, max_switches: int = 2, similarity_threshold: float = 0.6,
+                 warmup_messages: int = 3):
+        self.max_switches = max_switches
+        self.similarity_threshold = similarity_threshold
+        self.warmup_messages = warmup_messages
+        import threading
+        self._lock = threading.Lock()
+        # user_email -> list of (switch_time, prev_topic, new_topic)
+        self._switches: dict[str, list[tuple[float, str, str]]] = {}
+        # user_email -> message count (for warmup)
+        self._msg_counts: dict[str, int] = {}
+
+    # Switch signal words — user explicitly signals a topic change
+    _SWITCH_SIGNALS: Set[str] = {
+        "换话题", "换个话题", "换个问题", "另外", "还有",
+        "说个别的", "不说这个了", "算了", "下一个",
+        "change topic", "switch", "another question", "next",
+        "actually", "by the way", "on another note",
+    }
+
+    _STOPWORDS: Set[str] = {
+        "the", "a", "an", "is", "are", "was", "were", "be", "been",
+        "have", "has", "had", "do", "does", "did", "will", "would",
+        "can", "could", "may", "might", "shall", "should", "to",
+        "of", "in", "for", "on", "with", "at", "by", "from", "this",
+        "that", "it", "its", "i", "you", "he", "she", "we", "they",
+        "的", "了", "是", "在", "我", "有", "和", "就", "不", "人",
+        "都", "一", "一个", "上", "也", "很", "到", "说", "要", "去",
+        "你", "会", "着", "没有", "看", "好", "自己", "这", "那",
+        "什么", "怎么", "为什么", "如何",
+    }
+
+    def _clean_tokens(self, text: str) -> Set[str]:
+        """Extract meaningful tokens from text."""
+        if not text:
+            return set()
+        import re
+        tokens: Set[str] = set()
+        # English: 3+ letter words (lowercased)
+        for t in re.findall(r"[a-zA-Z]{3,}", text.lower()):
+            tokens.add(t)
+        # Chinese: extract 2-6 char words + short form (first 2 chars)
+        chinese_chunks = re.findall(r"[\u4e00-\u9fff]{2,}", text)
+        for chunk in chinese_chunks:
+            tokens.add(chunk)                         # full word
+            tokens.add(chunk[:2])                     # short prefix
+            if len(chunk) >= 4:
+                tokens.add(chunk[:4])                 # 4-char prefix
+        return {t for t in tokens if t not in self._STOPWORDS}
+
+    def _topic_similarity(self, a: str, b: str) -> float:
+        """Jaccard similarity of meaningful tokens between two texts."""
+        ta = self._clean_tokens(a)
+        tb = self._clean_tokens(b)
+        if not ta or not tb:
+            return 0.5
+        inter = len(ta & tb)
+        union = len(ta | tb)
+        return inter / union if union else 0.0
+
+    def _has_switch_signal(self, text: str) -> bool:
+        """Check if the user explicitly signalled a topic switch."""
+        if not text:
+            return False
+        t = text.lower().strip()
+        for signal in self._SWITCH_SIGNALS:
+            if signal in t:
+                return True
+        return False
+
+    def _extract_topic(self, text: str) -> str:
+        """Extract the most salient topic phrase."""
+        tokens = self._clean_tokens(text)
+        if not tokens:
+            return text[:60]
+        # Return the top 3 longest tokens as the topic signature
+        sorted_tokens = sorted(tokens, key=len, reverse=True)
+        return " ".join(sorted_tokens[:3])
+
+    def record_and_check(
+        self, user_email: str, new_msg: str, current_topic: str
+    ) -> dict | None:
+        """Record the current message and return a fuse inquiry if needed.
+
+        Returns None if no fuse needed.
+        Returns a dict {text: str, fuse: True} with the inquiry if fused.
+        """
+        with self._lock:
+            # Warmup: don't track until conversation has established
+            count = self._msg_counts.get(user_email, 0) + 1
+            self._msg_counts[user_email] = count
+            if count <= self.warmup_messages:
+                return None
+
+            now = __import__("time").time()
+            switches = self._switches.setdefault(user_email, [])
+
+            # Prune switches older than 5 minutes
+            switches[:] = [(t, a, b) for t, a, b in switches if now - t < 300]
+
+            # Check for explicit switch signal
+            if self._has_switch_signal(new_msg):
+                switches.clear()
+                return None
+
+            # Compare with current topic context
+            sim = self._topic_similarity(new_msg, current_topic)
+
+            # If similar to current topic — same topic, reset
+            if sim >= self.similarity_threshold:
+                switches.clear()
+                return None
+
+            # Also check against the last switched-to topic (if any)
+            if switches:
+                last_topic = switches[-1][2]
+                if self._topic_similarity(new_msg, last_topic) >= self.similarity_threshold:
+                    switches.clear()
+                    return None
+
+            # This is a genuine topic switch
+            new_topic = self._extract_topic(new_msg)
+            prev = switches[-1][2] if switches else current_topic[:80]
+            switches.append((now, prev, new_topic))
+
+            if len(switches) >= self.max_switches:
+                switches.clear()
+                return self._build_inquiry(prev, new_topic)
+
+            return None
+
+    def _build_inquiry(self, old_topic: str, new_topic: str) -> dict:
+        """Generate the fuse inquiry message."""
+        # Try to make it readable
+        old_clean = old_topic[:80] if old_topic else "之前的话题"
+        new_clean = new_topic[:80] if new_topic else "新话题"
+        return {
+            "text": (
+                f"我注意到您提到了「{new_clean}」，"
+                f"但之前我们一直在讨论「{old_clean}」。\n\n"
+                f"请问您是想：\n"
+                f"1. 切换到新话题，让我详细解释？\n"
+                f"2. 还是继续深入当前话题？"
+            ),
+            "fuse": True,
+        }
+
+
+_TOPIC_FUSE = None
+
+
+def get_topic_fuse() -> TopicFuse:
+    global _TOPIC_FUSE
+    if _TOPIC_FUSE is None:
+        _TOPIC_FUSE = TopicFuse()
+    return _TOPIC_FUSE
 
 class _UserScoped(Generic[_T]):
     """Each user (identified by email) gets an isolated copy of a mutable value.
@@ -101,27 +270,60 @@ def run_safety_check(user_msg: str, user: dict) -> Optional[dict]:
 # ═══ System prompt ═══
 
 def build_system_prompt(system_msg: Optional[str]) -> str:
-    return system_msg or (
+    NL = "\n"
+    base = (
         "You are Aelvoxim, a cognitive self-learning AI brain with cross-session memory."
-        " You reason, plan, use tools, and interact with the user's desktop.\\\\n\\\\n"
-        "Response style: Use plain text, not markdown.\\\\n"
-        "Always reply in the same language.\\\\n\\\\n"
-        "REASONING GUIDELINES:\\\\n"
-        "- If the question involves comparison, causality, multi-step logic, "
-        "math, code debugging, or contradictory info, reason step by step.\\\\n"
-        "- For straightforward factual questions, answer directly.\\\\n"
-        "\\\\n"
-        "CAPABILITIES (beyond conversation):\\\\n"
-        "  Memory — remembers across sessions.\\\\n"
-        "  Learning — actively learns new topics in background.\\\\n"
-        "  Desktop Control — operates Windows apps via Gateway.\\\\n"
-        "\\\\n"
-        "DESKTOP CONTROL (via Windows Gateway):\\\\n"
-        "  [TOOL:gateway] — Open apps, send keys, click, activate windows.\\\\n"
-        "  [TOOL:ocr_screenshot] — Screenshot + OCR. Returns text blocks with coordinates.\\\\n"
-        "  Use ocr_screenshot to read what's on screen, then use gateway to interact.\\\\n"
-        "  Example: [TOOL:ocr_screenshot] {\\\"target\\\":\\\"微信\\\"}\\\\n"
+        " You reason, plan, use tools, and interact with the user's desktop." + NL + NL
+        + "Response style: Use plain text, not markdown." + NL
+        + "Always reply in the same language." + NL + NL
+        + "REASONING GUIDELINES:" + NL
+        + "- If the question involves comparison, causality, multi-step logic, "
+        "math, code debugging, or contradictory info, reason step by step." + NL
+        + "- For straightforward factual questions, answer directly." + NL
+        + NL
+        + "CAPABILITIES (beyond conversation):" + NL
+        + "  Memory — remembers across sessions." + NL
+        + "  Learning — actively learns new topics in background." + NL
     )
+
+    try:
+        from .tool_use import check_gateway
+        _gw_online = check_gateway()
+    except Exception:
+        _gw_online = False
+
+    if _gw_online:
+        base += (
+            "  Desktop Control — operates Windows apps via Gateway." + NL
+            + "DESKTOP CONTROL (via Windows Gateway):" + NL
+            + '  Supported actions — use [TOOL:gateway] {"action":"<name>","target":"...","params":{...}}' + NL
+            + "    activate_window  — Bring window to foreground by title" + NL
+            + "    find_window      — Find window, returns position/size" + NL
+            + "    click_button     — Click a button by name (params.window_title + target)" + NL
+            + "    send_keys        — Keyboard shortcuts: ^=Ctrl, %=Alt, +=Shift." + NL
+            + '    type_text        — Type text. Add params.window to activate first' + NL
+            + "    mouse_click      — Click at coordinates (params.x, params.y)" + NL
+            + "    mouse_drag       — Drag (x1,y1) to (x2,y2)" + NL
+            + "    screenshot       — Take screenshot (target=window_title)" + NL
+            + "    open             — Launch an app by path or name" + NL
+            + "    wait             — Wait N seconds (params.seconds=N)" + NL
+            + '  [TOOL:ocr_screenshot] {"target":"window_title"} — Screenshot + OCR' + NL
+            + '  [TOOL:read_file], [TOOL:write_file], [TOOL:run_code]' + NL
+            + NL
+            + "  Workflow: ocr_screenshot -> examine text -> gateway to click/type" + NL
+        )
+    else:
+        base += (
+            "  ** Desktop Control is NOT available **" + NL
+            + "  The Gateway is not installed or running on this machine." + NL
+            + "  If the user asks to operate their computer, open a file, take a screenshot," + NL
+            + "  or any desktop operation, tell them they need to install the Desktop Gateway." + NL
+            + '  Download: http://8.134.185.33:9701/static/AEL_Gateway.zip' + NL
+            + "  Guide: unzip, run AEL Gateway.exe, then refresh this page." + NL
+            + "  Do NOT use [TOOL:gateway] or [TOOL:ocr_screenshot]." + NL
+        )
+
+    return system_msg or base
 
 
 # ═══ User-scoped global state (per-user isolation) ═══
@@ -260,15 +462,24 @@ def enhance_with_knowledge(user_msg: str, extra_context: str, user: dict, max_pe
                         seen[t] = r
                 kb_results = list(seen.values())
             items = []
+            low_conf_items = []
             for r in kb_results[:5]:
                 title = r.get("title", "") or r.get("summary", "")[:60]
                 content = (r.get("content") or r.get("summary") or "")[:200]
                 if title and content and r.get("confidence", 0) >= 0.3:
                     conf = r.get("confidence", 0)
-                    prefix = "  · [低置信度] " if conf < 0.5 else "  · "
-                    items.append(f"{prefix}{title}: {content}")
+                    if conf < 0.5:
+                        low_conf_items.append(f"  · {title}: {content} (confidence={conf:.2f}, may need verification)")
+                    else:
+                        items.append(f"  · {title}: {content}")
             if items:
                 extra_context += "\n[Related Knowledge]\n" + "\n".join(items) + "\n"
+            if low_conf_items:
+                extra_context += (
+                    "\n[Additional Info — Low Confidence]\n"
+                    "The following information has low confidence and may be inaccurate:\n"
+                    + "\n".join(low_conf_items) + "\n"
+                )
             # Track which knowledge entry was referenced (for iteration)
             if kb_results:
                 _top = kb_results[0]
@@ -527,12 +738,44 @@ def extract_and_store_entities(user_msg: str, text: str, user: dict, event_id: s
 # ═══ Fact check ═══
 
 def verify_response_facts(text: str, user_msg: str, user: dict) -> str:
-    """Post-response hallucination guard."""
+    """Post-response hallucination guard.
+    
+    Checks the response for potential factual issues and appends
+    a disclaimer when uncertainty is detected.
+    
+    Returns the original text, optionally with a confidence note appended.
+    """
     try:
-        from ..memory.conf_matrix import confidence_label
-        label = confidence_label(text[:100])
-        if label in ("low", "uncertain"):
-            return text + "\n\n[Note: I'm less confident about some details above]"
+        # 1. Check for uncertainty markers in the response itself
+        uncertainty_markers = [
+            "I'm not sure", "I'm not certain", "I think", "I believe",
+            "might be", "could be", "possibly", "perhaps", "may be",
+            "不确定", "可能", "大概", "也许是", "我记得",
+        ]
+        has_uncertainty = any(marker in text.lower() for marker in uncertainty_markers)
+        
+        # 2. Check for suspiciously specific unverified data
+        #    (4+ digit numbers that appear without context)
+        import re as _re
+        large_numbers = _re.findall(r'\b\d{4,}\b', text)
+        has_large_numbers = len(large_numbers) >= 3
+        
+        # 3. Check if knowledge base has relevant entries (confidence check)
+        from ..learn.knowledge import KnowledgeBase
+        kb_results = KnowledgeBase.search(query=user_msg[:200], min_confidence=0.3, limit=3)
+        kb_available = bool(kb_results)
+        
+        # Decision: append disclaimer if uncertainty + unverifiable
+        if has_uncertainty and not kb_available:
+            return text + (
+                "\n\n[Note: I'm less confident about some details above. "
+                "Consider verifying with additional sources.]"
+            )
+        if has_large_numbers and not kb_available:
+            return text + (
+                "\n\n[Note: Some specific figures in this response may not be verified. "
+                "Please cross-check.]"
+            )
     except Exception:
         pass
     return text
@@ -596,6 +839,8 @@ def chat_pipeline(
     global _LAST_PLAN_CHECK
     t0 = _time.time()
     _confidence_score = 0.5
+    # LLM-based fact contradiction check — off by default, enable via env
+    _llm_check_on = os.environ.get("AELVOXIM_LLM_CHECK", "").lower() in ("1", "true", "yes")
     _uid = (user or {}).get("email", "")[:20]
     _chat_log = logging.getLogger("aelvoxim.chat")
     _chat_log.info("Chat pipeline start mode=%s user=%s msg=%.60s",
@@ -603,6 +848,17 @@ def chat_pipeline(
     system_msg = next((m["content"] for m in messages if m.get("role") == "system"), None)
     user_msg = next((m["content"] for m in reversed(messages) if m.get("role") == "user"), "")
     extra_context = ""
+
+    # ═══ Topic Fuse (话题切换熔断) — highest priority ═══
+    if user and user.get("email"):
+        _user_email = user["email"]
+        # Build current topic context from ALL user messages (broad context)
+        _all_user_msgs = [m["content"] for m in messages if m.get("role") == "user"]
+        _current_topic = " ".join(_all_user_msgs)[:300] if _all_user_msgs else user_msg[:300]
+        _fuse = get_topic_fuse().record_and_check(_user_email, user_msg, _current_topic)
+        if _fuse:
+            _chat_log.info("  ⛔ Topic fuse tripped: user=%s msg=%.50s", _uid, user_msg[:50])
+            return _fuse
 
     # Cortex decision defaults (may be overridden in Phase 5)
     _cortex_tone = "normal"
@@ -842,6 +1098,18 @@ def chat_pipeline(
                 _chat_log.info("  ⚡ Tool calls detected, executing... tools=%s", available_tools())
                 text = execute_tool_calls(text)
                 _chat_log.info("  ⚡ Tool execution done in %.1fs", _time.time() - _tool_t0)
+                # Check for tool failures — if any tool returned success:false, feed the
+                # result back to the LLM so it can correct its reply instead of claiming success.
+                if '"success": false' in text or '"success":false' in text:
+                    _chat_log.info("  ⚡ Tool failures detected, asking LLM to re-evaluate...")
+                    _fix_prompt = (
+                        "Some tools you called reported failures. Please review the tool results "
+                        "below and update your response to honestly reflect what actually happened. "
+                        "Do NOT claim success for failed operations.\n\n---\n" + text
+                    )
+                    _fix_text = call_llm(mc, enhanced_system, _fix_prompt, temperature, _max_tokens_actual)
+                    if _fix_text and len(_fix_text) > 10:
+                        text = _fix_text
         except Exception as _exc:
             _chat_log.warning("  Tool execution error: %s", _exc)
 
@@ -852,21 +1120,29 @@ def chat_pipeline(
         except Exception:
             pass
 
-    # Post-generation quality check + auto-correction
-    if text:
+    # Post-generation quality check + auto-correction (via GenerationController)
+    if text and user_msg:
         try:
-            from ..control.metacog_check import evaluate as _mc_eval
-            _sev, _issues = _mc_eval(chunk=text, accumulated="", topic=user_msg)
-            if _sev == "SEVERE" and _issues:
-                _fname = ", ".join(i.get("type", "?") for i in _issues[:3])
-                # Auto-correct: append fix instruction and call LLM again
-                _fix_prompt = (
-                    f"The following response has issues ({_fname}). "
-                    f"Please correct it:\n\n{text}"
-                )
-                _corrected = call_llm(mc, enhanced_system, _fix_prompt, temperature, _max_tokens_actual)
-                if _corrected and len(_corrected) > 10:
-                    text = _corrected
+            from ..control.controller import GenerationController
+            # Wrap call_llm to match GenerationController's expected signature
+            def _make_llm_wrapper(mc, sys_prompt, temp, max_tok):
+                def _wrapped(prompt: str) -> str:
+                    return call_llm(mc, sys_prompt, prompt, temp, max_tok) or ""
+                return _wrapped
+
+            _gc = GenerationController(max_retries=3, llm_check_enabled=_llm_check_on)
+            _gc_result = _gc.generate(
+                query=user_msg,
+                system_prompt=enhanced_system,
+                topic=user_msg,
+                call_llm=_make_llm_wrapper(mc, enhanced_system, temperature, _max_tokens_actual),
+                existing_text=text,
+            )
+            if _gc_result.get("text") and len(_gc_result["text"]) > 10:
+                text = _gc_result["text"]
+                if _gc_result.get("retries", 0) > 0:
+                    _chat_log.info("  GenerationController: retries=%d issues=%d",
+                                   _gc_result["retries"], _gc_result.get("issues", 0))
         except Exception:
             pass
 

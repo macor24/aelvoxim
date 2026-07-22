@@ -1,34 +1,85 @@
 # Aelvoxim
 
-**Lightweight AI Cognitive Engine Framework — give your AI a brain that learns.**
+## Self-Learning AI Agent with Persistent Memory & Desktop Control
 
-Aelvoxim is a self-hosted AI decision layer that combines multi-agent orchestration, persistent memory, autonomous learning, and desktop automation. It provides a unified API (port 9701) for chat, knowledge management, and system administration, with a separate Gateway (port 9705) for Windows desktop control.
-
-> **Why Aelvoxim?** Most LLM frameworks treat the model as the whole system. Aelvoxim treats the model as one component in a larger cognitive architecture: safety filters, knowledge retrieval, memory persistence, multi-expert orchestration, metacognition checks, and desktop operation tools all work together *before and after* the LLM call.
+> A cognitive AI agent that remembers every conversation, learns autonomously, and can control your Windows desktop — fully self-hosted.
 
 ---
 
-## Architecture
+### Architecture
 
 ```
-User → Frontend (9702) → API Server (9701) → LLM
-                            ↓
-                    Expert Modules (safety, knowledge, memory, security, creativity, logic, emotion)
-                            ↓
-                    Metacognition Check (fact-conflict, drift, safety, clarity, repetition)
-                            ↓
-                    Tool Execution (read_file, write_file, gateway, OCR, HTTP requests)
-                            ↓
-                    Response → Frontend
+┌─────────────────────────────────────────────────────┐
+│  Application Layer                                 │
+│  Desktop control, file ops, browser automation     │
+├─────────────────────────────────────────────────────┤
+│  Tool Layer                                         │
+│  Code execution, API calls, data analysis, MCP     │
+├─────────────────────────────────────────────────────┤
+│  Cognitive Layer                                    │
+│  Reasoning, planning, decision-making, learning     │
+├─────────────────────────────────────────────────────┤
+│  Memory Layer                                       │
+│  Working → Episodic → Semantic → Procedural        │
+│  Knowledge graph, entity extraction                │
+└─────────────────────────────────────────────────────┘
 ```
+
+What you see, in order:
+
+1. **Aelvoxim** — the project
+2. **Self-Learning AI Agent with Persistent Memory & Desktop Control** — what it does
+3. **Four-layer architecture** — how it's built
+
+---
+
+## Features
+
+### 1. Cross-Session Memory
+
+Every conversation updates an evolving memory system. Start a new session — the AI picks up exactly where you left off. No lost context, no repeating yourself.
+
+- Concepts, relationships, and user preferences are structured into a persistent knowledge graph
+- Memory is queryable, exportable, and resettable
+- Four-tier retention: working (session) → episodic (7 days) → semantic (90 days) → procedural (permanent)
+
+### 2. Self-Learning & Evolution
+
+The system doesn't just answer questions — it learns from them.
+
+- Proactively initiates learning plans ("learn Rust", "study PostgreSQL indexing")
+- Curiosity engine detects unfamiliar topics during conversation and schedules background learning
+- Learning progress is trackable; acquired knowledge can be recalled and explained back to you
+
+### 3. Reasoning & Planning
+
+- Multi-step logical reasoning, causal analysis, and contradiction detection
+- Complex tasks are decomposed into plans and executed step by step
+- Tool-calling for code execution, API integration, and data analysis
+- Metacognition layer checks output quality (factual consistency, topic drift, safety, clarity)
+
+### 4. Desktop Control (via Windows-MCP)
+
+Control your Windows desktop through the AI — mouse, keyboard, file system, browser.
+
+- **Requires Windows-MCP** running on the Windows host (see [Windows-MCP/install_and_run.bat](Windows-MCP/install_and_run.bat))
+- PowerShell execution, screenshots, app launching, file operations
+- Suitable for test automation, data harvesting, daily office tasks
+
+### 5. Security
+
+- All requests filtered through SentriKit (optional security gate)
+- Tool permissions are tiered — sensitive operations require confirmation
+- No prompt injection, no unauthorized system modification
+
+---
 
 ### Port Map
 
 | Port | Service | Description |
 |------|---------|-------------|
-| 9701 | API Server (FastAPI) | Brain — chat, auth, admin, knowledge, learning |
-| 9702 | Frontend (ChatAEL-v2) | Web chat interface (static SPA) |
-| 9705 | Desktop Gateway (FastAPI) | Windows desktop control (UIA, OCR, screenshots) |
+| 9701 | API Server (FastAPI) | Core brain — chat, auth, admin, knowledge, learning |
+| 9702 | Frontend (ChatAEL-v2) | Web chat interface (compiled SPA) |
 | 5432 | PostgreSQL | Sessions, messages, knowledge base, users |
 
 ---
@@ -38,113 +89,81 @@ User → Frontend (9702) → API Server (9701) → LLM
 ### Prerequisites
 
 - Python 3.11+
-- PostgreSQL 15+ (optional — falls back to JSON file storage)
-- Windows 10+ (for desktop Gateway functionality)
+- PostgreSQL 15+ *(optional — falls back to JSON file storage)*
+- An LLM API key (OpenAI, DeepSeek, Anthropic, or any OpenAI-compatible provider)
 
 ### Installation
 
 ```bash
-# Clone the repository
 git clone https://github.com/macor24/aelvoxim.git
 cd aelvoxim
 
-# Install dependencies
-pip install -r requirements.txt
+# Python dependencies
+pip install -e .
 
-# Set up PostgreSQL (optional, recommended)
-# Create database and user
+# Configure PostgreSQL (optional, skip if using JSON storage)
 psql -U postgres -c "CREATE DATABASE aelvoxim;"
 psql -U postgres -c "CREATE USER aelvoxim WITH PASSWORD 'your_password';"
 psql -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE aelvoxim TO aelvoxim;"
-
-# If using PG, set connection string
 export AELVOXIM_DATABASE_URL="host=localhost port=5432 dbname=aelvoxim user=aelvoxim password=your_password"
+```
+
+### Configure LLM
+
+Set one of these environment variables (see docs for full list):
+
+```bash
+# DeepSeek
+export DEEPSEEK_API_KEY="sk-..."
+export LLM_PROVIDER="deepseek"
+
+# OpenAI
+export OPENAI_API_KEY="sk-..."
+export LLM_PROVIDER="openai"
 ```
 
 ### Running
 
 ```bash
-# Start the API server (brain)
-cd aelvoxim
+# Start the brain
 PYTHONPATH=src python3 src/run_server.py 9701
 
-# Start the frontend (separate terminal)
-cd frontend/chatael-v2
-python3 -m http.server 9702
+# (separate terminal) Start the frontend
+python3 serve_chatael.py --port 9702
 
-# Start the Gateway (on Windows host, separate terminal)
-cd aelvoxim-gateway
-python3 start_gateway.py
+# (on Windows host) Start desktop control — see Windows-MCP/install_and_run.bat
 ```
 
-Once running, open `http://localhost:9702` in your browser. Register an account and start chatting.
+Open `http://localhost:9702` in your browser. Register an account and start chatting.
 
 ---
 
-## Features
+## API Endpoints
 
-### Core Capabilities
-
-- **Multi-Expert Orchestration** — 8 expert modules (safety, knowledge, memory, security, creativity, logic, emotion, introspection) collaborate to produce high-quality responses
-- **Persistent Memory** — Cross-session memory with entity extraction, relation graphs, and forgetting curves
-- **Autonomous Learning** — Scheduled knowledge acquisition from web searches, code analysis, and conversation history
-- **Metacognition** — Post-generation quality checks (factual consistency, topic drift, safety, clarity, repetition avoidance)
-- **Multi-Tenant** — Session isolation by user ID; knowledge base intentionally shared across users
-
-### Desktop Automation (Windows Gateway)
-
-| Operation | Description |
-|-----------|-------------|
-| `open` | Launch an app by name (Windows PATH) or known alias (Photoshop, WeChat, Chrome) |
-| `activate_window` | Bring a window to foreground by title match |
-| `find_window` | Locate a window — returns position and dimensions |
-| `type_text` | Type text into the active window; auto-reactivates last focused window |
-| `send_keys` | Send keyboard shortcuts (e.g. `^s` for Ctrl+S, `{ENTER}`) |
-| `mouse_click` | Click at screen coordinates |
-| `screenshot` | Capture the entire screen or a specific window |
-| `ocr_screenshot` | Screenshot + OCR (via PaddleOCR subprocess) — returns text blocks |
-| `open_app` | Special command to launch known applications (alias for open) |
-
-> **Note:** Only system applications (notepad, calc, mspaint) can be launched directly by name. Third-party applications (WeChat, Photoshop) require the path to be configured in `_KNOWN_APPS` or launched manually.
-
-### API Endpoints
-
-All API endpoints are served on port 9701:
+All endpoints on port 9701:
 
 | Path | Description |
 |------|-------------|
 | `POST /v1/auth/register` | Create a new user account |
 | `POST /v1/auth/login` | Authenticate — returns API key |
 | `POST /v1/llm/chat/stream` | Streaming chat (SSE) |
-| `GET /v1/admin/panel` | Admin management panel HTML |
-| `GET /v1/admin/data` | System statistics dashboard |
+| `GET /v1/admin/panel` | Admin management panel |
 | `GET /v1/health` | Service health check |
+
+A full OpenAPI spec is available at `http://localhost:9701/docs`.
 
 ---
 
 ## Configuration
 
-Configuration is primarily through environment variables:
-
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `LLM_PROVIDER` | `deepseek` | LLM provider name |
+| `DEEPSEEK_API_KEY` | — | API key for DeepSeek |
+| `OPENAI_API_KEY` | — | API key for OpenAI |
 | `AELVOXIM_DATABASE_URL` | (none) | PostgreSQL DSN — leave unset for JSON file storage |
-| `AELVOXIM_EDITION` | `enterprise` | Feature edition gate (community/pro/enterprise) |
-| `AELVOXIM_GATEWAY_HOST` | (auto-detected) | Windows Gateway host IP for desktop operations |
-| `AELVOXIM_LLM_CHECK` | `0` | Enable LLM-based fact contradiction check (R1) |
-
----
-
-## Testing
-
-```bash
-cd aelvoxim
-PYTHONPATH=src python3 -m pytest tests/ -v
-
-# Run only specific test suites
-PYTHONPATH=src python3 -m pytest tests/test_tool_use.py -v
-PYTHONPATH=src python3 -m pytest tests/test_database.py -v
-```
+| `AELVOXIM_CONTENT_FILTER` | `0` | Enable prompt injection guard |
+| `AELVOXIM_LLM_CHECK` | `0` | Enable LLM-based fact contradiction check |
 
 ---
 
@@ -156,18 +175,19 @@ aelvoxim/
 │   └── aelvoxim/
 │       ├── server/        # API routes, auth, chat, tool execution
 │       ├── cortex/        # Intent routing, expert orchestration
-│       ├── experts/       # 8 expert modules (safety, logic, creativity, etc.)
-│       ├── control/       # Metacognition checks (post-generation quality)
+│       ├── chimera/       # Emotion engine, intent classification
+│       ├── control/       # Metacognition, generation quality checks
 │       ├── learn/         # Autonomous learning, knowledge acquisition
 │       ├── memory/        # Cross-session memory, entity extraction
+│       ├── proactive/     # Background proactive engine
 │       ├── storage/       # Database layer (PostgreSQL + JSON fallback)
-│       ├── utils/         # Utility functions (JSON, datetime, i18n)
-│       └── chimera/       # Intent classification, emotion engine
-├── aelvoxim-gateway/      # Windows desktop Gateway (UIA, OCR)
+│       ├── utils/         # Utility functions
+│       └── planner/       # Long-term task planning
 ├── frontend/              # ChatAEL-v2 SPA
-├── tests/                 # Test suite (~60 tests)
-├── requirements.txt       # Locked dependencies
-└── README.md
+├── scripts/               # CI, lint, migration helper scripts
+├── tests/                 # Test suite
+├── serve_chatael.py       # Frontend static server entry point
+└── requirements.txt       # Locked dependencies
 ```
 
 ---
@@ -181,4 +201,4 @@ MIT License — see [LICENSE](LICENSE) for details.
 ## Links
 
 - **GitHub:** https://github.com/macor24/aelvoxim
-- **Issue Tracker:** https://github.com/macor24/aelvoxim/issues
+- **Issues:** https://github.com/macor24/aelvoxim/issues
