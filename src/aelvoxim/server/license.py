@@ -35,6 +35,13 @@ from ..utils import DATA_DIR
 LICENSE_FILE = DATA_DIR / "license.json"
 
 
+def _require_secret() -> bytes:
+    """Get the license secret as bytes, or return None."""
+    if not _SECRET:
+        return None
+    return _SECRET.encode()
+
+
 def generate_license(plan: str, expires_days: int = 365) -> str:
     """Generate an HMAC-SHA256 license key.
 
@@ -45,9 +52,12 @@ def generate_license(plan: str, expires_days: int = 365) -> str:
     Returns:
         License key string: "plan:expires_ts:signature[:optional_features]"
     """
+    secret = _require_secret()
+    if not secret:
+        raise RuntimeError("AELVOXIM_LICENSE_SECRET not set — cannot generate license keys")
     expires_ts = int(time.time()) + expires_days * 86400
     payload = f"{plan}:{expires_ts}"
-    sig = hmac.new(_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()[:16]
+    sig = hmac.new(secret, payload.encode(), hashlib.sha256).hexdigest()[:16]
     return f"{payload}:{sig}"
 
 
@@ -61,6 +71,10 @@ def verify_license(key: str) -> Dict[str, Any]:
         Dict with keys: valid (bool), plan (str), expires_at (int),
         reason (str, present only if invalid).
     """
+    secret = _require_secret()
+    if not secret:
+        return {"valid": False, "plan": "community", "reason": "License verification not configured (set AELVOXIM_LICENSE_SECRET)"}
+
     try:
         parts = key.split(":")
         plan = parts[0]
@@ -76,7 +90,7 @@ def verify_license(key: str) -> Dict[str, Any]:
 
     # Validate signature
     payload = f"{plan}:{expires_ts}"
-    expected = hmac.new(_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()[:16]
+    expected = hmac.new(secret, payload.encode(), hashlib.sha256).hexdigest()[:16]
     if not hmac.compare_digest(sig, expected):
         return {"valid": False, "plan": "community", "reason": "Invalid signature"}
 

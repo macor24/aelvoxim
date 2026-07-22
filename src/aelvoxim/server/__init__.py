@@ -47,9 +47,12 @@ def create_app() -> FastAPI:
         description="Self-evolving AI Agent — Standard Public API",
     )
 
+    # CORS: allow specific origins via env var, default to safe localhost
+    _cors_origins = os.environ.get("AELVOXIM_CORS_ORIGINS", "http://localhost:3000,http://localhost:9702")
+    _origins_list = [o.strip() for o in _cors_origins.split(",") if o.strip()]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=_origins_list,
         allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -255,8 +258,11 @@ def create_app() -> FastAPI:
     async def windows_mcp_proxy(body: dict):
         """Proxy tool calls to Windows-MCP via Streamable HTTP."""
         import httpx, json, time, asyncio
-        WINDOWS_MCP_KEY = "sk-aelvoxim-38179e1738a8b83daaf8145e5a85f7db5200753ab2100811"
-        WINDOWS_MCP_URL = "http://172.24.80.1:8000"
+        WINDOWS_MCP_KEY = os.environ.get("WINDOWS_MCP_KEY", "")
+        WINDOWS_MCP_URL = os.environ.get("WINDOWS_MCP_URL", "http://172.24.80.1:8000")
+        if not WINDOWS_MCP_KEY:
+            from fastapi.responses import JSONResponse
+            return JSONResponse({"success": False, "error": "Windows-MCP not configured (set WINDOWS_MCP_KEY)"}, status_code=500)
 
         action = body.get("action", "")
         params = body.get("params", {})

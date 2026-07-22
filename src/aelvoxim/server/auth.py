@@ -355,18 +355,23 @@ _RESET_DIR = METACORE_DIR / "reset_tokens"
 _RESET_EXPIRY = 3600  # 1 hour
 
 
+def _reset_token_filename(email: str) -> str:
+    """Generate a hashed filename for reset tokens (avoid exposing email in filename)."""
+    return hashlib.sha256(email.lower().strip().encode()).hexdigest() + ".json"
+
+
 def set_reset_token(email: str) -> str:
     """Generate a password reset token for the given email. Returns token string."""
     _RESET_DIR.mkdir(parents=True, exist_ok=True)
     token = secrets.token_hex(16)
     token_data = json.dumps({"email": email, "token": token, "expires": time.time() + _RESET_EXPIRY})
-    (_RESET_DIR / f"{email.replace('/', '_')}.json").write_text(token_data)
+    (_RESET_DIR / _reset_token_filename(email)).write_text(token_data)
     return token
 
 
 def verify_reset_token(email: str, token: str) -> bool:
     """Verify a reset token. Consumes it (deletes file) regardless of result."""
-    path = _RESET_DIR / f"{email.replace('/', '_')}.json"
+    path = _RESET_DIR / _reset_token_filename(email)
     if not path.exists():
         return False
     try:

@@ -1,11 +1,14 @@
 import { create } from 'zustand';
 import type { Tenant } from '../types/auth';
 
+// Default API URL: prefer env var at build time, fall back to localhost
+const DEFAULT_API_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_AELVOXIM_API_URL) || 'http://localhost:9701';
+
 const DEFAULT_TENANT: Tenant = {
   id: 'default',
   name: 'Default',
   apiKey: '',
-  apiUrl: 'http://8.134.185.33:9701',
+  apiUrl: DEFAULT_API_URL,
 };
 
 // Storage key — always use 'chatael_tenants' without isolation suffix

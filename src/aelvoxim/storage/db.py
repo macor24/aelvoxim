@@ -35,14 +35,9 @@ def _get_psycopg2():
 
 # ── Config ──
 
-PG_DSN = os.environ.get(
-    "AELVOXIM_DATABASE_URL",
-    "host=localhost port=5432 dbname=aelvoxim user=aelvoxim password=aelvoxim_pg_778af6539f11998d",
-)
-_USE_PG = bool(os.environ.get("AELVOXIM_DATABASE_URL", "true"))  # default to PG
-# For backward compat: if the env var is explicitly set to empty string, disable PG
-if "AELVOXIM_DATABASE_URL" in os.environ and not os.environ["AELVOXIM_DATABASE_URL"]:
-    _USE_PG = False
+PG_DSN = os.environ.get("AELVOXIM_DATABASE_URL", "")
+# PG is only enabled when AELVOXIM_DATABASE_URL is set to a non-empty value
+_USE_PG = bool(PG_DSN)
 
 _POOL: Optional[any] = None  # ThreadedConnectionPool, lazy-initialized
 _POOL_LOCK = threading.Lock()
@@ -430,31 +425,40 @@ def _safe_execute(cur, sql: str):
 
 def search_memory(query_embedding: list[float], limit: int = 10) -> list[dict]:
     """Search memory entities by cosine similarity."""
-    vec = str(query_embedding)
-    sql_str = f"""
+    # Validate: ensure query_embedding is a list of floats
+    if not isinstance(query_embedding, list) or not all(isinstance(x, (int, float)) for x in query_embedding):
+        return []
+    limit = min(max(int(limit), 1), 100)  # bound limit between 1-100
+    # Build vector safely — cast each element explicitly
+    vec_str = "[" + ",".join(str(float(x)) for x in query_embedding) + "]"
+    sql_str = """
         SELECT id, name, entity_type, content, confidence, source,
-               1 - (embedding <=> '{vec}'::vector) AS similarity,
+               1 - (embedding <=> %s::vector) AS similarity,
                created_at
         FROM memory_entities
         WHERE embedding IS NOT NULL
-        ORDER BY embedding <=> '{vec}'::vector
-        LIMIT {limit}
+        ORDER BY embedding <=> %s::vector
+        LIMIT %s
     """
-    return fetch_dict(sql_str)
+    return fetch_dict(sql_str, (vec_str, vec_str, limit))
 
 
 def search_knowledge(query_embedding: list[float], limit: int = 10) -> list[dict]:
     """Search knowledge entries by cosine similarity."""
-    vec = str(query_embedding)
-    sql_str = f"""
+    # Validate: ensure query_embedding is a list of floats
+    if not isinstance(query_embedding, list) or not all(isinstance(x, (int, float)) for x in query_embedding):
+        return []
+    limit = min(max(int(limit), 1), 100)  # bound limit between 1-100
+    vec_str = "[" + ",".join(str(float(x)) for x in query_embedding) + "]"
+    sql_str = """
         SELECT id, topic, title, content, status,
-               1 - (embedding <=> '{vec}'::vector) AS similarity
+               1 - (embedding <=> %s::vector) AS similarity
         FROM knowledge_entries
         WHERE embedding IS NOT NULL AND status = 'active'
-        ORDER BY embedding <=> '{vec}'::vector
-        LIMIT {limit}
+        ORDER BY embedding <=> %s::vector
+        LIMIT %s
     """
-    return fetch_dict(sql_str)
+    return fetch_dict(sql_str, (vec_str, vec_str, limit))
 
 
 # ── Chat session helpers (dual-mode: PG + JSON fallback) ──

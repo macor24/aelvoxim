@@ -52,6 +52,9 @@ models/
 # Internal planning & development docs (not for public)
 docs/
 
+# Windows reserved names — should never be tracked
+nul
+
 # Hermes agent config (local dev only)
 .hermes/
 

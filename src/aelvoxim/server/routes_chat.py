@@ -595,8 +595,11 @@ async def llm_chat_stream(
                     _chat_log.info("  Windows-MCP call: %s %s", _win_action, _win_params)
                     try:
                         import httpx as _httpx_w
-                        WINDOWS_MCP_KEY = "sk-aelvoxim-38179e1738a8b83daaf8145e5a85f7db5200753ab2100811"
-                        WINDOWS_MCP_URL = "http://172.24.80.1:8000"
+                        import os as _os_w
+                        WINDOWS_MCP_KEY = _os_w.environ.get("WINDOWS_MCP_KEY", "")
+                        WINDOWS_MCP_URL = _os_w.environ.get("WINDOWS_MCP_URL", "http://172.24.80.1:8000")
+                        if not WINDOWS_MCP_KEY:
+                            raise RuntimeError("Windows-MCP not configured (set WINDOWS_MCP_KEY)")
                         _sid_resp = _httpx_w.get(f"{WINDOWS_MCP_URL}/mcp",
                             headers={"Authorization": f"Bearer {WINDOWS_MCP_KEY}"}, timeout=5)
                         _sid = _sid_resp.headers.get("mcp-session-id", "")
