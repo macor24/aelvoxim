@@ -1,8 +1,8 @@
 # Aelvoxim
 
-## Self-Learning AI Agent with Persistent Memory & Desktop Control
+## Biomimetic Autonomous Cognitive AI Brain
 
-> A cognitive AI agent that remembers every conversation, learns autonomously, and can control your Windows desktop — fully self-hosted.
+> A self-learning, hallucination-resistant AI cognitive entity that never forgets and can control your desktop — fully self-hosted.
 
 ---
 
