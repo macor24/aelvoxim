@@ -496,7 +496,10 @@ def execute_tool_calls(text: str) -> str:
                     import re as _p_re
                     _m = _p_re.match(r'^([A-Za-z]):\\\\(.*)', _path)
                     if _m:
-                        _path = f"/mnt/{_m.group(1).lower()}/{_m.group(2).replace('\\\\', '/')}"
+                        _path = "/mnt/{}/{}{}".format(
+                            _m.group(1).lower(),
+                            _m.group(2).replace("\\", "/"),
+                        )
                     elif _p_re.match(r'^[A-Za-z]:\\', _path):
                         _drive = _path[0].lower()
                         _rest = _path[3:].replace('\\', '/')
