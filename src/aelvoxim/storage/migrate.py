@@ -17,6 +17,10 @@ from ..utils import METACORE_DIR
 
 from .db import execute, fetch_one, use_pg
 
+import logging
+_log = logging.getLogger("aelvoxim.migrate")
+
+
 
 # ── Count helpers (old storage) ──
 
@@ -43,7 +47,7 @@ def _count_json_knowledge() -> int:
                 elif isinstance(data, dict):
                     count += 1
             except Exception:
-                pass
+                _log.exception("migrate error")
     return count
 
 
@@ -81,7 +85,7 @@ def _count_json_messages() -> int:
                 data = json.loads(f.read_text())
                 count += len(data.get("messages", []))
             except Exception:
-                pass
+                _log.exception("migrate error")
     return count
 
 
@@ -183,7 +187,7 @@ def migrate_knowledge():
                 _insert_kb_entry(data)
                 count += 1
         except Exception:
-            pass
+            _log.exception("migrate error")
     print(f"  Knowledge: {count} imported")
 
 
@@ -263,7 +267,7 @@ def migrate_sessions():
                 """, (sid, m.get("role", "user"), m.get("content", "")))
                 msg_count += 1
         except Exception as e:
-            pass
+            _log.exception("migrate error")
     print(f"  Sessions: {session_count}, Messages: {msg_count}")
 
 

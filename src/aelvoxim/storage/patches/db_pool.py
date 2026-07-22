@@ -43,13 +43,13 @@ def _safe_ping_loop(pool):
                 try:
                     conn.close()
                 except Exception:
-                    pass
+                    _log.exception("db_pool error")
                 # putconn with a closed connection: psycopg2 pool
                 # detects the closed state and removes it from rotation
                 try:
                     pool.putconn(conn)
                 except Exception:
-                    pass
+                    _log.exception("db_pool error")
         except Exception:
             pass  # pool.getconn() can also fail (pool exhausted etc.)
         time.sleep(60)
@@ -118,13 +118,13 @@ def patch_start_pool_health_check():
                         try:
                             conn.close()
                         except Exception:
-                            pass
+                            _log.exception("db_pool error")
                         try:
                             p.putconn(conn)
                         except Exception:
-                            pass
+                            _log.exception("db_pool error")
             except Exception:
-                pass
+                _log.exception("db_pool error")
             time.sleep(60)
 
     t = threading.Thread(target=_check, daemon=True)

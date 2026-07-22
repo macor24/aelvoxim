@@ -37,6 +37,10 @@ sys.path = SYSPATH_PLACEHOLDER
 # Build ExpertInput from stdin
 inp_data = json.loads(sys.stdin.read())
 from aelvoxim.experts.base import ExpertInput, ExpertOutput
+
+import logging
+_log = logging.getLogger("aelvoxim.sub_agent")
+
 inp = ExpertInput(**inp_data)
 
 # Load shared context from other experts (if shared_dir is set)
@@ -51,7 +55,7 @@ if shared_dir and os.path.isdir(shared_dir):
                     expert_name = fname.replace(".json", "")
                     inp.context.setdefault("_shared_context", {})[expert_name] = other
             except Exception:
-                pass
+                _log.exception("sub_agent error")
 
 # Import and instantiate the expert class
 module_path, class_name = MODULE_PLACEHOLDER, CLASS_PLACEHOLDER
@@ -76,7 +80,7 @@ if shared_dir:
                 "skipped": out.skipped,
             }, fh)
     except Exception:
-        pass
+        _log.exception("sub_agent error")
 
 _output = {
     "expert_name": out.expert_name,
@@ -170,7 +174,7 @@ class SubAgentManager:
             import shutil
             shutil.rmtree(shared_dir, ignore_errors=True)
         except Exception:
-            pass
+            _log.exception("sub_agent error")
 
         # Fill in defaults for any that failed
         final: List[ExpertOutput] = []
@@ -245,7 +249,7 @@ class SubAgentManager:
             try:
                 os.unlink(_tmp_cleanup)
             except Exception:
-                pass
+                _log.exception("sub_agent error")
 
             if proc.returncode != 0:
                 err_msg = (err or "").strip()[:120]
@@ -278,7 +282,7 @@ class SubAgentManager:
             try:
                 proc.kill()
             except Exception:
-                pass
+                _log.exception("sub_agent error")
             return ExpertOutput(
                 expert_name=class_name,
                 opinion=f"Expert timed out after {timeout}s.",

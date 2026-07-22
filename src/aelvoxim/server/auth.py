@@ -19,6 +19,10 @@ from typing import Optional
 from ..utils import METACORE_DIR, ensure_dir
 from ..storage.db import execute, fetch_one, fetch_all, use_pg, get_pool
 
+import logging
+_log = logging.getLogger("aelvoxim.auth")
+
+
 # ── Admin key ──
 ADMIN_KEY = os.environ.get("AELVOXIM_ADMIN_KEY", "")
 
@@ -132,7 +136,7 @@ def _all_users() -> list[dict]:
                     seen_emails.add(u.get("email", "").lower())
                     users.append(u)
         except Exception:
-            pass
+            _log.exception("auth error")
 
     # JSON fallback — skip emails already in PG
     for f in sorted(USERS_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
@@ -143,7 +147,7 @@ def _all_users() -> list[dict]:
                 seen_emails.add(email)
                 users.append(u)
         except Exception:
-            pass
+            _log.exception("auth error")
     return users
 
 
@@ -158,7 +162,7 @@ def find_user(api_key: str) -> Optional[dict]:
             if rows and len(rows) > 0:
                 return _user_to_dict_pg(rows[0])
         except Exception:
-            pass
+            _log.exception("auth error")
     # JSON fallback
     path = _user_path(api_key)
     if path.exists():
@@ -178,7 +182,7 @@ def find_by_email(email: str) -> Optional[dict]:
             if rows and len(rows) > 0:
                 return _user_to_dict_pg(rows[0])
         except Exception:
-            pass
+            _log.exception("auth error")
     for user in _all_users():
         if user.get("email", "").lower() == email_lower:
             return user
@@ -194,7 +198,7 @@ def find_by_username(username: str) -> Optional[dict]:
             if rows and len(rows) > 0:
                 return _user_to_dict_pg(rows[0])
         except Exception:
-            pass
+            _log.exception("auth error")
     for user in _all_users():
         if user.get("username", "").lower() == uname:
             return user
@@ -272,7 +276,7 @@ def create_user(user_or_email, password="", username="", plan="community"):
             path.write_text(json.dumps(user, indent=2))
             return user
         except Exception:
-            pass
+            _log.exception("auth error")
     # JSON fallback
     path = _user_path(api_key)
     path.write_text(json.dumps(user, indent=2))
@@ -344,7 +348,7 @@ def _save_user(user: dict) -> None:
             ))
             return
         except Exception:
-            pass
+            _log.exception("auth error")
     path = _user_path(user.get("api_key", ""))
     path.write_text(json.dumps(user, indent=2))
 
@@ -396,7 +400,7 @@ def update_password(email: str, password_hash: str) -> bool:
                     (password_hash, email))
             return True
         except Exception:
-            pass
+            _log.exception("auth error")
     # JSON fallback: find user by email in all JSON files
     email_lower = email.lower().strip()
     for f in USERS_DIR.glob("*.json"):
@@ -408,7 +412,7 @@ def update_password(email: str, password_hash: str) -> bool:
                 f.write_text(json.dumps(data, indent=2))
                 return True
         except Exception:
-            pass
+            _log.exception("auth error")
     return False
 
 
@@ -450,7 +454,7 @@ def update_user_field(email: str, field: str, value: any) -> bool:
                 f.write_text(json.dumps(data, indent=2, ensure_ascii=False))
                 return True
         except Exception:
-            pass
+            _log.exception("auth error")
     return False
 
 
@@ -475,5 +479,5 @@ def delete_user(email: str) -> bool:
                 f.unlink()
                 return True
         except Exception:
-            pass
+            _log.exception("auth error")
     return False

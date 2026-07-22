@@ -9,6 +9,10 @@ from __future__ import annotations
 import time
 from typing import Any, Callable, Dict, Optional
 
+import logging
+_log = logging.getLogger("aelvoxim.meta_cog")
+
+
 
 def analyze_triggers(report, directions: dict) -> Optional[dict]:
     """Analyze triggered signals and return root cause + suggested action."""
@@ -82,7 +86,7 @@ def analyze_with_hypotheses(report, directions: dict, log_func: Callable, learne
                         analysis["fallback_seed"] = fallback
                         return analysis
                 except Exception:
-                    pass
+                    _log.exception("meta_cog error")
                 return None
             hypotheses = new_hypotheses
             analysis["hypotheses"] = [asdict(h) for h in hypotheses]
@@ -103,7 +107,7 @@ def analyze_with_hypotheses(report, directions: dict, log_func: Callable, learne
                         bp.get_or_create(key, prior_a=3, prior_b=1)
                         bp.record_outcome(key, True)  # confirmed = success
                     except Exception:
-                        pass
+                        _log.exception("meta_cog error")
     return analysis
 
 
@@ -150,7 +154,7 @@ def execute_reflection(
             _old = [e for e in _all if (e.get('created_at', _now) if isinstance(e.get('created_at'), (int, float)) else 0) < _cutoff]
             log_func(f"  🧠 Reflected: {len(_all)} entries, {len(_old)} older than 3d — {analysis.get('detail','')}")
         except Exception:
-            pass
+            _log.exception("meta_cog error")
 
     # Record this repair for later verification
     repair = None
@@ -178,7 +182,7 @@ def execute_reflection(
             for r in results:
                 log_func(f"  🧪 Hypothesis result: {r}")
     except Exception:
-        pass
+        _log.exception("meta_cog error")
 
     return repair
 
@@ -244,4 +248,4 @@ def update_selfmodel_from_repair(repair_result: dict) -> None:
         sm._capabilities["repair"].record_outcome(success=(repair_result["status"] == "resolved"))
         sm._save()
     except Exception:
-        pass
+        _log.exception("meta_cog error")

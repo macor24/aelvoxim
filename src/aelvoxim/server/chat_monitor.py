@@ -20,6 +20,10 @@ from typing import Any, Dict, List, Optional
 
 from ..utils import DATA_DIR as _DATA_ROOT
 
+import logging
+_log = logging.getLogger("aelvoxim.chat_monitor")
+
+
 _DATA_DIR = _DATA_ROOT / "chat_monitor"
 
 
@@ -244,7 +248,7 @@ def cleanup_old(keep_days: int = 30) -> int:
                 fp.unlink()
                 removed += 1
             except Exception:
-                pass
+                _log.exception("chat_monitor error")
     return removed
 
 
@@ -325,7 +329,7 @@ def generate_metacog_log(
                             "source": attrs.get("source", "chat"),
                         })
                 except Exception:
-                    pass
+                    _log.exception("chat_monitor error")
 
             # Blind spots (low confidence extracted entities)
             if overall < 0.6 and "extracted" in (attrs.get("tags") or ""):
@@ -367,7 +371,7 @@ def generate_metacog_log(
             )
 
     except Exception:
-        pass
+        _log.exception("chat_monitor error")
 
     return log
 

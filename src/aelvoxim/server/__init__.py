@@ -7,6 +7,7 @@ Aggregates all route modules and creates the FastAPI application.
 from __future__ import annotations
 
 import os
+import logging
 
 from fastapi import FastAPI
 from fastapi import Request, WebSocket
@@ -37,6 +38,9 @@ router.include_router(_cortex_router)
 # Chimera and brain routers (external)
 from ..chimera.routes import router as chimera_router
 from ..orchestrator import router as brain_router
+
+_log = logging.getLogger("aelvoxim.server")
+
 
 
 def create_app() -> FastAPI:
@@ -101,7 +105,7 @@ def create_app() -> FastAPI:
                     response.status_code = 401
                     response.headers["X-Session-Conflict"] = "true"
         except Exception:
-            pass
+            _log.exception("server error")
         return response
 
     # Forward-compat: /orchestrate without /v1 prefix (for ChatAEL-v2 frontend)
@@ -113,18 +117,19 @@ def create_app() -> FastAPI:
     # Auto-start Learner + .pyc cleanup on startup
     @app.on_event("startup")
     async def _startup_init():
-        # Clean stale .pyc files first
-        try:
-            import subprocess, os as _os2
-            _root = _os2.path.dirname(_os2.path.dirname(_os2.path.abspath(__file__)))
-            subprocess.run(
-                ["find", _root, "-name", "__pycache__", "-type", "d",
-                 "-exec", "rm", "-rf", "{}", "+"],
-                capture_output=True, timeout=10,
-            )
-        except Exception:
-            import logging
-            logging.getLogger("aelvoxim.server").exception("startup: pyc cleanup failed")
+        # Clean stale .pyc files first (dev mode only)
+        if os.environ.get("AELVOXIM_DEV", "0") == "1":
+            try:
+                import subprocess, os as _os2
+                _root = _os2.path.dirname(_os2.path.dirname(_os2.path.abspath(__file__)))
+                subprocess.run(
+                    ["find", _root, "-name", "__pycache__", "-type", "d",
+                     "-exec", "rm", "-rf", "{}", "+"],
+                    capture_output=True, timeout=10,
+                )
+            except Exception:
+                import logging
+                logging.getLogger("aelvoxim.server").exception("startup: pyc cleanup failed")
         # License verification + edition injection
         try:
             from aelvoxim.server.edition import current as _ed_current
@@ -342,7 +347,7 @@ def create_app() -> FastAPI:
             ) if hasattr(learner, '_directions') else 0
             result["last_heartbeat"] = getattr(learner, '_last_heartbeat', 0.0)
         except Exception:
-            pass
+            _log.exception("server error")
         return result
 
     # Serve ChatAEL frontend (built SPA) at /chatael

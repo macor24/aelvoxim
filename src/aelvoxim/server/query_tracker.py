@@ -21,6 +21,10 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from ..utils import METACORE_DIR
 
+import logging
+_log = logging.getLogger("aelvoxim.query_tracker")
+
+
 _TRACKER_DIR = Path(METACORE_DIR) / "query_tracker"
 _COOLDOWN_MINUTES = 30  # Within this window, same-topic repeats are deduplicated
 
@@ -87,7 +91,7 @@ def record_query(query: str, user_id: str = "") -> str:
                 "raw_prefix": query[:50],
             }, ensure_ascii=False) + "\n")
     except Exception:
-        pass
+        _log.exception("query_tracker error")
     return topic
 
 
@@ -106,7 +110,7 @@ def get_recent_topics(hours: int = 24, limit: int = 50) -> List[Dict]:
                 if len(results) >= limit:
                     break
         except Exception:
-            pass
+            _log.exception("query_tracker error")
         if len(results) >= limit:
             break
     return results
@@ -187,5 +191,5 @@ def get_trend(days: int = 7) -> List[Dict]:
                 day = e.get("ts", "")[:10]
                 daily[day][e.get("topic", "general")] += 1
         except Exception:
-            pass
+            _log.exception("query_tracker error")
     return [{"date": d, "topics": dict(c)} for d, c in sorted(daily.items())]

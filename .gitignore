@@ -76,3 +76,7 @@ Windows-MCP/server.json
 Windows-MCP/uv.lock
 Windows-MCP/assets/
 Windows-MCP/docs/
+
+# Automation logs
+@AutomationLog.txt
+dist/

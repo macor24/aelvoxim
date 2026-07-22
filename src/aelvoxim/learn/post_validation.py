@@ -22,6 +22,10 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+import logging
+_log = logging.getLogger("aelvoxim.post_validation")
+
+
 
 # ── Risk topic keywords ──────────────────────────────────────
 
@@ -281,7 +285,7 @@ class FactCrossVerifier:
                     "attributes": json.loads(row["attributes"] or "{}"),
                 }
         except Exception:
-            pass
+            _log.exception("post_validation error")
         return None
 
     def verify(self, entry: dict) -> List[AuditIssue]:
@@ -594,7 +598,7 @@ class SafetyComplianceFilter:
                             matched_content=f"age={age_days}d",
                         ))
             except Exception:
-                pass
+                _log.exception("post_validation error")
 
         # 5. SentriKit re-check (only for high-confidence entries)
         if entry.get("confidence", 0.5) >= 0.8:
@@ -725,15 +729,15 @@ class PostValidationEngine:
         try:
             issues.extend(self._fact_verifier.verify(entry))
         except Exception:
-            pass
+            _log.exception("post_validation error")
         try:
             issues.extend(self._consistency_checker.verify(entry))
         except Exception:
-            pass
+            _log.exception("post_validation error")
         try:
             issues.extend(self._safety_filter.verify(entry))
         except Exception:
-            pass
+            _log.exception("post_validation error")
         return issues
 
     # ── Entry mutations ──
@@ -764,7 +768,7 @@ class PostValidationEngine:
             from .knowledge import _write_entry
             _write_entry(entry)
         except Exception:
-            pass
+            _log.exception("post_validation error")
 
     @staticmethod
     def _adjust_confidence(entry: dict, issues: List[AuditIssue],
@@ -789,6 +793,6 @@ class PostValidationEngine:
             from .knowledge import _write_entry
             _write_entry(entry)
         except Exception:
-            pass
+            _log.exception("post_validation error")
 
         report.entries_adjusted.append(entry.get("id", "unknown"))

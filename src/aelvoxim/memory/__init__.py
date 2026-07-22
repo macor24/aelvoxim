@@ -184,7 +184,7 @@ def _migrate_from_json():
                                 importance=0.5, timestamp=now, source="migration")
             _store_to_fusion(entry)
         except Exception:
-            pass
+            _log.exception("__init__ error")
 
     for relation in data.get("relations", []):
         rid = relation.get("id") or f"rel:{uuid.uuid4().hex[:12]}"
@@ -196,7 +196,7 @@ def _migrate_from_json():
                  json.dumps(relation.get("attributes", {}), ensure_ascii=False), now),
             )
         except Exception:
-            pass
+            _log.exception("__init__ error")
 
     for event in data.get("events", []):
         eid = event.get("id") or f"ev:{uuid.uuid4().hex[:12]}"
@@ -209,7 +209,7 @@ def _migrate_from_json():
                  event.get("user_id", "")),
             )
         except Exception:
-            pass
+            _log.exception("__init__ error")
 
     db.commit()
     legacy.rename(legacy.with_suffix(".json.bak"))
@@ -292,7 +292,7 @@ def _migrate_confidence_metadata():
             import logging as _log2
             _log2.getLogger("memory").info("Backfilled %d entities with confidence metadata", updated)
     except Exception:
-        pass
+        _log.exception("__init__ error")
 
 _migrate_confidence_metadata()
 
@@ -329,7 +329,7 @@ def store_entity(eid: str, etype: str, attributes: dict,
                 # Still write but with conflict metadata instead of blocking entirely
                 # This lets the existing promotion/review pipeline handle it
         except Exception:
-            pass
+            _log.exception("__init__ error")
         # Preserve original type on re-insert, but upgrade org→location
         _old_type_row = db.execute("SELECT type FROM entities WHERE id = ?", (eid,)).fetchone()
         if _old_type_row:
@@ -381,7 +381,7 @@ def store_entity(eid: str, etype: str, attributes: dict,
                     if _cf and _cf.get("_conflict"):
                         attributes.update(_cf)
                 except Exception:
-                    pass
+                    _log.exception("__init__ error")
             # Time tag detection
             _src = str(attributes.get("extracted_from", "")) or value
             _ttl = detect_ttl(_src)
@@ -411,7 +411,7 @@ def store_entity(eid: str, etype: str, attributes: dict,
                 )
                 attributes["confidence_metadata"] = _c5d_result
             except Exception:
-                pass
+                _log.exception("__init__ error")
             # Update DB with attributes (TTL, superseded, etc.)
             _attrs_j2 = json.dumps(attributes, ensure_ascii=False)
             db.execute("UPDATE entities SET attributes = ? WHERE id = ? AND user_id = ?",
@@ -465,7 +465,7 @@ def store_entity(eid: str, etype: str, attributes: dict,
                                 del _l._entries[eid]
                         _fusion.procedural._entries[eid] = _e
                 except Exception:
-                    pass
+                    _log.exception("__init__ error")
                 _audit_memory("memory_write", eid, user_id, {"type": etype})
                 return True
         entry = MemoryEntry(key=eid, value=value, tags=tags or [],
@@ -682,14 +682,14 @@ def search_entities(query: str, etype: Optional[str] = None,
                     try:
                         _attrs = json.loads(_rr["attributes"] or "{}")
                     except Exception:
-                        pass
+                        _log.exception("__init__ error")
                     _rels.append({
                         "source": _src, "target": _tgt, "type": _rtype,
                         "strength": _attrs.get("_strength", 0.5),
                     })
                 _r_ent["relations"] = _rels
     except Exception:
-        pass
+        _log.exception("__init__ error")
 
     return results
 
@@ -823,7 +823,7 @@ def memory_read(key: str) -> Optional[dict]:
                         "tags": r.get("metadata", {}).get("tags", []),
                         "attributes": r.get("metadata", {})}
         except Exception:
-            pass
+            _log.exception("__init__ error")
     entry = _read_from_layers(key)
     if entry:
         return {"key": entry.key, "type": entry.layer, "value": entry.value,
@@ -857,7 +857,7 @@ def memory_store(key: str, value: str, tags: Optional[List[str]] = None,
             """, (str(_uid.uuid4()), key[:200], etype, value, str(emb), "chat",
                   json.dumps({"tags": tags or []})))
         except Exception:
-            pass
+            _log.exception("__init__ error")
     return store_entity(key, etype, {"value": value}, tags=tags, user_id=user_id)
 
 
@@ -896,7 +896,7 @@ def _audit_memory(event: str, eid: str, user_id: str, extra: Optional[Dict[str, 
         with open(str(log_path), "a") as f:
             f.write(entry + "\n")
     except Exception:
-        pass
+        _log.exception("__init__ error")
 
 
 __all__ = [
@@ -935,7 +935,7 @@ def update_emotion_profile(
             if isinstance(parsed, dict):
                 current = parsed
         except (json.JSONDecodeError, TypeError):
-            pass
+            _log.exception("__init__ error")
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     current[sentiment] = current.get(sentiment, 0) + 1
     current["total"] = current.get("total", 0) + 1
@@ -969,4 +969,4 @@ try:
     from .decay import install_decay_cleanup as _install_decay
     _install_decay(_fusion, _DB_PATH)
 except Exception:
-    pass
+    _log.exception("__init__ error")

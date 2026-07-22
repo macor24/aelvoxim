@@ -1,2 +1,0 @@
-2026-07-08 22:44:05.455 <string>[1] <module> -> Find Control Timeout(10s): {Name: '微信', ControlType: WindowControl}
-2026-07-08 22:44:16.577 <string>[1] <module> -> Find Control Timeout(10s): {Name: '微信', ControlType: WindowControl}

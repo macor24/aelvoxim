@@ -58,6 +58,10 @@ from .scheduler import check_pending_promotions, llm_verify_practice
 from .meta_cog import analyze_triggers, analyze_with_hypotheses
 from .meta_cog import execute_reflection, verify_repair, update_selfmodel_from_repair
 
+import logging
+_log = logging.getLogger("aelvoxim.loop")
+
+
 
 # ── Singleton pattern ──
 _learner_instance = None
@@ -321,13 +325,13 @@ class Learner:
                     from ..hooks.tracker import record_outcome as _ro
                     _ro(_at["id"], True)
             except Exception:
-                pass
+                _log.exception("loop error")
             # Sync to knowledge graph
             try:
                 from ..server.knowledge_graph import add_knowledge_entry
                 add_knowledge_entry(topic, title)
             except Exception:
-                pass
+                _log.exception("loop error")
 
         result = execute_and_validate(
             topic=topic,
@@ -415,7 +419,7 @@ class Learner:
                                              "source_milestone": direction.source_milestone}}}
                 _ltp.update_from_learner(_st)
             except Exception:
-                pass
+                _log.exception("loop error")
         return True
 
     def _report_learning_quality(self, topic: str, direction: LearningDirection) -> None:
@@ -427,7 +431,7 @@ class Learner:
                 return
             verified_high = sum(1 for e in entries if e.get("confidence", 0) >= 0.7)
         except Exception:
-            pass
+            _log.exception("loop error")
 
     # ── Cognition tick (delegated to sub-modules) ──
 
@@ -447,7 +451,7 @@ class Learner:
             try:
                 from ..patches.learner_cache import get_selfmodel as _cached_sm
             except (ImportError, ModuleNotFoundError):
-                pass
+                _log.exception("loop error")
 
             sm = _cached_sm() if _cached_sm else SelfModel()
             mon = MetaCogMonitor()
@@ -471,7 +475,7 @@ class Learner:
                         if t:
                             _kb_topics[t] = _kb_topics.get(t, 0) + 1
                 except Exception:
-                    pass
+                    _log.exception("loop error")
                 _gap_result = analyze_knowledge_gaps(
                     self._directions, _kb_topics, [],
                     min_entries_threshold=5, saturation_threshold=0.8,
@@ -489,7 +493,7 @@ class Learner:
                             _plan = _ltp.create_plan(_goal, source="gap_analysis")
                             self._log(f"  🗺️ Plan created: {_plan.id} -> {_goal[:50]}")
             except Exception:
-                pass
+                _log.exception("loop error")
             if hasattr(sm, '_capabilities'):
                 bc = sm._capabilities.get("belief_health", None)
                 if bc:
@@ -517,7 +521,7 @@ class Learner:
                             _days = (_now_ts - _parsed.timestamp()) / 86400
                             _max_age_days = max(_max_age_days, _days)
                         except Exception:
-                            pass
+                            _log.exception("loop error")
                 # Repeat failure count from log analysis
                 _repeat_fail = 0
                 try:
@@ -525,7 +529,7 @@ class Learner:
                     _a_report = _hook_analyze(lookback=5)
                     _repeat_fail = _a_report.failure_count if hasattr(_a_report, 'failure_count') else 0
                 except Exception:
-                    pass
+                    _log.exception("loop error")
                 # Also check SelfModel for failure tracking
                 try:
                     _learner_cap = sm._capabilities.get("learner")
@@ -534,7 +538,7 @@ class Learner:
                         if _failures > _repeat_fail:
                             _repeat_fail = _failures
                 except Exception:
-                    pass
+                    _log.exception("loop error")
                 _mc_report = _trigger.evaluate(
                     success_rate_7d=_overall_success,
                     success_rate_3d=_overall_success,
@@ -557,7 +561,7 @@ class Learner:
                     if _result.get('decayed', 0) > 0 or _result.get('archived', 0) > 0 or _result.get('dormant', 0) > 0:
                         self._log(f"  🧹 Memory maintenance: {_result}")
             except Exception:
-                pass
+                _log.exception("loop error")
 
             # ── Unknown discovery (every tick) ──
             try:
@@ -565,7 +569,7 @@ class Learner:
                 if scan_unknowns(self._directions, self._log):
                     self._log("  🔍 UnknownDiscovery: new candidate(s) queued")
             except Exception:
-                pass
+                _log.exception("loop error")
 
             report = mon.evaluate(
                 learner_stats=learner_stats,
@@ -583,13 +587,13 @@ class Learner:
                     if _cr.get("merged_count", 0) > 0 or _cr.get("groups_found", 0) > 0:
                         self._log(f"  🧩 Consolidation: merged {_cr['merged_count']} from {_cr['groups_found']} groups")
             except Exception:
-                pass
+                _log.exception("loop error")
 
             # 2b. Feed learner results back into SelfModel
             try:
                 sm.inject_learner_stats(learner_stats, belief_stats)
             except Exception:
-                pass
+                _log.exception("loop error")
 
             # ── Determine current focus from active goals ──
             _current_focus = "balanced"
@@ -608,7 +612,7 @@ class Learner:
                     if _cleaned:
                         self._log(f"  🧹 [Focus:cleanup] Cleaned {_cleaned} low-value entries")
                 except Exception:
-                    pass
+                    _log.exception("loop error")
             else:
                 _memory_cleanup()
 
@@ -654,7 +658,7 @@ class Learner:
                                 _tid = _st({"changes": _shielded_changes, "trigger": "cognition_tick"})
                                 self._log(f"  📊 Tracker started: {_tid}")
                             except Exception:
-                                pass
+                                _log.exception("loop error")
                         for c in _shielded_changes[:3]:
                             self._log(f"    {c.get('target','?')}: {c.get('old','?')} -> {c.get('new','?')} ({c.get('reason','')})")
                 _analysis = analyze_with_hypotheses(report, self._directions, self._log, learner_ref=self)
@@ -670,14 +674,14 @@ class Learner:
                     for _c in _at_changes[:3]:
                         self._log(f"    {_c.get('target','?')}: {_c.get('action','?')} ({_c.get('reason','')})")
             except Exception:
-                pass
+                _log.exception("loop error")
 
             # 5a. Active search and learn (skippable via focus)
             if "search" not in _current_skip:
                 try:
                     self._search_rr = _goals_search_and_learn(self._directions, self._log, self._search_rr)
                 except Exception:
-                    pass
+                    _log.exception("loop error")
             else:
                 self._log(f"  ⏸️ [Focus:{_current_focus}] Search paused")
 
@@ -703,7 +707,7 @@ class Learner:
                         if cleaned:
                             self._log(f"  🧹 Cognition: cleaned up {cleaned} low-value entries")
                     except Exception:
-                        pass
+                        _log.exception("loop error")
 
             # 6. Verify last repair
             try:
@@ -712,13 +716,13 @@ class Learner:
                     update_selfmodel_from_repair(_repair_result)
                     self._log(f"  🔄 Repair verification: {_repair_result['status']} — {_repair_result.get('detail', '')}")
             except Exception:
-                pass
+                _log.exception("loop error")
 
             # 7. Progress goals
             try:
                 self._active_goals = _goals_progress(self._active_goals, self._log)
             except Exception:
-                pass
+                _log.exception("loop error")
 
             # 8. Set new goals (every 30 cycles)
             try:
@@ -726,7 +730,7 @@ class Learner:
                 if self._cognition_cycle_count % 30 == 0:
                     self._active_goals = _goals_set_active(self._active_goals, self._log)
             except Exception:
-                pass
+                _log.exception("loop error")
 
             # 9. Review scheduler (every 10 cycles)
             try:
@@ -735,13 +739,13 @@ class Learner:
                     _rr = run_review_cycle(log_func=self._log)
                 self._review_tick = getattr(self, '_review_tick', 0) + 1
             except Exception:
-                pass
+                _log.exception("loop error")
 
             # 9. Daily brain report
             try:
                 _update_daily_report(report, self._dir_mgr, self)
             except Exception:
-                pass
+                _log.exception("loop error")
 
             # 10. Curiosity-driven autonomous learning (every 15 cycles)
             try:
@@ -770,7 +774,7 @@ class Learner:
                             self._log(f"  ⚠️ Curiosity: Search failed for '{_topic}'")
                 self._curiosity_tick = getattr(self, '_curiosity_tick', 0) + 1
             except Exception:
-                pass
+                _log.exception("loop error")
 
             # Update running average
             elapsed = time.time() - t0
@@ -809,7 +813,7 @@ class Learner:
                             self._sleep(30)
                             continue
                 except Exception:
-                    pass
+                    _log.exception("loop error")
 
                 # Refresh LLM + search status
                 self._detect_llm_status()
@@ -842,7 +846,7 @@ class Learner:
                             _kb = _report["knowledge"]
                             self._log(f"  📊 Health: {_kb['total']} entries, avg conf {_kb.get('avg_confidence', 0):.2f}, {_report['directions'].get('active', 0)} active directions")
                 except Exception:
-                    pass
+                    _log.exception("loop error")
 
                 # Check reviews
                 if check_reviews(self._directions, self._dir_mgr.save, self._log):
@@ -883,7 +887,7 @@ class Learner:
                                 self._dir_mgr.save()
                                 self._log(f'  🗂️ Archived {_archived} old completed directions ({len(self._directions)} remaining)')
                     except Exception:
-                        pass
+                        _log.exception("loop error")
 
                     # Curiosity engine: pick next topic from seeds or derive
                     try:
@@ -892,14 +896,14 @@ class Learner:
                             self._sleep(5)
                             continue
                     except Exception:
-                        pass
+                        _log.exception("loop error")
 
                     try:
                         if self._review_mode():
                             self._sleep(5)
                             continue
                     except Exception:
-                        pass
+                        _log.exception("loop error")
 
                     if len(self._directions) >= 20:
                         self._log(f'  ℹ️ {len(self._directions)} directions exist, skipping self-heal')
@@ -910,7 +914,7 @@ class Learner:
                                 for f in fixes:
                                     self._log('🩺 Self-heal: {}'.format(f))
                         except Exception:
-                            pass
+                            _log.exception("loop error")
 
                     if self._enable_auto_discover:
                         found, new_ts = _auto_add(
@@ -945,7 +949,7 @@ class Learner:
                                         self._log("    [{}] {}: {} — {}".format(
                                             _fi.severity, _fi.dimension, _fi.entry_title[:30], _fi.detail[:50]))
                     except Exception:
-                        pass
+                        _log.exception("loop error")
 
                 # ── Loop summary (every iteration) ──
                 self._loop_count += 1
@@ -985,7 +989,7 @@ class Learner:
                 self._log("  ℹ️ Community edition: auto-learning disabled (start Pro for 7×24 loop)")
                 return
         except ImportError:
-            pass
+            _log.exception("loop error")
 
         self._running = True
         self._thread = threading.Thread(target=self._main_loop_safe, daemon=True, name="learner-main")
@@ -999,7 +1003,7 @@ class Learner:
                 self._health_thread = threading.Thread(target=self._health_daemon, daemon=True)
                 self._health_thread.start()
         except Exception:
-            pass
+            _log.exception("loop error")
 
         # Watchdog
         self._start_watchdog()
@@ -1009,7 +1013,7 @@ class Learner:
         try:
             self._main_loop()
         except SystemExit:
-            pass
+            _log.exception("loop error")
         except Exception as e:
             self._log(f"🚨 Learning loop crashed: {e}")
             import traceback as _tb
@@ -1044,7 +1048,7 @@ class Learner:
             if pending:
                 return True
         except Exception:
-            pass
+            _log.exception("loop error")
         return False
 
     def single_learn(self, topic: str) -> dict:
@@ -1100,7 +1104,7 @@ class Learner:
         try:
             STATUS_FILE.write_text(json.dumps(status, ensure_ascii=False, indent=2))
         except Exception:
-            pass
+            _log.exception("loop error")
 
     def get_status(self) -> dict:
         """Get learner status dict."""
@@ -1119,5 +1123,5 @@ class Learner:
                 lines = LOG_FILE.read_text().strip().split("\n")
                 return lines[-n:]
         except Exception:
-            pass
+            _log.exception("loop error")
         return []

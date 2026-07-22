@@ -122,7 +122,7 @@ async def handle_gateway_ws(ws: WebSocket):
             try:
                 await old_info["ws"].close()
             except Exception:
-                pass
+                log.exception("gateway_ws error")
         _GATEWAY_CONNECTIONS[email] = {"ws": ws, "connected_at": time.time(), "version": msg.get("version", "")}
         await ws.send_json({"type": "auth_ok", "user": email})
         log.info("Gateway connected: %s", email)
@@ -142,7 +142,7 @@ async def handle_gateway_ws(ws: WebSocket):
                 if info:
                     info["version"] = msg.get("version", info.get("version", ""))
     except WebSocketDisconnect:
-        pass
+        log.exception("gateway_ws error")
     except Exception as e:
         log.exception("Gateway WS error for %s: %s", email, e)
     finally:

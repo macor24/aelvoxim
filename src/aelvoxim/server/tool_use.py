@@ -57,7 +57,7 @@ if not _GATEWAY_HOST:
                     _GATEWAY_HOST = _parts[2]
                     break
     except Exception:
-        pass
+        log.exception("tool_use error")
 
 def register(name: str):
     """Decorator to register a tool function."""
@@ -133,14 +133,14 @@ def _is_allowed(path: Path) -> bool:
             path.resolve().relative_to(Path(d).resolve())
             return True
         except ValueError:
-            pass
+            log.exception("tool_use error")
     # Check persisted authorized paths
     for d in _load_allowed():
         try:
             path.resolve().relative_to(Path(d).resolve())
             return True
         except ValueError:
-            pass
+            log.exception("tool_use error")
     return False
 
 
@@ -201,6 +201,8 @@ def write_file(path: str, content: str) -> Dict[str, Any]:
 @register("run_code")
 def run_code(code: str, timeout: int = 15) -> Dict[str, Any]:
     """Execute Python code in a subprocess. Returns stdout/stderr."""
+    if os.environ.get("AELVOXIM_DISABLE_CODE_EXEC", "0") == "1":
+        return {"success": False, "error": "Code execution is disabled (AELVOXIM_DISABLE_CODE_EXEC=1)"}
     if len(code) > 5000:
         return {"success": False, "error": "Code too long (max 5000 chars)"}
     try:
@@ -378,6 +380,8 @@ def execute_command(
         Dict with keys: success, stdout (str), stderr (str), exit_code (int),
         error (str if failed).
     """
+    if os.environ.get("AELVOXIM_DISABLE_CODE_EXEC", "0") == "1":
+        return {"success": False, "error": "Code execution is disabled (AELVOXIM_DISABLE_CODE_EXEC=1)"}
     import subprocess as _sp
     import shlex as _shlex
 

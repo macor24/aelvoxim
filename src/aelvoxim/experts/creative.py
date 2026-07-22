@@ -12,6 +12,10 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from .base import BaseExpert, ExpertInput, ExpertOutput, register
 
+import logging
+_log = logging.getLogger("aelvoxim.creative")
+
+
 # ── Creative type detection ─────────────────────────────────
 
 _CREATIVE_TYPES: Dict[str, Dict] = {
@@ -88,7 +92,7 @@ def _build_context(inp: ExpertInput) -> str:
             if isinstance(memory_details, dict):
                 shared_entities = memory_details.get("entities", [])
     except Exception:
-        pass
+        _log.exception("creative error")
 
     if shared_entities:
         vals = [e.get("value", "")[:80] or str(e.get("content", ""))[:80]
@@ -106,7 +110,7 @@ def _build_context(inp: ExpertInput) -> str:
             if vals:
                 parts.append("Related known entities: " + "; ".join(vals))
     except Exception:
-        pass
+        _log.exception("creative error")
     try:
         from aelvoxim.memory import search_events
         events = search_events(query=inp.query, limit=3)
@@ -115,7 +119,7 @@ def _build_context(inp: ExpertInput) -> str:
             if ev:
                 parts.append("Related events: " + "; ".join(ev))
     except Exception:
-        pass
+        _log.exception("creative error")
     return "\n".join(parts)
 
 
@@ -217,7 +221,7 @@ class CreativeExpert(BaseExpert):
                                     float(m.group(1)),
                                 )
                         except Exception:
-                            pass
+                            _log.exception("creative error")
             if current_alt:
                 details["scenarios"].append(current_alt.strip())
             # Fill alternatives list
@@ -272,7 +276,7 @@ def _fallback_generate(q: str, details: Dict[str, Any]) -> Dict[str, Any]:
             )
             details["scenarios"].append(scenario)
         except Exception:
-            pass
+            _log.exception("creative error")
 
     _alt_prefixes = [
         "Try reversing", "Consider scaling down",

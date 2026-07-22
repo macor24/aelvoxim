@@ -167,7 +167,7 @@ def get_subscription(sub_id: str) -> Optional[dict]:
                 "created_at": str(r.get("created_at", "")),
             }
     except Exception:
-        pass
+        _log.exception("webhook error")
     return None
 
 
@@ -308,4 +308,4 @@ def _update_delivery_log(sub_id: str, success: bool, status_code: int):
                 WHERE id = %s
             """, (sub_id,))
     except Exception:
-        pass
+        _log.exception("webhook error")

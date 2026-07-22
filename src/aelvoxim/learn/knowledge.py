@@ -55,12 +55,12 @@ def _acquire_process_lock():
         try:
             fcntl.flock(_lock_fd, fcntl.LOCK_EX)
         except (AttributeError, OSError):
-            pass
+            _log.exception("knowledge error")
     elif HAVE_MSVCRT:
         try:
             msvcrt.locking(_lock_fd, msvcrt.LK_LOCK, 1)
         except (OSError, IOError):
-            pass
+            _log.exception("knowledge error")
     # else: no locking available
 
 
@@ -72,12 +72,12 @@ def _release_process_lock():
             try:
                 fcntl.flock(_lock_fd, fcntl.LOCK_UN)
             except (AttributeError, OSError):
-                pass
+                _log.exception("knowledge error")
         elif HAVE_MSVCRT:
             try:
                 msvcrt.locking(_lock_fd, msvcrt.LK_UNLCK, 1)
             except (OSError, IOError):
-                pass
+                _log.exception("knowledge error")
 
 
 class _FileWriteGuard:
@@ -506,7 +506,7 @@ class KnowledgeBase:
                     "KB entry limit reached (%d/%d)", _total, _cfg['max_kb_entries'])
                 return {"id": "", "_status": "rejected_quota", "title": title, "topic": topic, "created_at": now}
         except Exception:
-            pass
+            _log.exception("knowledge error")
 
         # ── Compute content hash for exact dedup ─────────────
         import hashlib
@@ -526,7 +526,7 @@ class KnowledgeBase:
                     ON CONFLICT DO NOTHING
                 """, (topic, title, summary or content, "active", source or "chat"))
             except Exception:
-                pass
+                _log.exception("knowledge error")
 
         # ── Common sense reasonableness check ────────────────
         sanity_check = _check_content_sanity(topic, summary or content)
@@ -814,7 +814,7 @@ class KnowledgeBase:
                 from .review_scheduler import register_entry
                 register_entry(entry_id)
             except Exception:
-                pass
+                _log.exception("knowledge error")
             return {"approved": True, "entry_id": entry_id}
 
         return {"approved": False, "reason": "Entry not found"}
@@ -892,7 +892,7 @@ class KnowledgeBase:
                 feedback_data = _js_k.loads(feedback_path.read_text())
                 feedback_count = len(feedback_data)
             except Exception:
-                pass
+                _log.exception("knowledge error")
         # Limit feedback requests to 2 per 24h
         if feedback_count >= 2:
             return []
@@ -1114,7 +1114,7 @@ class KnowledgeBase:
                     if _results:
                         return _results[:limit]
         except Exception:
-            pass
+            _log.exception("knowledge error")
 
         # Vector search (if embedding cache available)
         if use_vector and query:
@@ -1219,7 +1219,7 @@ class KnowledgeBase:
                             "content": r["content"], "confidence": float(r.get("confidence", 0.5)),
                             "tags": r.get("tags", [])}
         except Exception:
-            pass
+            _log.exception("knowledge error")
         # File fallback
         index = _read_index()
         for eid in index["entries"]:

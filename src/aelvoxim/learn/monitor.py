@@ -146,7 +146,7 @@ def _count_recent_log_errors(pattern: str, hours: float = 1.0) -> int:
                     if ts < cutoff:
                         continue
                 except (ValueError, IndexError):
-                    pass
+                    logger.exception("monitor error")
             count += 1
         return count
     except (OSError, PermissionError) as e:
@@ -334,7 +334,7 @@ class HealthMonitor:
                         if (now_dt - dt).days < 7:
                             snap.entries_last_7d += 1
                     except (ValueError, TypeError):
-                        pass
+                        logger.exception("monitor error")
         except Exception as e:
             logger.debug("Collect knowledge base failed: %s", e)
 
@@ -378,7 +378,7 @@ class HealthMonitor:
                         if review_dt.timestamp() < now_ts:
                             snap.overdue_reviews += 1
                     except (ValueError, TypeError):
-                        pass
+                        logger.exception("monitor error")
                 if d.get("status") == "mastery":
                     snap.mastery_count += 1
         except Exception as e:
@@ -412,7 +412,7 @@ class HealthMonitor:
                                     datetime.now() - ts
                                 ).total_seconds() / 3600.0
                             except (ValueError, IndexError):
-                                pass
+                                logger.exception("monitor error")
                             break
             except (OSError, PermissionError) as e:
                 logger.debug("Collect idle time failed: %s", e)

@@ -23,6 +23,10 @@ from typing import Any, Dict, List, Optional, Tuple
 from .entry import LAYER_SEMANTIC
 from .fusion import MemoryFusion
 
+import logging
+_log = logging.getLogger("aelvoxim.prevalidation")
+
+
 # ── Thresholds ──
 
 _HIGH_CONFIDENCE = 0.8
@@ -61,7 +65,7 @@ def _existing_value(
                 attrs: dict = json.loads(row[1] or "{}")
                 return (str(row[0]), attrs.get("_confidence", 0.5), "db")
         except Exception:
-            pass
+            _log.exception("prevalidation error")
     return (None, 0.0, "")
 
 
@@ -89,7 +93,7 @@ def _relation_targets(
                 "attributes": r["attributes"],
             })
     except Exception:
-        pass
+        _log.exception("prevalidation error")
     return targets, rels
 
 
@@ -117,7 +121,7 @@ def _walk_chain(
             })
             chains.extend(_walk_chain(other, db, depth + 1, visited))
     except Exception:
-        pass
+        _log.exception("prevalidation error")
     return chains
 
 

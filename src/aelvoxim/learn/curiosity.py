@@ -153,6 +153,9 @@ def activate_curiosity(
     except ImportError:
         pass
 
+    if add_direction_fn is None:
+        return False
+
     topic = pick_next_topic(directions, log_func)
     if not topic:
         return False

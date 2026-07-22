@@ -23,6 +23,10 @@ from .entry import (
 )
 from .fusion import MemoryFusion
 
+import logging
+_log = logging.getLogger("aelvoxim.decay")
+
+
 # ── Thresholds ──
 
 DORMANT_THRESHOLD = 0.2
@@ -137,7 +141,7 @@ def batch_decay(fusion: MemoryFusion, db_path: str = "") -> Dict[str, Any]:
             _db.commit()
             _db.close()
         except Exception:
-            pass
+            _log.exception("decay error")
 
     # ── Relation decay (extension) ──
     if db_path:
@@ -148,7 +152,7 @@ def batch_decay(fusion: MemoryFusion, db_path: str = "") -> Dict[str, Any]:
             stats["rel_dormant"] = _rel_stats.get("dormant", 0)
             stats["rel_archived"] = _rel_stats.get("archived", 0)
         except Exception:
-            pass
+            _log.exception("decay error")
 
     return stats
 
@@ -165,7 +169,7 @@ def install_decay_cleanup(fusion: MemoryFusion, db_path: str = "", interval_hour
     try:
         batch_decay(fusion, db_path)
     except Exception:
-        pass
+        _log.exception("decay error")
 
     def _loop():
         while True:
@@ -173,7 +177,7 @@ def install_decay_cleanup(fusion: MemoryFusion, db_path: str = "", interval_hour
             try:
                 batch_decay(fusion, db_path)
             except Exception:
-                pass
+                _log.exception("decay error")
 
     t = Thread(target=_loop, daemon=True, name="memory-decay")
     t.start()

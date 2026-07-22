@@ -20,6 +20,10 @@ from typing import Any, Dict, List, Optional
 
 from ..utils import METACORE_DIR
 
+import logging
+_log = logging.getLogger("aelvoxim.meta_learner")
+
+
 _FEEDBACK_DIR = METACORE_DIR / "feedback"
 _FEEDBACK_FILE = _FEEDBACK_DIR / "pending.jsonl"
 
@@ -48,7 +52,7 @@ def ingest_feedback(record: dict) -> None:
         with open(_FEEDBACK_FILE, "a") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
     except Exception:
-        pass
+        _log.exception("meta_learner error")
 
 
 def _load_feedback() -> List[dict]:
@@ -68,7 +72,7 @@ def _clear_feedback() -> None:
         if _FEEDBACK_FILE.exists():
             _FEEDBACK_FILE.unlink()
     except Exception:
-        pass
+        _log.exception("meta_learner error")
 
 
 # ══════════════════════════════════════════════════════════════
@@ -106,7 +110,7 @@ class MetaLearner:
                     "repeat_confidence", self.REPEAT_CONFIDENCE)
                 self.MAX_BATCH = mc.get("max_feedback_batch", self.MAX_BATCH)
         except Exception:
-            pass
+            _log.exception("meta_learner error")
 
     # ── Main entry ──
 
@@ -137,7 +141,7 @@ class MetaLearner:
                 actions.extend(acts)
                 processed += 1
             except Exception:
-                pass
+                _log.exception("meta_learner error")
 
         _clear_feedback()
         if processed > 0:
@@ -202,7 +206,7 @@ class MetaLearner:
                 validated=True,
             )
         except Exception:
-            pass
+            _log.exception("meta_learner error")
 
         self._create_negative_anchor(old_term)
 
@@ -211,7 +215,7 @@ class MetaLearner:
             try:
                 self._learner.add_direction(new_term)
             except Exception:
-                pass
+                _log.exception("meta_learner error")
 
         return f"correction: '{old_term[:20]}' -> '{new_term[:20]}'"
 
@@ -249,7 +253,7 @@ class MetaLearner:
                 self._learner.add_direction(topic_clean)
                 return f"repeat: added direction '{topic_clean[:20]}'"
             except Exception:
-                pass
+                _log.exception("meta_learner error")
 
         # Fallback: store to knowledge base
         try:
@@ -265,7 +269,7 @@ class MetaLearner:
             )
             return f"repeat: stored KB entry '{topic_clean[:20]}'"
         except Exception:
-            pass
+            _log.exception("meta_learner error")
 
         return None
 
@@ -289,4 +293,4 @@ class MetaLearner:
                 tags=["negative_anchor", topic.lower()],
             )
         except Exception:
-            pass
+            _log.exception("meta_learner error")

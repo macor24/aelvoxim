@@ -15,6 +15,10 @@ from typing import Any, Dict, List, Optional
 
 from ..utils import get_data_dir
 
+import logging
+_log = logging.getLogger("aelvoxim.selfmodel")
+
+
 
 @dataclass
 class CapabilityScore:
@@ -314,7 +318,7 @@ class SelfModel:
                     accessed / max(len(recent), 1), 2
                 )
         except Exception:
-            pass
+            _log.exception("selfmodel error")
 
         # 2. Direction saturation speed
         # From direction config: avg cycles from active → completed/saturated
@@ -333,7 +337,7 @@ class SelfModel:
                     sum(speeds) / len(speeds), 1
                 )
         except Exception:
-            pass
+            _log.exception("selfmodel error")
 
         # 3. Validation pass rate
         # From Learner logs or SelfModel decision history
@@ -352,7 +356,7 @@ class SelfModel:
                 if total > 0:
                     result["validation_pass_rate"] = round(verified / total, 2)
         except Exception:
-            pass
+            _log.exception("selfmodel error")
 
         return result
 

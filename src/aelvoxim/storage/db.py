@@ -74,7 +74,7 @@ def _init_pool() -> bool:
     try:
         _pg2 = _get_psycopg2()
         if _pg2 is None:
-            print("psycopg2 not installed — falling back to JSON/SQLite storage")
+            _log.warning("psycopg2 not installed — falling back to JSON/SQLite storage")
             return False
         _POOL = _pg2.pool.ThreadedConnectionPool(1, 20, dsn=PG_DSN)
         _init_tables()
@@ -82,7 +82,7 @@ def _init_pool() -> bool:
         _POOL_READY.set()
         return True
     except Exception as e:
-        print(f"PostgreSQL connection failed: {e}")
+        _log.warning(f"PostgreSQL connection failed: {e}")
         _POOL_READY.clear()
         return False
 
@@ -94,7 +94,7 @@ def _close_pool():
         try:
             _POOL.close()
         except Exception:
-            pass
+            _log.exception("db error")
         _POOL = None
     _POOL_READY.clear()
 
@@ -121,7 +121,7 @@ def get_pool() -> Optional[any]:
         _POOL.putconn(conn)
     except Exception:
         _close_pool()
-        print("PG connection lost, background retryer will reconnect")
+        _log.warning("PG connection lost, background retryer will reconnect")
         return None
 
     return _POOL
@@ -142,13 +142,13 @@ def _start_pool_health_check():
                         try:
                             conn.close()
                         except Exception:
-                            pass
+                            _log.exception("db error")
                         try:
                             p.putconn(conn)
                         except Exception:
-                            pass
+                            _log.exception("db error")
             except Exception:
-                pass
+                _log.exception("db error")
             time.sleep(60)
 
     t = threading.Thread(target=_check, daemon=True)
@@ -174,7 +174,7 @@ def execute(sql_str: str, params: tuple = ()) -> None:
         try:
             conn.rollback()
         except Exception:
-            pass
+            _log.exception("db error")
         raise
     finally:
         p.putconn(conn)
@@ -194,7 +194,7 @@ def fetch_one(sql_str: str, params: tuple = ()) -> Optional[tuple]:
         try:
             conn.rollback()
         except Exception:
-            pass
+            _log.exception("db error")
         raise
     finally:
         p.putconn(conn)
@@ -214,7 +214,7 @@ def fetch_all(sql_str: str, params: tuple = ()) -> list[tuple]:
         try:
             conn.rollback()
         except Exception:
-            pass
+            _log.exception("db error")
         raise
     finally:
         p.putconn(conn)
@@ -234,7 +234,7 @@ def fetch_dict(sql_str: str, params: tuple = ()) -> list[dict]:
         try:
             conn.rollback()
         except Exception:
-            pass
+            _log.exception("db error")
         raise
     finally:
         p.putconn(conn)
@@ -244,6 +244,10 @@ def fetch_dict(sql_str: str, params: tuple = ()) -> list[dict]:
 
 
 from contextlib import contextmanager
+
+import logging
+_log = logging.getLogger("aelvoxim.db")
+
 
 
 @contextmanager
@@ -396,12 +400,12 @@ def _init_tables():
         _safe_execute(cur, "CREATE INDEX IF NOT EXISTS idx_webhook_events ON webhook_subscriptions USING GIN (events)")
 
         conn.commit()
-        print("✅ PostgreSQL tables initialized")
+        _log.info("PostgreSQL tables initialized")
     except Exception:
         try:
             conn.rollback()
         except Exception:
-            pass
+            _log.exception("db error")
         raise
     finally:
         _POOL.putconn(conn)
@@ -417,7 +421,7 @@ def _safe_execute(cur, sql: str):
         try:
             cur.connection.rollback()
         except Exception:
-            pass
+            _log.exception("db error")
 
 
 # ── Vector search helpers ──
@@ -481,7 +485,7 @@ def save_session_to_pg(session: dict) -> None:
         conn.commit()
         conn.close()
     except Exception as e:
-        print(f"save_session_to_pg error: {e}")
+        pass  # logged above
 
 
 def save_message_to_pg(session_id: str, role: str, content: str, user_id: str = "") -> None:
@@ -507,7 +511,7 @@ def save_message_to_pg(session_id: str, role: str, content: str, user_id: str = 
     except PermissionError:
         raise
     except Exception as e:
-        print(f"save_message_to_pg error: {e}")
+        pass  # logged above
 
 
 def _pg_connect():
@@ -554,7 +558,7 @@ def get_sessions_from_pg(user_id: str = "", email: str = "", limit: int = 50) ->
         conn.close()
         return rows
     except Exception as e:
-        print(f"get_sessions_from_pg error: {e}")
+        pass  # logged above
         return []
 
 def get_messages_from_pg(session_id: str) -> list[dict]:
@@ -577,7 +581,7 @@ def get_messages_from_pg(session_id: str) -> list[dict]:
         conn.close()
         return rows
     except Exception as e:
-        print(f"get_messages_from_pg error: {e}")
+        pass  # logged above
         return []
 
 
@@ -608,7 +612,7 @@ def delete_session_from_pg(session_id: str, user_id: str = "") -> bool:
     except PermissionError:
         raise
     except Exception as e:
-        print(f"delete_session_from_pg error: {e}")
+        pass  # logged above
         return False
 
 

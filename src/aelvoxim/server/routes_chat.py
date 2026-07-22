@@ -452,7 +452,7 @@ async def llm_chat_stream(
         if _learned:
             enhanced_system += f"\n[Curiosity] You recently learned about: {', '.join(_learned[:3])}. If natural, you may mention what you learned.\n"
     except Exception:
-        pass
+        _log.exception("routes_chat error")
 
     # Inject routing-based style template
     _rt = _cortex_routing.get("routing_type", "") if _cortex_routing else ""
@@ -533,7 +533,7 @@ async def llm_chat_stream(
 [WIN:PowerShell] {{"command": "Get-ChildItem 'C:\\Users\\{_win_user}\\Desktop' | Select-Object Name | ConvertTo-Json"}}"
 """
     except Exception:
-        pass
+        _log.exception("routes_chat error")
 
     full_prompt = identity_prefix + user_msg
 
@@ -561,7 +561,7 @@ async def llm_chat_stream(
                                 "title": _pg_msg[:100] or "新对话", "messages": []})
             save_message_to_pg(_pg_sid, "user", _pg_msg or "", user_id=str(_pg_uid) if _pg_uid else "")
         except Exception:
-            pass
+            _log.exception("routes_chat error")
 
     def _generate():
         try:
@@ -655,7 +655,7 @@ async def llm_chat_stream(
                                     from ..storage.db import save_message_to_pg
                                     save_message_to_pg(_pg_sid, "assistant", _result_text)
                                 except Exception:
-                                    pass
+                                    _log.exception("routes_chat error")
                             yield "data: [DONE]\n\n"
                             return
                 except Exception as _exc:
@@ -670,7 +670,7 @@ async def llm_chat_stream(
                 from ..storage.db import save_message_to_pg
                 save_message_to_pg(_pg_sid, "assistant", _text)
             except Exception:
-                pass
+                _log.exception("routes_chat error")
     return StreamingResponse(
         _generate(),
         media_type="text/event-stream",

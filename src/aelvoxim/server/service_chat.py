@@ -243,7 +243,7 @@ def run_safety_check(user_msg: str, user: dict) -> Optional[dict]:
         if not _sk_result.get("allowed", True):
             return _sk_result
     except Exception:
-        pass
+        _log.exception("service_chat error")
     # Content filter prompt injection check
     try:
         if os.environ.get("AELVOXIM_CONTENT_FILTER", "").lower() in ("true", "1", "yes"):
@@ -252,7 +252,7 @@ def run_safety_check(user_msg: str, user: dict) -> Optional[dict]:
             if not verdict.passed:
                 return {"allowed": False, "reason": f"Content filter blocked: {verdict.reason}"}
     except Exception:
-        pass
+        _log.exception("service_chat error")
     # Local keyword-based safety check (SentriKit unavailable fallback)
     _blocked_keywords = [
         "ignore all previous instructions", "ignore all prior",
@@ -510,7 +510,7 @@ def enhance_with_knowledge(user_msg: str, extra_context: str, user: dict, max_pe
             if _gap == "ask_teach" and _t and len(_t) > 3:
                 _add_curiosity_topic(_t, user)
     except Exception:
-        pass
+        _log.exception("service_chat error")
     # Cache result (per-user)
     _user_cache = _cache_store.get(user)
     _user_cache[_cache_key] = (_tm.time(), extra_context)
@@ -557,7 +557,7 @@ def inject_memory_context(user_msg: str, user: dict, extra_context: str) -> str:
             if items:
                 extra_context += "\n[Memory]\n" + "\n".join(items) + "\n"
     except Exception:
-        pass
+        _log.exception("service_chat error")
     return extra_context
 
 
@@ -570,7 +570,7 @@ def inject_security_context(extra_context: str) -> str:
         sk_line = "Connected" if _sk_connected else "Not connected"
         extra_context += f"\n[Security]\nSentriKit: {sk_line}\n"
     except Exception:
-        pass
+        _log.exception("service_chat error")
     return extra_context
 
 
@@ -596,7 +596,7 @@ def run_experts(user_msg: str, user: dict, extra_context: str) -> str:
             if lines:
                 extra_context += "\n[Expert Analysis]\n" + "\n".join(lines) + "\n"
     except Exception:
-        pass
+        _log.exception("service_chat error")
     return extra_context
 
 
@@ -653,7 +653,7 @@ def inject_topic_anchor(messages: List[dict], enhanced_system: str) -> str:
         if anchor:
             enhanced_system += f"\n[Topic]\n{anchor}\n"
     except Exception:
-        pass
+        _log.exception("service_chat error")
     return enhanced_system
 
 
@@ -676,7 +676,7 @@ def process_memory_commands(user_msg: str, user: dict, identity_prefix: str) -> 
             memory_store(f"forget_flag:{user.get('email','')[:20]}", True)
             identity_prefix += "[Memory: forget requested]\n"
         except Exception:
-            pass
+            _log.exception("service_chat error")
     return identity_prefix
 
 
@@ -689,7 +689,7 @@ def inject_memory_status(user_msg: str, user: dict, identity_prefix: str) -> str
         if results:
             identity_prefix += "[Memory: preferences exist]\n"
     except Exception:
-        pass
+        _log.exception("service_chat error")
     return identity_prefix
 
 
@@ -703,7 +703,7 @@ def inject_safety_and_metacog(enhanced_system: str, identity_prefix: str, user: 
         if evaluation.get("overload"):
             enhanced_system += "\n[Note: system under load, responses may be brief]\n"
     except Exception:
-        pass
+        _log.exception("service_chat error")
     return enhanced_system, identity_prefix
 
 
@@ -730,9 +730,9 @@ def extract_and_store_entities(user_msg: str, text: str, user: dict, event_id: s
                                 etype=ent.get("type", "concept"),
                                 attributes={"value": ent.get("value", ""), "source": "chat"})
                 except Exception:
-                    pass
+                    _log.exception("service_chat error")
     except Exception:
-        pass
+        _log.exception("service_chat error")
 
 
 # ═══ Fact check ═══
@@ -777,7 +777,7 @@ def verify_response_facts(text: str, user_msg: str, user: dict) -> str:
                 "Please cross-check.]"
             )
     except Exception:
-        pass
+        _log.exception("service_chat error")
     return text
 
 
@@ -791,7 +791,7 @@ def run_post_chat_tasks(user_msg: str, text: str, user: dict,
             from ..learn.meta_learner import MetaLearner
             MetaLearner().ingest_feedback(user_msg, text, user)
     except Exception:
-        pass
+        _log.exception("service_chat error")
 
 
 # ═══ Reference detection ═══
@@ -928,7 +928,7 @@ def chat_pipeline(
                                 "📋 Auto-created learning plan: %s (asked %d times)", _t, len(_user_topic_freq[_t]))
                     break  # one plan per check
         except Exception:
-            pass
+            _log.exception("service_chat error")
 
     # Phase 3: Memory
     if not skip_memory:
@@ -988,7 +988,7 @@ def chat_pipeline(
             if _lines:
                 enhanced_system += "\n[Learning Plans]\n" + "\n".join(_lines) + "\n"
     except Exception:
-        pass
+        _log.exception("service_chat error")
 
     # Inject recently learned topics for proactive sharing
     if user_msg:
@@ -1001,7 +1001,7 @@ def chat_pipeline(
                     f"If natural, you may mention what you learned.\n"
                 )
         except Exception:
-            pass
+            _log.exception("service_chat error")
 
     if extra_context:
         enhanced_system += f"\n\nContext:\n{extra_context}"
@@ -1043,7 +1043,7 @@ def chat_pipeline(
                     "warn the user before proceeding. Explain the risks.\n"
                 )
         except Exception:
-            pass
+            _log.exception("service_chat error")
 
     # Self-evaluation feedback: inject recent quality trend (per-user)
     try:
@@ -1059,7 +1059,7 @@ def chat_pipeline(
                 if all(_recent_3[i][1] > _recent_3[i+1][1] for i in range(2)):
                     enhanced_system += "\n[Alert] 你的回复质量呈持续下降趋势，请谨慎确认信息后再回复。\n"
     except Exception:
-        pass
+        _log.exception("service_chat error")
 
     identity_prefix = build_identity_prefix(user)
     identity_prefix = process_memory_commands(user_msg, user, identity_prefix)
@@ -1118,7 +1118,7 @@ def chat_pipeline(
         try:
             text = verify_response_facts(text, user_msg, user)
         except Exception:
-            pass
+            _log.exception("service_chat error")
 
     # Post-generation quality check + auto-correction (via GenerationController)
     if text and user_msg:
@@ -1144,7 +1144,7 @@ def chat_pipeline(
                     _chat_log.info("  GenerationController: retries=%d issues=%d",
                                    _gc_result["retries"], _gc_result.get("issues", 0))
         except Exception:
-            pass
+            _log.exception("service_chat error")
 
     # Memory
     event_id = store_conversation_memory(user_msg, text, user)
@@ -1158,7 +1158,7 @@ def chat_pipeline(
     try:
         record_confidence(_confidence_score)
     except Exception:
-        pass
+        _log.exception("service_chat error")
 
     # Post-chat quality evaluation
     if text:
@@ -1172,7 +1172,7 @@ def chat_pipeline(
                 response_time_ms=(time.time() - t0) * 1000,
             )
         except Exception:
-            pass
+            _log.exception("service_chat error")
 
         # Self-review (content-level quality assessment)
         try:
@@ -1190,7 +1190,7 @@ def chat_pipeline(
                 while len(_user_scores) > _MAX_RECENT:
                     _user_scores.pop(0)
         except Exception:
-            pass
+            _log.exception("service_chat error")
 
         # Layer 1: Continuous learning — extract, associate, iterate
         if text:
@@ -1237,7 +1237,7 @@ def chat_pipeline(
                     _is_correction = bool(signals.get("correction"))
                     _record_belief(_recent_hit, success=not _is_correction)
             except Exception:
-                pass
+                _log.exception("service_chat error")
 
         # Self-reflection (async, doesn't block return)
         _text_for_reflect = text
@@ -1246,7 +1246,7 @@ def chat_pipeline(
                 import threading as _t
                 _t.Thread(target=_self_reflect, args=(user_msg, _text_for_reflect, mc, user), daemon=True).start()
             except Exception:
-                pass
+                _log.exception("service_chat error")
 
     return {"text": text, "blocked": False}
 
@@ -1285,7 +1285,7 @@ def _record_belief(key: str, success: bool) -> None:
         _pool = _bp()
         _pool.record_outcome(key, success)
     except Exception:
-        pass
+        _log.exception("service_chat error")
 
 
 # ── Continuous learning helpers ──
@@ -1356,7 +1356,7 @@ def _add_curiosity_topic(topic: str, user: dict = None) -> None:
             })
             fp.write_text(json.dumps(topics, ensure_ascii=False, indent=2, default=str))
     except Exception:
-        pass
+        _log.exception("service_chat error")
 
 
 def _pop_curiosity_topic() -> str:
@@ -1423,4 +1423,4 @@ def _self_reflect(query: str, reply: str, mc=None, user: dict = None) -> None:
         if _score < 40 and query:
             _add_curiosity_topic(query[:80], user)
     except Exception:
-        pass
+        _log.exception("service_chat error")

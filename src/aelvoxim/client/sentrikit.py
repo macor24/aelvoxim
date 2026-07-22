@@ -35,6 +35,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from ..utils import DATA_DIR
 
+_log = logging.getLogger("aelvoxim.sentrikit")
+
+
 # ── Configuration ──
 
 _SENTRIKIT_HOST = os.environ.get("SENTRIKIT_HOST", "https://127.0.0.1:8899")
@@ -56,14 +59,14 @@ def _load_config() -> dict:
         if _CONFIG_FILE.exists():
             return json.loads(_CONFIG_FILE.read_text())
     except Exception:
-        pass
+        _log.exception("sentrikit error")
     return {}
 def _save_config(cfg: dict) -> None:
     try:
         _CACHE_DIR.mkdir(parents=True, exist_ok=True)
         _CONFIG_FILE.write_text(json.dumps(cfg, indent=2))
     except Exception:
-        pass
+        _log.exception("sentrikit error")
 def get_configured_host() -> str:
     cfg = _load_config()
     return cfg.get("host", "") or _SENTRIKIT_HOST
@@ -94,21 +97,21 @@ def test_connection(host: str = "", api_key: str = "") -> dict:
         if resp and resp.get("status") == "ok":
             return {"status": "ok", "host": target_host}
     except Exception:
-        pass
+        _log.exception("sentrikit error")
     # Try status endpoint
     try:
         resp = _get(f"{target_host}/api/status", timeout=5, api_key=target_key)
         if resp:
             return {"status": "ok", "host": target_host}
     except Exception:
-        pass
+        _log.exception("sentrikit error")
     # Try without auth
     try:
         resp = _get(f"{target_host}/health", timeout=5)
         if resp:
             return {"status": "auth_required", "host": target_host}
     except Exception:
-        pass
+        _log.exception("sentrikit error")
     return {"status": "unreachable", "host": target_host}
 
 
@@ -122,7 +125,7 @@ def _load_cached_key() -> str:
         if _CACHE_FILE.exists():
             return json.loads(_CACHE_FILE.read_text()).get("api_key", "")
     except Exception:
-        pass
+        _log.exception("sentrikit error")
     return ""
 
 
@@ -132,7 +135,7 @@ def _save_cached_key(key: str) -> None:
         _CACHE_DIR.mkdir(parents=True, exist_ok=True)
         _CACHE_FILE.write_text(json.dumps({"api_key": key}))
     except Exception:
-        pass
+        _log.exception("sentrikit error")
 
 
 def _ensure_key() -> Optional[str]:
@@ -147,7 +150,7 @@ def _ensure_key() -> Optional[str]:
             _SENTRIKIT_KEY = _SENTRIKIT_DEFAULT_KEY
             return _SENTRIKIT_KEY
     except Exception:
-        pass
+        _log.exception("sentrikit error")
     # Try cache
     cached = _load_cached_key()
     if cached and len(cached) > 10:
@@ -163,7 +166,7 @@ def _ensure_key() -> Optional[str]:
             _save_cached_key(_SENTRIKIT_KEY)
             return _SENTRIKIT_KEY
     except Exception:
-        pass
+        _log.exception("sentrikit error")
     # Fallback: scan SentriKit users directory for the latest key
     try:
         _users_dir = Path.home() / ".sentrikit" / "users"
@@ -176,7 +179,7 @@ def _ensure_key() -> Optional[str]:
                     _save_cached_key(_SENTRIKIT_KEY)
                     return _SENTRIKIT_KEY
     except Exception:
-        pass
+        _log.exception("sentrikit error")
     return None
 
 

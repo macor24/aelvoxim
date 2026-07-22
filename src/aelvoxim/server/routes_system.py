@@ -370,7 +370,7 @@ async def health_check():
         from ..server.service_chat import get_confidence_trend
         result["confidence"] = get_confidence_trend()
     except Exception:
-        pass
+        _log.exception("routes_system error")
     try:
         from ..core.health import get_watchdog, get_resource_usage, get_pg_status
         wd = get_watchdog()
@@ -619,7 +619,7 @@ async def migrate_users(body: dict, admin: dict = Depends(_require_admin)):
             try:
                 _uid = data.get("email", "unknown")
             except Exception:
-                pass
+                _log.exception("routes_system error")
             errors.append("migration error for " + _uid)
     return {"migrated": migrated, "errors": errors, "total_users_in_pg_plus_json": migrated}
 
@@ -700,7 +700,7 @@ async def admin_overview(user: dict = Depends(_verify_key)):
         data["learner"]["completed"] = sum(1 for d in dirs if d["status"] in ("completed", "mastery"))
         data["learner"]["directions"] = dirs
     except Exception:
-        pass
+        _log.exception("routes_system error")
 
     # Knowledge
     try:
@@ -712,7 +712,7 @@ async def admin_overview(user: dict = Depends(_verify_key)):
         topics = Counter(e.get("topic", "") for e in entries)
         data["knowledge"]["top_topics"] = [{"topic": t, "count": c} for t, c in topics.most_common(10)]
     except Exception:
-        pass
+        _log.exception("routes_system error")
 
     # SelfModel
     try:
@@ -725,9 +725,9 @@ async def admin_overview(user: dict = Depends(_verify_key)):
             grade = sm.overall_grade() if hasattr(sm, "overall_grade") else {}
             data["selfmodel"]["grade"] = grade.get("grade", "N/A")
         except Exception:
-            pass
+            _log.exception("routes_system error")
     except Exception:
-        pass
+        _log.exception("routes_system error")
 
     import json as _json
     return _json.loads(_json.dumps(data, default=str))
@@ -768,7 +768,7 @@ async def admin_dashboard(user: dict = Depends(_verify_key)):
         except Exception:
             result["learner"]["total_entries"] = sum(d.get("entries_created", 0) for d in dirs)
     except Exception:
-        pass
+        _log.exception("routes_system error")
     # Knowledge: real DB count
     try:
         from ..learn.knowledge import KnowledgeBase
@@ -785,7 +785,7 @@ async def admin_dashboard(user: dict = Depends(_verify_key)):
             result["knowledge"]["total"] = len(active_entries)
             result["knowledge"]["pending"] = 0
     except Exception:
-        pass
+        _log.exception("routes_system error")
     return result
 
 @router.get("/admin/cognition")
@@ -800,12 +800,12 @@ async def admin_cognition(user: dict = Depends(_verify_key)):
         from ..core.belief import BeliefPool
         result["belief"] = BeliefPool().get_stats()
     except Exception:
-        pass
+        _log.exception("routes_system error")
     try:
         from ..core.calibration import get_calibration
         result["calibration"] = get_calibration().get_snapshot()
     except Exception:
-        pass
+        _log.exception("routes_system error")
     return result
 
 @router.get("/admin/knowledge-graph")

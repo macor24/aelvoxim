@@ -22,6 +22,10 @@ from typing import Any, Dict, List, Optional
 
 from ..utils import METACORE_DIR
 
+import logging
+_log = logging.getLogger("aelvoxim.active_scan")
+
+
 # ── Constants ──
 
 _HEALTH_DIR = Path(METACORE_DIR) / "health"
@@ -70,7 +74,7 @@ def run_scan(log_fn: Optional[callable] = None) -> Dict[str, Any]:
             _dst = str(_md / "memory.db.rollback")
             shutil.copy2(_src, _dst)
         except Exception:
-            pass
+            _log.exception("active_scan error")
         from ..memory import cleanup_all as _cl
         from ..memory import _fusion as _fus
         _cl({"working": _fus.working, "episodic": _fus.episodic, "semantic": _fus.semantic})
@@ -126,9 +130,9 @@ def run_scan(log_fn: Optional[callable] = None) -> Dict[str, Any]:
             memory_stats["cleaned"] = _cleaned
             memory_stats["pending_forget"] = _pending_forget
         except Exception:
-            pass
+            _log.exception("active_scan error")
     except Exception:
-        pass
+        _log.exception("active_scan error")
     report["memory"] = memory_stats or {"cleaned": 0}
 
     # ── 2. Knowledge base health ──
@@ -189,7 +193,7 @@ def run_scan(log_fn: Optional[callable] = None) -> Dict[str, Any]:
         with open(str(log_path), "a") as f:
             f.write(json.dumps(report, ensure_ascii=False) + "\n")
     except Exception:
-        pass
+        _log.exception("active_scan error")
 
     _mark_scanned()
     return report
@@ -220,5 +224,5 @@ def get_trend(days: int = 7) -> List[Dict]:
                 if line:
                     results.append(json.loads(line))
         except Exception:
-            pass
+            _log.exception("active_scan error")
     return results
