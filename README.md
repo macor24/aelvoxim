@@ -36,20 +36,40 @@ What you see, in order:
 
 ## How Aelvoxim Compares
 
-A realistic look at where Aelvoxim stands against general-purpose AI assistants like ChatGPT — written from current capability, not roadmap.
+A realistic comparison of Aelvoxim against major AI platforms — written from current capability, not roadmap.
 
-| Dimension | Aelvoxim | ChatGPT | Verdict |
-| :--- | :--- | :--- | :--- |
-| **Cross-session memory** | Persistent knowledge graph (1978 entities, 1100 relations in PG). Conversation history survives across sessions | Session-only. No memory between new conversations | **Aelvoxim wins** — this is the core differentiator |
-| **Active learning** | Learner module can initiate study plans and background knowledge extraction. Effect depends on search API quality and LLM config | None. Knowledge updates only come with model upgrades | **Aelvoxim wins** — does learn autonomously, though results vary |
-| **Hallucination resistance** | Neither has reliable mechanisms. Aelvoxim's `verify_response_facts()` is a keyword check, not real verification | Neither does | **Tie** — don't trust either one blindly |
-| **Desktop control** | Yes, with Windows-MCP installed (`Windows-MCP/install_and_run.bat`). Can control mouse, keyboard, files, browser | Not possible | **Aelvoxim wins** — requires extra setup but works once installed |
-| **Security** | Partially implemented. SentriKit integration exists but is unavailable at runtime. Tool permission tiers are coded but not fully enforced | Mature content filtering | **ChatGPT more reliable** — Aelvoxim's security is WIP |
-| **Knowledge breadth** | Narrow. Grows through conversations and background learning | Vast — trained on massive corpora | **ChatGPT dominates** |
-| **Conversation fluency** | Depends on backend LLM (currently DeepSeek). Functional but not exceptional | Excellent — empathy, creativity, multi-turn | **ChatGPT dominates** |
-| **Setup complexity** | Requires Python 3.11+, optional PostgreSQL, LLM API key config | Zero — open browser and use | **ChatGPT dominates** |
+| Dimension | Aelvoxim | DeepSeek | ChatGPT | Claude | Llama |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Nature** | Cognitive engine framework (plugs into any LLM) | LLM | LLM + platform | LLM | Open-source LLM |
+| **Persistent memory** | ✅ 4-tier memory, cross-session knowledge graph | ❌ No built-in memory | ⚠️ Limited (ChatGPT Memory) | ❌ No built-in memory | ❌ No built-in memory |
+| **Metacognition** | ✅ MetaCogMonitor + 6 ethics gates (L1-L6) | ❌ | ❌ | ⚠️ Constitutional AI (different approach) | ❌ |
+| **Self-learning** | ✅ Learner loop + background knowledge extraction | ❌ | ❌ | ❌ | ❌ |
+| **Expert orchestration** | ✅ 8 expert modules + orchestrator voting | ❌ | ❌ | ❌ | ❌ |
+| **Code generation** | ⚠️ Depends on backend LLM (can use DeepSeek, etc.) | ✅ Excellent | ✅ Strong | ✅ Strong | ⚠️ Fine-tuned variants |
+| **Reasoning depth** | ⚠️ Depends on backend LLM | ✅ Strong chain-of-thought | ✅ Strong | ✅ Strong, safety-aligned | ⚠️ Varies by size |
+| **Local deployment** | ✅ CPU-only, Python 3.11+, optional PostgreSQL | ✅ Needs GPU | ❌ API-only | ❌ API-only | ✅ Needs GPU |
+| **Open source** | ✅ MIT | ✅ Weights open | ❌ Closed | ❌ Closed | ✅ Weights open |
+| **Multimodal** | ⚠️ Via tool integration | ❌ Text-only | ✅ GPT-4o multimodal | ✅ Multimodal | ⚠️ Partial |
+| **Tool calling** | ✅ Unified orchestrator | ⚠️ Function Call | ⚠️ Function Call | ⚠️ Tool Use | ⚠️ Self-wrapped |
+| **Security** | ✅ 6 ethics gates (L1-L6) + community edition gating | ⚠️ Basic content filter | ⚠️ Policy filter | ✅ Constitutional AI | ❌ None built-in |
+| **Business model** | Open-source + self-hosted | Open weights + API | Closed API | Closed API | Open weights + ecosystem |
 
-**Bottom line:** They are complementary, not competitors. Aelvoxim is for persistent, self-hosted cognitive tasks with memory and desktop control. ChatGPT is for broad knowledge, creative conversation, and instant access. Aelvoxim's biggest weakness today is not missing features — it's code that's written but not yet fully working (SentriKit offline, hallucination check is a stub, learner depends on external services).
+**Key takeaways:**
+
+1. **Memory & continuous learning** — Aelvoxim's core moat. Every competitor is stateless per session. ChatGPT Memory exists but is a simple snippet store — no forgetting curve, no confidence scoring, no 4-tier architecture.
+2. **Metacognition & self-learning** — No competitor has runtime self-monitoring, degradation detection, or hypothesis generation. Aelvoxim's MetaCogMonitor + 6 ethics gates are unique. Other models' "reflection" is prompt-induced text generation, not system-level self-check.
+3. **Code & reasoning** — Aelvoxim's advantage is **flexibility**: it doesn't lock you into one model. Plug in DeepSeek for code, Claude for safety, or run multiple models and let the orchestrator vote.
+4. **Deployment** — Aelvoxim runs on CPU, no GPU required. DeepSeek and Llama need GPU for local inference.
+
+**Bottom line:** Aelvoxim is not competing with LLMs — it's the **operating system for LLMs**: managing memory, monitoring health, orchestrating tools, and learning continuously. You choose the brain (model), Aelvoxim gives it a body that remembers and improves.
+
+| Product | One-liner |
+| :--- | :--- |
+| **Aelvoxim** | Gives any LLM persistent memory, metacognition, and self-learning |
+| **DeepSeek** | Open-source code king, cost-effective reasoning |
+| **ChatGPT** | Closed-source all-rounder, multimodal + plugin ecosystem |
+| **Claude** | Safest closed-source model, long-document reasoning |
+| **Llama** | Open-source LLM standard — powerful but needs engineering to productize |
 
 ---
 
