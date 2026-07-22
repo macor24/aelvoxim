@@ -13,6 +13,9 @@ import time
 from collections import Counter
 from typing import Dict, List, Optional, Set
 
+import logging
+_log = logging.getLogger("aelvoxim.learn.curiosity")
+
 # ── Interest seeds ──────────────────────────────────────────
 # Learner works through these in order when no active directions exist.
 # After seeds are exhausted, derive_next() generates new topics from completed ones.
@@ -151,7 +154,7 @@ def activate_curiosity(
         if not _ed_get("curiosity_enabled", False):
             return False
     except ImportError:
-        pass
+        _log.exception("curiosity error")
 
     if add_direction_fn is None:
         return False

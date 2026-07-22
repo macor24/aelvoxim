@@ -22,6 +22,9 @@ from .base import BaseExpert, ExpertInput, ExpertOutput, register
 
 from ..utils import DATA_DIR
 
+import logging
+_log = logging.getLogger("aelvoxim.experts.emotion")
+
 _EMOTION_DIR = DATA_DIR / "emotion"
 
 # Tone mapping based on sentiment
@@ -59,7 +62,7 @@ def _save_emotion_snapshot(user_id: str, snapshot: Dict) -> None:
         with open(str(_EMOTION_DIR / f"{user_id}.jsonl"), "a", encoding="utf-8") as f:
             f.write(json.dumps(snapshot, ensure_ascii=False) + "\n")
     except Exception:
-        pass
+        _log.exception("emotion error")
 
 
 # ── Trend detection ──────────────────────────────────────────
@@ -188,7 +191,7 @@ class EmotionExpert(BaseExpert):
                 _sig_type, _sig_conf = signal[0], signal[1]
                 details["emotion_profile"] = {"sentiment": _sig_type, "confidence": _sig_conf}
         except Exception:
-            pass
+            _log.exception("emotion error")
 
         current = _detect_sentiment_keyword(query)
         sentiment = current["label"]

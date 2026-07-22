@@ -21,6 +21,9 @@ from .routes import _verify_key, _require_admin
 from fastapi import Depends
 
 
+import logging
+_log = logging.getLogger("aelvoxim.server.routes_brain")
+
 @router.get("/brain/report")
 async def get_brain_report(date: str = Query("", description="Date in YYYY-MM-DD format, defaults to today"),
                            _user: dict = Depends(_verify_key)):
@@ -76,7 +79,7 @@ async def get_brain_status(_user: dict = Depends(_verify_key)):
                 if d.status == "active"
             )
         except Exception:
-            pass
+            _log.exception("routes_brain error")
 
         return {
             "grade": grade_label,

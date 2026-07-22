@@ -12,6 +12,9 @@ from datetime import datetime
 from ..storage.db import fetch_dict
 
 
+import logging
+_log = logging.getLogger("aelvoxim.proactive.selector")
+
 class BehaviorSelector:
     """Choose push type and generate content based on context."""
 
@@ -54,7 +57,7 @@ class BehaviorSelector:
                 title = rows[0]["title"]
                 return f"💡 我最近在学「{topic}」相关的知识，比如「{title}」。想了解更多吗？"
         except Exception:
-            pass
+            _log.exception("selector error")
         return f"💡 关于「{topic}」我学到了一些新东西，要不要看看？"
 
     def _build_status_push(self) -> str:
@@ -69,5 +72,5 @@ class BehaviorSelector:
             if r2:
                 return f"🧠 我已经记住了 {r2[0]['cnt']} 条记忆"
         except Exception:
-            pass
+            _log.exception("selector error")
         return ""

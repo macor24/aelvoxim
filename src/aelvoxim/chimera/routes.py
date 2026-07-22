@@ -126,7 +126,7 @@ async def handle_intent(request: Dict[str, Any]) -> Dict[str, Any]:
                             _win_host = _parts[2]
                             break
             except Exception:
-                pass
+                logger.exception("routes error")
 
             _gw_payload = json.dumps({
                 "operation": {

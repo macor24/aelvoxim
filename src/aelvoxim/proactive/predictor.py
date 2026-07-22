@@ -12,6 +12,9 @@ from typing import Any
 from ..storage.db import fetch_dict
 
 
+import logging
+_log = logging.getLogger("aelvoxim.proactive.predictor")
+
 class TopicPredictor:
     """Predict topics a user may want to hear about next."""
 
@@ -28,7 +31,7 @@ class TopicPredictor:
             pred = predict_next_topics(hours=48)
             topics = pred.get("predictions", [])
         except Exception:
-            pass
+            _log.exception("predictor error")
 
         # 2. Fallback: most active knowledge topics
         if not topics:
@@ -43,6 +46,6 @@ class TopicPredictor:
                 """, (limit,))
                 topics = [r["topic"] for r in rows]
             except Exception:
-                pass
+                _log.exception("predictor error")
 
         return topics[:limit]

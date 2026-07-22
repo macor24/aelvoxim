@@ -22,6 +22,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from ..utils import METACORE_DIR
 
+import logging
+_log = logging.getLogger("aelvoxim.server.knowledge_graph")
+
 _DB_PATH = str(Path(METACORE_DIR) / "memory.db")
 
 
@@ -224,7 +227,7 @@ def add_knowledge_entry(topic: str, title: str) -> None:
         )
         db.commit()
     except Exception:
-        pass
+        _log.exception("knowledge_graph error")
 
 
 def sync_all_entries_to_graph() -> dict:
@@ -265,9 +268,9 @@ def sync_all_entries_to_graph() -> dict:
             added_e += 1
             added_r += 1
         except Exception:
-            pass
+            _log.exception("knowledge_graph error")
     try:
         db.commit()
     except Exception:
-        pass
+        _log.exception("knowledge_graph error")
     return {"added_entities": added_e, "added_relations": added_r}

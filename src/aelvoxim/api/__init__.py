@@ -17,6 +17,9 @@ from typing import Any, Dict, List, Optional
 from ..utils import read_json, write_json, CONFIG_FILE
 
 
+import logging
+_log = logging.getLogger("aelvoxim.api.__init__")
+
 # ── Config API ────────────────────────────
 
 
@@ -115,7 +118,7 @@ def get_task_status(task_id: str) -> Optional[Dict]:
                     "cycles": d.get("cycles_completed", 0),
                 }
         except Exception:
-            pass
+            _log.exception("__init__ error")
 
     elif task_id.startswith("search:"):
         return {"type": "search", "status": "completed"}
@@ -154,7 +157,7 @@ def memory_store(key: str, value: Any, tags: Optional[List[str]] = None,
                     store_relation(rid, key, rel["target"], rel.get("type", "related"),
                                    attributes=rel.get("attributes", {}))
         except Exception:
-            pass
+            _log.exception("__init__ error")
         finally:
             _done.set()
     _t = threading.Thread(target=_do_store, daemon=True)

@@ -102,7 +102,7 @@ def _extract_text(path: Path) -> Tuple[str, str]:
                     return text, title
                 # If too little text, fall through to OCR
             except ImportError:
-                pass
+                log.exception("directory_learner error")
             # OCR fallback for scanned PDFs
             try:
                 from aelvoxim.learn.ocr_extract import ocr_extract
@@ -110,7 +110,7 @@ def _extract_text(path: Path) -> Tuple[str, str]:
                 if result:
                     return result, title
             except ImportError:
-                pass
+                log.exception("directory_learner error")
             return "", title
 
         # DOCX
@@ -174,7 +174,7 @@ def _extract_text(path: Path) -> Tuple[str, str]:
                 if result:
                     return result, title
             except ImportError:
-                pass
+                log.exception("directory_learner error")
             return "", title
 
     except Exception as e:

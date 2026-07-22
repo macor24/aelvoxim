@@ -22,6 +22,9 @@ from urllib.request import Request, urlopen
 
 from ..utils import METACORE_DIR
 
+import logging
+_log = logging.getLogger("aelvoxim.core.health")
+
 # ── Config ──
 
 # Auto-detect project root — supports both WSL and native Linux
@@ -69,7 +72,7 @@ class Watchdog:
         try:
             self._tick(skip_self=True)
         except Exception:
-            pass
+            _log.exception("health error")
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
 
@@ -78,7 +81,7 @@ class Watchdog:
             try:
                 self._tick()
             except Exception as e:
-                pass
+                _log.exception("health error")
             self._stop.wait(self._interval)
 
     def _tick(self, skip_self: bool = False):
@@ -136,7 +139,7 @@ class Watchdog:
             try:
                 result.append(json.loads(line))
             except Exception:
-                pass
+                _log.exception("health error")
         return result
 
     def get_heal_counts(self) -> dict:

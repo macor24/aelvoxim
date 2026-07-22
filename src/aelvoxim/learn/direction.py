@@ -15,6 +15,9 @@ from typing import Any, Dict, List, Optional
 from ..utils import METACORE_DIR, ensure_dir
 from .knowledge import KnowledgeBase
 
+import logging
+_log = logging.getLogger("aelvoxim.learn.direction")
+
 # ── Data paths ──
 LEARNER_DIR = METACORE_DIR / "learner"
 CONFIG_FILE = LEARNER_DIR / "config.json"
@@ -116,7 +119,7 @@ def load_config_from_file() -> Dict:
                 if result:
                     return result
         except Exception:
-            pass
+            _log.exception("direction error")
     if CONFIG_FILE.exists():
         try:
             return json.loads(CONFIG_FILE.read_text())
@@ -189,7 +192,7 @@ class DirectionManager:
                 self._log(f"  🚫 Direction limit reached ({plan}: {cfg['max_directions']})")
                 return False
         except Exception:
-            pass
+            _log.exception("direction error")
         # SentriKit safety check
         if not self._safety_check(topic):
             return False
@@ -251,4 +254,4 @@ class DirectionManager:
                 try:
                     self._directions[topic] = LearningDirection(**cfg)
                 except Exception:
-                    pass
+                    _log.exception("direction error")

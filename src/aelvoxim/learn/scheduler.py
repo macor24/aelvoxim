@@ -13,6 +13,9 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 
+import logging
+_log = logging.getLogger("aelvoxim.learn.scheduler")
+
 def submit_verification_task(
     topic: str,
     is_review: bool,
@@ -56,7 +59,7 @@ def submit_verification_task(
                 outcome="submitted",
             ))
         except Exception:
-            pass
+            _log.exception("scheduler error")
 
         # Schedule review if is_review
         if is_review:
@@ -73,7 +76,7 @@ def submit_verification_task(
                 save_config_fn()
                 log_func(f"  📅 [{topic}] Next review in {next_days} day(s)")
     except Exception:
-        pass
+        _log.exception("scheduler error")
 
 
 def schedule_review(topic: str, directions: dict, save_config_fn: Callable, log_func: Callable) -> None:
@@ -142,7 +145,7 @@ def check_reviews(directions: dict, save_config_fn: Callable, log_func: Callable
             }, ensure_ascii=False, indent=2))
             log_func(f"  🧠 Memory review queue: {len(_queue)} low-strength semantic entries")
     except Exception:
-        pass
+        _log.exception("scheduler error")
 
     return triggered
 

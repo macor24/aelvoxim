@@ -13,6 +13,9 @@ from .base import BaseExpert, ExpertInput, ExpertOutput, register
 from aelvoxim.memory import search_events
 
 
+import logging
+_log = logging.getLogger("aelvoxim.experts.memory")
+
 # ── Freshness classification ─────────────────────────────────
 
 _FRESHNESS_CUTOFFS = {
@@ -57,7 +60,7 @@ def _run_fusion_search(query: str, user_id: str, limit: int = 10) -> list:
         if results:
             return results
     except Exception:
-        pass
+        _log.exception("memory error")
     # Fallback: standard entity search with user_id
     try:
         from aelvoxim.memory import search_entities
@@ -180,7 +183,7 @@ class MemoryExpert(BaseExpert):
                     for e in events
                 ]
         except Exception:
-            pass
+            _log.exception("memory error")
 
         # 3. Detect blind spots (low-confidence entities for this user)
         try:
@@ -192,7 +195,7 @@ class MemoryExpert(BaseExpert):
                     for s in spots
                 ]
         except Exception:
-            pass
+            _log.exception("memory error")
 
         # 4. Compute confidence summary
         if details["entities"]:
@@ -247,5 +250,5 @@ def _extract_overall(entity: dict) -> Optional[float]:
             if isinstance(cm, dict):
                 return cm.get("overall")
     except Exception:
-        pass
+        _log.exception("memory error")
     return None

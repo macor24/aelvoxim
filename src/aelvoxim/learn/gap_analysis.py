@@ -22,6 +22,9 @@ from typing import Any, Dict, List, Optional, Tuple
 from ..utils import METACORE_DIR
 
 
+import logging
+_log = logging.getLogger("aelvoxim.learn.gap_analysis")
+
 def analyze_knowledge_gaps(
     directions: Dict[str, Any],
     knowledge_topics: Dict[str, int],
@@ -81,7 +84,7 @@ def analyze_knowledge_gaps(
                             "detail": f"active {days_idle}d with 0 entries, suggest engine switch",
                         })
                 except Exception:
-                    pass
+                    _log.exception("gap_analysis error")
 
     # 3. User query topics with no KB coverage
     query_counts = Counter(query_topics)
@@ -175,5 +178,5 @@ def get_blind_spots_for_user(
                 if len(results) >= max_items:
                     break
     except Exception:
-        pass
+        _log.exception("gap_analysis error")
     return results

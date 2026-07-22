@@ -25,6 +25,9 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 
+import logging
+_log = logging.getLogger("aelvoxim.experts.router")
+
 # ── Load routing rules from config file ──
 
 _CONFIG_PATH = Path(__file__).resolve().parent.parent.parent.parent / "config" / "routing_rules.json"
@@ -36,7 +39,7 @@ def _load_rules() -> dict:
         if _CONFIG_PATH.exists():
             return json.loads(_CONFIG_PATH.read_text())
     except Exception:
-        pass
+        _log.exception("router error")
     return {}
 
 

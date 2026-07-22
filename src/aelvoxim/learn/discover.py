@@ -15,6 +15,9 @@ import urllib.request
 import urllib.error
 from typing import Dict, List, Optional, Set
 
+import logging
+_log = logging.getLogger("aelvoxim.learn.discover")
+
 # ── arXiv discovery ──────────────────────────
 
 # Categories most relevant to MetaCore's domain
@@ -200,7 +203,7 @@ def discover_directions(
         arxiv_candidates = discover_from_arxiv(existing | set(candidates))
         candidates.extend(arxiv_candidates[:3])
     except Exception:
-        pass
+        _log.exception("discover error")
 
     # 2. KB-based discovery (existing logic)
     if all_entries:
@@ -211,7 +214,7 @@ def discover_directions(
             )
             candidates.extend(kb_candidates)
         except Exception:
-            pass
+            _log.exception("discover error")
 
     return candidates[:max_suggestions]
 

@@ -15,6 +15,9 @@ from typing import Callable, Dict, List, Set
 
 from .knowledge import KnowledgeBase
 
+import logging
+_log = logging.getLogger("aelvoxim.learn.unknown_discovery")
+
 # ── English / Chinese stop lists ──
 
 _EN_STOP: Set[str] = {
@@ -134,7 +137,7 @@ def _is_known(term: str) -> bool:
             if title and term.lower() in title.lower():
                 return True
     except Exception:
-        pass
+        _log.exception("unknown_discovery error")
     return False
 
 
@@ -164,7 +167,7 @@ def scan_unknowns(directions: Dict[str, object], log_func: Callable) -> bool:
             c = entry.get("content") or entry.get("summary") or ""
             sources.append(f"{t} {c}")
     except Exception:
-        pass
+        _log.exception("unknown_discovery error")
     sources.extend(directions.keys())
 
     # 2. Extract candidates in one pass

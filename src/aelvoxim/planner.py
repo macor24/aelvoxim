@@ -208,7 +208,7 @@ class LongTermPlanner:
                 plan = Plan.from_dict(data)
                 self._plans[plan.id] = plan
             except Exception:
-                pass
+                log.exception("planner error")
 
     def create_plan(self, goal: str, source: str = "user") -> Plan:
         """Create a new plan from a user goal.
@@ -230,7 +230,7 @@ class LongTermPlanner:
                         f"{plan_id}:ms:{i}", task,
                     ))
         except Exception:
-            pass
+            log.exception("planner error")
 
         if not milestones:
             # Fallback: template milestones (rarely reached — decompose_direction
@@ -312,7 +312,7 @@ class LongTermPlanner:
                 if _related:
                     self.create_plan(f"深入学习 {plan.goal[:30]} - {_related}", source="auto_suggest")
         except Exception:
-            pass
+            log.exception("planner error")
 
     @staticmethod
     def _suggest_next_goal(completed_goal: str) -> str:

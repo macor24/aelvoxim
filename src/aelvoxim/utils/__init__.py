@@ -13,6 +13,9 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 
+import logging
+_log = logging.getLogger("aelvoxim.utils.__init__")
+
 # ── Paths ──
 
 DATA_DIR = Path.home() / ".aelvoxim"
@@ -75,7 +78,7 @@ def read_json(path: Path) -> Optional[Dict]:
                 return {}
             return json.loads(raw)
     except (json.JSONDecodeError, OSError):
-        pass
+        _log.exception("__init__ error")
     return None
 
 

@@ -11,6 +11,9 @@ from datetime import datetime, timedelta
 from ..storage.db import execute, fetch_one, fetch_dict
 
 
+import logging
+_log = logging.getLogger("aelvoxim.proactive.feedback")
+
 class FeedbackLearner:
     """Record push events and track user responses."""
 
@@ -27,7 +30,7 @@ class FeedbackLearner:
                 WHERE id = %s::uuid
             """, (push_id,))
         except Exception:
-            pass
+            _log.exception("feedback error")
 
     def get_accepted_count(self, user_id: str) -> int:
         """Count how many pushes this user responded to."""
@@ -64,5 +67,5 @@ class FeedbackLearner:
             if rows:
                 return rows[0]["id"]
         except Exception:
-            pass
+            _log.exception("feedback error")
         return ""

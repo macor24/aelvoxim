@@ -24,6 +24,9 @@ from typing import Any, Dict, List, Optional
 
 from ..utils import METACORE_DIR
 
+import logging
+_log = logging.getLogger("aelvoxim.server.session_manager")
+
 _SNAPSHOT_DIR = Path(METACORE_DIR) / "snapshots"
 _MAX_SNAPSHOTS = 30
 _STALE_DAYS = 3
@@ -258,7 +261,7 @@ def get_user_preferences(user_id: str) -> Dict[str, Any]:
         saved = json.loads(path.read_text())
         default.update(saved)
     except Exception:
-        pass
+        _log.exception("session_manager error")
     return default
 
 
@@ -328,7 +331,7 @@ def _prune(user_id: str) -> None:
                 f.unlink()
                 continue
         except Exception:
-            pass
+            _log.exception("session_manager error")
         # Also cap count
     files = sorted(user_dir.glob("*.json"), key=os.path.getmtime, reverse=True)
     for f in files[_MAX_SNAPSHOTS:]:

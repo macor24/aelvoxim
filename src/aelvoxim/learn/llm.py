@@ -17,6 +17,9 @@ from urllib.request import Request, urlopen
 from urllib.error import URLError
 
 
+import logging
+_log = logging.getLogger("aelvoxim.learn.llm")
+
 # ── Model config ────────────────────────────────────
 
 
@@ -173,7 +176,7 @@ def default_models() -> List[ModelConfig]:
                     priority=1 if saved_provider == "deepseek" else 5,
                 ))
     except Exception:
-        pass
+        _log.exception("llm error")
 
     # 5. Ollama local
     ollama_url = auto_detect_ollama()
@@ -420,7 +423,7 @@ def _call_openai_compat_stream(
                     if content:
                         yield content
                 except json.JSONDecodeError:
-                    pass
+                    _log.exception("llm error")
     finally:
         conn.close()
 
@@ -854,8 +857,7 @@ def orchestrate(
                                temperature=temperature, max_tokens=max_tokens)
             return call_with_fallback(models, enhanced_system, user_message)
         except LLMError:
-            # Knowledge enhancement failed, degrade to non-enhanced flow
-            pass
+            _log.exception("llm error")
         except Exception:
             pass  # non-critical: knowledge-enhanced call failed, continue with normal flow
 

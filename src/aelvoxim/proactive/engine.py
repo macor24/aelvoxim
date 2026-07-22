@@ -7,14 +7,16 @@ and pushes proactive messages when appropriate.
 
 from __future__ import annotations
 
+import logging
 import json
 import threading
 import time
 from datetime import datetime, timedelta
 from typing import Optional
 
-from ..storage.db import fetch_dict, execute, use_pg
+_log = logging.getLogger("aelvoxim.proactive.engine")
 
+from ..storage.db import fetch_dict, execute, use_pg
 
 class ProactiveEngine:
     """Background engine that pushes proactive messages to users."""
@@ -37,7 +39,7 @@ class ProactiveEngine:
         self._stop_event.clear()
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
-        print(f"  ProactiveEngine started (tick={self._tick_interval}s)")
+        _log.info("ProactiveEngine started (tick=%ss)", self._tick_interval)
 
     def stop(self):
         """Stop the background loop."""
@@ -54,7 +56,7 @@ class ProactiveEngine:
             try:
                 self._tick()
             except Exception as e:
-                print(f"  ProactiveEngine tick error: {e}")
+                _log.warning("ProactiveEngine tick error: %s", e)
             self._stop_event.wait(self._tick_interval)
 
     def _tick(self):

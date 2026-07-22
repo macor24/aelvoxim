@@ -13,6 +13,9 @@ from typing import Any, Dict, List, Optional
 
 from ..utils import METACORE_DIR, DATA_DIR
 
+import logging
+_log = logging.getLogger("aelvoxim.learn.report")
+
 # ── Data paths ──
 LOG_FILE = METACORE_DIR / "learner" / "learner.log"
 _REPORTS_DIR = DATA_DIR / "reports" / "daily"
@@ -29,12 +32,12 @@ def log(msg: str):
                     bak.unlink()
                 LOG_FILE.rename(bak)
         except Exception:
-            pass
+            _log.exception("report error")
         with open(LOG_FILE, "a", encoding="utf-8") as f:
             f.write(log_line + "\n")
     except Exception:
-        pass
-    print(log_line)
+        _log.exception("report error")
+    _log.info(log_line)
 
 
 def update_daily_brain_report(cognition_report, direction_manager, learner_ref) -> None:
@@ -90,4 +93,4 @@ def update_daily_brain_report(cognition_report, direction_manager, learner_ref) 
         tmp.write_text(content, encoding="utf-8")
         tmp.replace(report_file)
     except Exception:
-        pass
+        _log.exception("report error")

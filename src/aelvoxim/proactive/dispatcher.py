@@ -15,6 +15,9 @@ from datetime import datetime
 from ..storage.db import execute, use_pg
 
 
+import logging
+_log = logging.getLogger("aelvoxim.proactive.dispatcher")
+
 class ChannelDispatcher:
     """Dispatch proactive messages to users through available channels."""
 
@@ -39,7 +42,7 @@ class ChannelDispatcher:
                     VALUES (%s, %s, %s, %s, %s)
                 """, (user_id, push_type, content[:500], topic, "chat"))
             except Exception:
-                pass
+                _log.exception("dispatcher error")
 
         # Actually push to the user's ChatAEL session
         return self._push_to_chat(user_id, content)

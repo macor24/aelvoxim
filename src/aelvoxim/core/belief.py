@@ -19,6 +19,8 @@ Usage:
 
 from __future__ import annotations
 
+import logging
+_log = logging.getLogger("aelvoxim.belief")
 import json
 import math
 from dataclasses import dataclass, asdict, field

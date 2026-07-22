@@ -22,6 +22,9 @@ from typing import Any, Dict, List, Optional
 
 from ..utils import METACORE_DIR
 
+import logging
+_log = logging.getLogger("aelvoxim.learn.review_scheduler")
+
 # ── Config ──
 
 REVIEW_INTERVALS = [1, 3, 7, 15, 30, 90]
@@ -133,7 +136,7 @@ def get_stats() -> Dict[str, Any]:
             if datetime.fromisoformat(info.get("next_review_at", "")) <= now:
                 due += 1
         except Exception:
-            pass
+            _log.exception("review_scheduler error")
 
     return {
         "total": total,

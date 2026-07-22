@@ -17,6 +17,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from ..utils import METACORE_DIR
 
+import logging
+_log = logging.getLogger("aelvoxim.learn.autotune")
+
 TUNE_LOG = METACORE_DIR / "learner" / "autotune.log"
 
 
@@ -206,7 +209,7 @@ def _decide_adjustments(metrics: List[Dict], learner,
             })
             _log(f"⚖️  Updated weights: direction={new_weights['direction']:.2f} efficiency={new_weights['efficiency']:.2f}")
     except Exception:
-        pass
+        _log.exception("autotune error")
 
     return changes
 
@@ -234,7 +237,7 @@ def _apply_adjustments(learner, changes: List[Dict]) -> None:
                 outcome=c["reason"],
             ))
     except Exception:
-        pass
+        _log.exception("autotune error")
 
     # Write a brief changelog
     METACORE_DIR.mkdir(parents=True, exist_ok=True)
@@ -245,7 +248,7 @@ def _apply_adjustments(learner, changes: List[Dict]) -> None:
                 line = {**c, "ts": time.strftime("%Y-%m-%dT%H:%M:%S")}
                 f.write(json.dumps(line, ensure_ascii=False) + "\n")
     except Exception:
-        pass
+        _log.exception("autotune error")
 
     _log(f"Applied {len(changes)} changes: {[c['action'] for c in changes]}")
 

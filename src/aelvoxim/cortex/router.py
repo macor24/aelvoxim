@@ -11,6 +11,9 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+import logging
+_log = logging.getLogger("aelvoxim.cortex.router")
+
 _ROUTING_FILE = Path(__file__).parent.parent.parent.parent / "config" / "routing_rules.json"
 
 
@@ -29,7 +32,7 @@ class Router:
             if _ROUTING_FILE.exists():
                 return json.loads(_ROUTING_FILE.read_text(encoding="utf-8"))
         except Exception:
-            pass
+            _log.exception("router error")
         return {}
 
     def classify(self, query: str) -> Dict[str, Any]:

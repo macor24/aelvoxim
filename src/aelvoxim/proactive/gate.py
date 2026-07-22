@@ -57,7 +57,7 @@ class FrequencyGate:
                 if datetime.now() - last < timedelta(hours=cooldown_hours):
                     return False
             except Exception:
-                pass
+                _log.exception("gate error")
 
         return True
 
@@ -75,3 +75,6 @@ class FrequencyGate:
         """, (json.dumps(now), user_id))
 
 import json
+
+import logging
+_log = logging.getLogger("aelvoxim.proactive.gate")

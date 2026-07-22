@@ -15,6 +15,9 @@ from .entry import MemoryEntry, LAYER_SEMANTIC, LAYER_EPISODIC
 from .fusion import MemoryFusion
 
 
+import logging
+_log = logging.getLogger("aelvoxim.memory.conflict")
+
 # ── Similarity heuristic ──
 
 
@@ -141,7 +144,7 @@ def resolve_conflict(
             )
             db_connection.commit()
         except Exception:
-            pass
+            _log.exception("conflict error")
 
     return True
 

@@ -13,6 +13,9 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional, TYPE_CHECKING
 
+import logging
+_log = logging.getLogger("aelvoxim.core.metacog")
+
 if TYPE_CHECKING:
     from .selfmodel import SelfModel
 
@@ -176,7 +179,7 @@ class MetaCogTrigger:
                     report.suggested_actions.insert(0, "consult_sentrikit")
                     report.suggested_actions.append("align_evolution_schedule")
         except Exception:
-            pass
+            _log.exception("metacog error")
         self._history.append(report)
         return report
 

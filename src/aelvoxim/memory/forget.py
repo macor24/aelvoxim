@@ -16,6 +16,9 @@ from .entry import MemoryEntry, LAYER_WORKING, LAYER_EPISODIC, LAYER_SEMANTIC
 from .layers import WorkingMemory, EpisodicMemory, SemanticMemory
 
 
+import logging
+_log = logging.getLogger("aelvoxim.memory.forget")
+
 def cleanup_working(layer: WorkingMemory, max_seconds: int = 86400) -> int:
     """Expire working entries past their TTL and remove stale ones."""
     return layer.cleanup()
@@ -46,7 +49,7 @@ def cleanup_semantic(layer: SemanticMemory, max_idle_days: int = 30) -> int:
                 del layer._entries[key]
                 removed += 1
         except Exception:
-            pass
+            _log.exception("forget error")
     return removed
 
 

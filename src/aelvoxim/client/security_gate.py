@@ -22,6 +22,9 @@ from typing import Dict, Optional
 
 from ..utils import DATA_DIR
 
+import logging
+_log = logging.getLogger("aelvoxim.client.security_gate")
+
 # ── SentriKit host (same config as sentrikit.py) ──
 
 _SENTRIKIT_HOST = os.environ.get("SENTRIKIT_HOST", "https://127.0.0.1:8899")
@@ -150,7 +153,7 @@ def _load_prefs() -> dict:
         if _SAFETY_PREFS_PATH.exists():
             return json.loads(_SAFETY_PREFS_PATH.read_text())
     except Exception:
-        pass
+        _log.exception("security_gate error")
     return {"overrides": {}, "false_positive_feedback": [], "accepted_risks": {}}
 
 
@@ -161,7 +164,7 @@ def _save_prefs(prefs: dict) -> None:
             json.dumps(prefs, ensure_ascii=False, indent=2)
         )
     except Exception:
-        pass
+        _log.exception("security_gate error")
 
 
 def record_feedback(rule_key: str, is_false_positive: bool, user_id: str = "") -> None:

@@ -20,6 +20,9 @@ from typing import Any, Dict, List, Optional
 
 from ..utils import METACORE_DIR
 
+import logging
+_log = logging.getLogger("aelvoxim.learn.hypothesis")
+
 _HYPOTHESIS_DIR = METACORE_DIR / "hypotheses"
 _HYPOTHESIS_FILE = _HYPOTHESIS_DIR / "history.jsonl"
 
@@ -56,7 +59,7 @@ def _save_hypothesis(h: Hypothesis) -> None:
             if len(lines) > 2000:
                 _HYPOTHESIS_FILE.write_text("\n".join(lines[-1000:]) + "\n")
     except Exception:
-        pass
+        _log.exception("hypothesis error")
 
 
 def _load_hypotheses(limit: int = 50) -> List[Hypothesis]:

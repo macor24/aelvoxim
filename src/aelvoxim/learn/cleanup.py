@@ -7,6 +7,9 @@ Responsibility: memory layer cleanup, KB quality cleanup (low-confidence entries
 from __future__ import annotations
 
 
+import logging
+_log = logging.getLogger("aelvoxim.learn.cleanup")
+
 def memory_layer_cleanup() -> None:
     """Clean up old/expired memory entries in all three layers.
 
@@ -17,7 +20,7 @@ def memory_layer_cleanup() -> None:
         from ..memory import _fusion as _fus
         _cl({"working": _fus.working, "episodic": _fus.episodic, "semantic": _fus.semantic})
     except Exception:
-        pass
+        _log.exception("cleanup error")
 
 
 def cleanup_knowledge_base(log_func) -> None:

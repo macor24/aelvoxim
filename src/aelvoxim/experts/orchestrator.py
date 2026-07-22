@@ -18,6 +18,9 @@ import time
 from typing import Any, Dict, List, Optional, Set, Tuple, Type
 from .base import BaseExpert, ExpertInput, ExpertOutput
 from . import discover_experts
+import logging
+_log = logging.getLogger("aelvoxim.experts.orchestrator")
+
 # ── Voting weights — updated dynamically by WeightManager ──
 
 EXPERT_WEIGHTS = {
@@ -280,7 +283,7 @@ def _parse_arbitration(text: str) -> Optional[float]:
             conf = float(m.group(1))
             return max(0.0, min(1.0, conf))
     except Exception:
-        pass
+        _log.exception("orchestrator error")
     return None
 
 
@@ -292,7 +295,7 @@ def _extract_reason(text: str) -> str:
         if m:
             return m.group(1).strip()
     except Exception:
-        pass
+        _log.exception("orchestrator error")
     return "LLM arbitration completed"
 
 
@@ -373,7 +376,7 @@ class ExpertOrchestrator:
                     "opinion": _out.opinion,
                 }
         except Exception:
-            pass
+            _log.exception("orchestrator error")
         return None
 
     def think(self, inp: ExpertInput, expert_filter: Optional[List[str]] = None) -> Dict[str, Any]:

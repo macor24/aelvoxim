@@ -179,6 +179,9 @@ def current_edition() -> str:
 # ── Trial license for self-hosted new users ──
 from .auth import TRIAL_DAYS
 
+import logging
+_log = logging.getLogger("aelvoxim.server.license")
+
 TRIAL_DIR = DATA_DIR / "trials"
 
 
@@ -199,7 +202,7 @@ def create_trial_license(email: str) -> int:
             data = json.loads(trial_file.read_text())
             return data.get("expires_at", 0)
         except Exception:
-            pass
+            _log.exception("license error")
     expires_at = int(time.time()) + TRIAL_DAYS * 86400
     record = {
         "email": email.lower().strip(),

@@ -53,7 +53,7 @@ def get_recent_failures(n: int = 10) -> List[Dict]:
 def emit_metric(name: str, value: float, tags: Optional[Dict] = None) -> None:
     """Emit a metric. Current implementation: print to stderr."""
     tags_str = f" {tags}" if tags else ""
-    print(f"[metric] {name}={value}{tags_str}", file=__import__("sys").stderr)
+    _log.info("[metric] %s=%s%s", name, value, tags_str)
 
 
 # ── Learning trigger switch ───────────────

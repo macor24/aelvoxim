@@ -20,6 +20,9 @@ from typing import Any, Dict, Optional, List
 from ..utils import get_data_dir
 
 
+import logging
+_log = logging.getLogger("aelvoxim.core.calibration")
+
 # ── Default params (complete list, safe to modify values but don't delete keys) ──
 
 DEFAULT_CALIBRATION: Dict[str, Any] = {
@@ -363,7 +366,7 @@ class Calibration:
             if not _ed_get("auto_tune_enabled", False):
                 return []
         except ImportError:
-            pass
+            _log.exception("calibration error")
 
         if not self._data.get("metaevolve", {}).get("auto_tune_enabled", True):
             return []

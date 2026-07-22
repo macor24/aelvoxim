@@ -19,6 +19,9 @@ from .search import search as _search
 from ..utils import read_json, LLM_CONFIG_FILE
 
 
+import logging
+_log = logging.getLogger("aelvoxim.learn.extract")
+
 # ── Content quality checks ────────────────
 
 
@@ -291,7 +294,7 @@ def rule_extract(task: str, topic: str = "") -> Optional[str]:
             content = result["content"]
             return f"About '{task}':\\n{content}"
     except Exception:
-        pass
+        _log.exception("extract error")
     return None
 
 
@@ -308,7 +311,7 @@ def is_search_mock() -> bool:
         if sc.get("engine") == "mock":
             return True
     except Exception:
-        pass
+        _log.exception("extract error")
     return False
 
 

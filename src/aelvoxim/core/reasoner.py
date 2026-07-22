@@ -22,6 +22,9 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from ..utils import METACORE_DIR
 
 
+import logging
+_log = logging.getLogger("aelvoxim.core.reasoner")
+
 class ProactiveReasoner:
     """Proactive reasoning engine using rule-based similarity matching.
 
@@ -108,7 +111,7 @@ class ProactiveReasoner:
 
             result["predictions"] = result["predictions"][:5]
         except Exception:
-            pass
+            _log.exception("reasoner error")
 
         return result
 

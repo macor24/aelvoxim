@@ -19,6 +19,9 @@ from typing import Any, Dict, Optional
 
 from .base import BaseExpert, ExpertInput, ExpertOutput, register
 
+import logging
+_log = logging.getLogger("aelvoxim.experts.safety")
+
 # ── SentriKit config ──
 _SENTRIKIT_HOST = os.environ.get("SENTRIKIT_HOST", "https://127.0.0.1:8899")
 _SENTRIKIT_API_KEY = os.environ.get("SENTRIKIT_API_KEY", "")
@@ -29,7 +32,7 @@ if not _SENTRIKIT_API_KEY:
         if _key_file.exists():
             _SENTRIKIT_API_KEY = _key_file.read_text().strip()
     except Exception:
-        pass
+        _log.exception("safety error")
 _SSL_CTX = ssl.create_default_context()
 _SSL_CTX.check_hostname = False
 _SSL_CTX.verify_mode = ssl.CERT_NONE

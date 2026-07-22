@@ -25,6 +25,9 @@ import urllib.error
 import random
 from typing import Any, Dict, List, Optional
 
+import logging
+_log = logging.getLogger("aelvoxim.learn.search")
+
 # ── Engine config ───────────────────────────────
 
 BING_API_KEY = os.environ.get("AELVOXIM_BING_API_KEY", os.environ.get("METACORE_BING_API_KEY", ""))
@@ -324,7 +327,7 @@ def _mock_search(query: str, max_results: int = 5) -> List[Dict[str, str]]:
                 })
             return results
     except ImportError:
-        pass
+        _log.exception("search error")
 
     # Generic mock fallback — produce topic-aware snippets
     topic = query.strip()

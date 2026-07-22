@@ -15,6 +15,9 @@ from .extract import extract_knowledge, is_valid_content, content_has_real_value
 from .patches.validate_safe import safe_is_validated
 
 
+import logging
+_log = logging.getLogger("aelvoxim.learn.validate")
+
 def _topic_is_english(topic: str) -> bool:
     """Check if a topic is primarily English (no Chinese characters)."""
     return not bool(re.search(r'[\u4e00-\u9fff]', topic))
@@ -59,7 +62,7 @@ def execute_and_validate(
                 log_func(f"  🛑 Safety block: {_sk_r.get('reason', '')}")
             return False
     except Exception:
-        pass
+        _log.exception("validate error")
 
     log = log_func or (lambda msg: None)
 
