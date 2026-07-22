@@ -526,8 +526,7 @@ function loadApiKeys() {
       + '<button class="btn-primary-sm" onclick="createApiKey()"><i class="fas fa-plus"></i> 新建 API Key</button>'
       + '<span style="font-size:12px;color:#64748b;align-self:center;">共 ' + keys.length + ' 个 Key</span></div>';
     keys.forEach(function(k) {
-      var storedName = localStorage.getItem('keyname_' + k.id) || '';
-      var displayName = storedName ? '<span style="font-size:11px;color:#64748b;margin-right:6px;">' + storedName + '</span>' : '';
+      var displayName = k.name ? '<span style="font-size:11px;color:#64748b;margin-right:6px;">' + k.name + '</span>' : '';
       html += '<div class="key-row">'
         + '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;">'
         + displayName
@@ -547,9 +546,13 @@ function loadApiKeys() {
 }
 
 function createApiKey() {
+  var name = prompt('请输入 API Key 备注名称（如项目名）：');
+  if (name === null) return;
+  if (!name.trim()) name = '';
   var el = document.getElementById('apikeys-content');
   el.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-pulse"></i> 生成中...</div>';
-  apiFetch('/v1/auth/api-keys', {method:'POST'}).then(function(data) {
+  var body = name.trim() ? JSON.stringify({name: name.trim()}) : '';
+  apiFetch('/v1/auth/api-keys', {method:'POST', body: body}).then(function(data) {
     if (data.api_key) {
       // 把完整 key 显示在界面上，带一键复制
       el.innerHTML = '<div class="card" style="text-align:center;">'

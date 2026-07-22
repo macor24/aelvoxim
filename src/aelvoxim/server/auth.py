@@ -439,6 +439,9 @@ def update_user_field(email: str, field: str, value: any) -> bool:
     email_lower = email.lower().strip()
     if use_pg():
         try:
+            # jsonb columns need explicit serialization
+            if isinstance(value, (list, dict)):
+                value = json.dumps(value)
             execute(f"UPDATE users SET {field} = %s, updated_at = NOW() WHERE email = %s",
                     (value, email_lower))
             return True

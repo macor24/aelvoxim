@@ -78,6 +78,17 @@ def _map_key(key: str) -> str:
         return key
     return key[:4] + "..." + key[-4:]
 
+
+def _map_key_entry(i: int, entry) -> dict:
+    """Map a key entry (string or {key, name} dict) to API response."""
+    if isinstance(entry, dict):
+        raw = entry.get("key", "")
+        name = entry.get("name", "")
+    else:
+        raw = entry
+        name = ""
+    return {"id": i, "preview": _map_key(raw), "name": name}
+
 _SAFETY_RESPONSE = "I'm sorry, but I cannot assist with that request."
 
 # ── Auth endpoints ──
@@ -264,20 +275,32 @@ async def list_api_keys(current_user: dict = Depends(_verify_key)):
     if not user:
         raise HTTPException(404, detail="user not found")
     keys = user.get("api_keys", [user.get("api_key", "")])
-    return {"keys": [{"id": i, "preview": _map_key(k)} for i, k in enumerate(keys)]}
+    return {"keys": [_map_key_entry(i, k) for i, k in enumerate(keys)]}
 
 @router.post("/auth/api-keys")
-async def create_api_key_route(current_user: dict = Depends(_verify_key)):
-    """Create a new API key."""
+async def create_api_key_route(request: Request, current_user: dict = Depends(_verify_key)):
+    """Create a new API key. Optional body: {"name": "my-project"}"""
     from .auth import find_by_email, generate_api_key, update_user_field
+    name = ""
+    try:
+        _data = await request.json()
+        name = _data.get("name", "")
+    except Exception:
+        pass
+
     user = find_by_email(current_user.get("email", ""))
     if not user:
         raise HTTPException(404, detail="user not found")
     keys = user.get("api_keys", [user.get("api_key", "")])
     new_key = generate_api_key()
-    keys.append(new_key)
+
+    # Store as either list of strings (backward compat) or list of {key, name}
+    if name:
+        keys.append({"key": new_key, "name": name.strip()})
+    else:
+        keys.append(new_key)
     update_user_field(current_user["email"], "api_keys", keys)
-    return {"api_key": new_key, "id": len(keys) - 1}
+    return {"api_key": new_key, "id": len(keys) - 1, "name": name}
 
 @router.delete("/auth/api-keys/{key_id}")
 async def delete_api_key_route(key_id: int, current_user: dict = Depends(_verify_key)):
