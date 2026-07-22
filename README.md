@@ -28,8 +28,28 @@
 What you see, in order:
 
 1. **Aelvoxim** — the project
-2. **Self-Learning AI Agent with Persistent Memory & Desktop Control** — what it does
-3. **Four-layer architecture** — how it's built
+2. **Biomimetic Autonomous Cognitive AI Brain** — what it is
+3. **A self-learning, hallucination-resistant AI that never forgets and can control your desktop** — what it does
+4. **Four-layer architecture** — how it's built
+
+---
+
+## How Aelvoxim Compares
+
+A realistic look at where Aelvoxim stands against general-purpose AI assistants like ChatGPT — written from current capability, not roadmap.
+
+| Dimension | Aelvoxim | ChatGPT | Verdict |
+| :--- | :--- | :--- | :--- |
+| **Cross-session memory** | Persistent knowledge graph (1978 entities, 1100 relations in PG). Conversation history survives across sessions | Session-only. No memory between new conversations | **Aelvoxim wins** — this is the core differentiator |
+| **Active learning** | Learner module can initiate study plans and background knowledge extraction. Effect depends on search API quality and LLM config | None. Knowledge updates only come with model upgrades | **Aelvoxim wins** — does learn autonomously, though results vary |
+| **Hallucination resistance** | Neither has reliable mechanisms. Aelvoxim's `verify_response_facts()` is a keyword check, not real verification | Neither does | **Tie** — don't trust either one blindly |
+| **Desktop control** | Yes, with Windows-MCP installed (`Windows-MCP/install_and_run.bat`). Can control mouse, keyboard, files, browser | Not possible | **Aelvoxim wins** — requires extra setup but works once installed |
+| **Security** | Partially implemented. SentriKit integration exists but is unavailable at runtime. Tool permission tiers are coded but not fully enforced | Mature content filtering | **ChatGPT more reliable** — Aelvoxim's security is WIP |
+| **Knowledge breadth** | Narrow. Grows through conversations and background learning | Vast — trained on massive corpora | **ChatGPT dominates** |
+| **Conversation fluency** | Depends on backend LLM (currently DeepSeek). Functional but not exceptional | Excellent — empathy, creativity, multi-turn | **ChatGPT dominates** |
+| **Setup complexity** | Requires Python 3.11+, optional PostgreSQL, LLM API key config | Zero — open browser and use | **ChatGPT dominates** |
+
+**Bottom line:** They are complementary, not competitors. Aelvoxim is for persistent, self-hosted cognitive tasks with memory and desktop control. ChatGPT is for broad knowledge, creative conversation, and instant access. Aelvoxim's biggest weakness today is not missing features — it's code that's written but not yet fully working (SentriKit offline, hallucination check is a stub, learner depends on external services).
 
 ---
 
