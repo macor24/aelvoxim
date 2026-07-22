@@ -207,7 +207,15 @@ def scan_directory(
     if not use_pg():
         return {"error": "PostgreSQL not available", "scanned": 0, "new": 0, "skipped": 0, "errors": 0}
 
-    root = Path(directory).expanduser().resolve()
+    raw = Path(directory).expanduser()
+    # Resolve + guard: only allow user-writable directories
+    try:
+        root = raw.resolve(strict=False)
+    except (RuntimeError, OSError):
+        return {"error": f"Invalid path: {directory}", "scanned": 0, "new": 0, "skipped": 0, "errors": 0}
+    _allowed_prefixes = ("/home/", "/tmp/", "/mnt/", "/opt/", "/var/aelvoxim/")
+    if not any(str(root).startswith(p) for p in _allowed_prefixes):
+        return {"error": f"Access denied: {directory}", "scanned": 0, "new": 0, "skipped": 0, "errors": 0}
     if not root.is_dir():
         return {"error": f"Not a directory: {directory}", "scanned": 0, "new": 0, "skipped": 0, "errors": 0}
 

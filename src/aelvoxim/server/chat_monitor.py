@@ -430,9 +430,11 @@ def extract_feedback_signals(query: str, answer: str) -> dict:
             break
 
     # 2. Explicit correction extraction: "not A but B"
+    # Bound input length to prevent ReDoS
+    _safe_query = query[:2000]
     correction_match = re.search(
         r"(?i)不是\s*(.+?)\s*而是\s*(.+?)(?:\s*[。，]|$)",
-        query,
+        _safe_query,
     )
     if correction_match:
         _old = correction_match.group(1).strip()

@@ -223,6 +223,8 @@ def _check_content_sanity(topic: str, text: str) -> Optional[str]:
     """
     import re
     
+    # Cap input length to prevent ReDoS on user-supplied text
+    text = text[:5000]
     numbers = re.findall(r'\d+\.?\d*', text)
     integers = [int(float(n)) for n in numbers if n.replace('.', '').isdigit() and float(n) < 1e12]
     if not integers:

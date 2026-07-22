@@ -257,21 +257,23 @@ async def llm_chat_stream(
 
     # Quick file read: detect "读/读取/打开" + file path → bypass LLM tool calling
     import re as _qf_re
+    # Cap input to prevent ReDoS
+    _qf_safe = user_msg[:3000]
     _qf_match = _qf_re.search(
         r'(?:读\s*取|读\s*一\s*下|读\s*文\s*件|打\s*开\s*文\s*件|查\s*看\s*文\s*件|打\s*开)\s*([A-Za-z]:[\\/][^\s)]{1,260})',
-        user_msg,
+        _qf_safe,
     )
     if not _qf_match:
         # Also match "文件 C:\xxx" or "内容 C:\xxx"
         _qf_match = _qf_re.search(
             r'(?:文\s*件|内\s*容|看\s*看)\s*[:：]?\s*([A-Za-z]:[\\/][^\s)]{1,260})',
-            user_msg,
+            _qf_safe,
         )
     if not _qf_match:
         # Bare path with read intent: match any "C:\xxx" after 读/看/打开
         _qf_match = _qf_re.search(
             r'(?:读|看|打\s*开|查\s*看).{0,10}?([A-Za-z]:[\\/][^\s)]{1,260})',
-            user_msg,
+            _qf_safe,
         )
     if _qf_match:
         import os as _qf_os
@@ -283,16 +285,30 @@ async def llm_chat_stream(
         else:
             _qf_path = _qf_path_raw
         # Block path traversal characters
-        if ".." in _qf_path:
+        if not _qf_match:
             _qf_path = ""
-        if _qf_path and _qf_os.path.exists(_qf_path):
+
+        # --- resolve path and guard ---
+        if _qf_path and ".." not in _qf_path:
+            try:
+                _qf_resolved = _qf_os.path.realpath(_qf_path)
+                # Guard: must resolve within allowed dirs
+                _qf_allowed = ("/mnt/", "/home/", "/tmp/", "/mnt/c/", "/mnt/d/")
+                if not any(_qf_resolved.startswith(p) for p in _qf_allowed):
+                    _qf_resolved = ""
+            except Exception:
+                _qf_resolved = ""
+        else:
+            _qf_resolved = ""
+
+        if _qf_resolved and _qf_os.path.exists(_qf_resolved):
             try:
                 # Security: block system paths (same as resolve_path in tool_use.py)
                 _qf_blocked = ("/etc", "/usr", "/boot", "/dev", "/proc", "/sys", "/var", "/bin", "/sbin")
-                if any(_qf_path.startswith(p) for p in _qf_blocked):
+                if any(_qf_resolved.startswith(p) for p in _qf_blocked):
                     extra_context += f"\n[User requested to read file: {_qf_path_raw} — access denied (system path)]\n"
                 else:
-                    with open(_qf_path, "r", encoding="utf-8", errors="replace") as _qf_f:
+                    with open(_qf_resolved, "r", encoding="utf-8", errors="replace") as _qf_f:
                         _qf_content = _qf_f.read(5000)
                     _qf_lines = _qf_content.count("\n") + 1
                     extra_context += (
