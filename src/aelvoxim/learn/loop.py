@@ -447,21 +447,35 @@ class Learner:
                                save_config_fn=self._dir_mgr.save, log_func=self._log)
                 self._dir_mgr.save()
             return True
-        # ── 饱和度评估（v2）：加权验证质量 + 任务完成度 ──
+        # ── 饱和度评估（v3）：加权验证质量 + 任务完成率 + 难度因子 ──
         conf_avg = sum(e.get("confidence", 0.5) for e in entries) / max(len(entries), 1)
         entry_ratio = min(direction.entries_created / 5.0, 1.0)
-        # 验证通过率：从 completed_tasks + KnowledgeBase 计算
+        # 验证通过率
         done_tasks = json.loads(direction.completed_tasks or "[]")
         total_tasks = len(done_tasks) + (len(json.loads(direction.task_queue or "[]")) if direction.task_queue and direction.task_queue != "[]" else 0)
-        # 高置信度条目比例作为验证通过率近似值
         high_conf = sum(1 for e in entries if e.get("confidence", 0) >= 0.6)
         verify_pass_rate = high_conf / max(len(entries), 1)
-        # 任务完成率
         task_complete_rate = len(done_tasks) / max(total_tasks, 1) if total_tasks > 0 else 0
-        # 新公式：饱和度 = 验证通过率 * 0.6 + 任务完成率 * 0.4
+        # 难度因子：总任务数越大、已消耗 cycle 越多 → 难度越高
+        # 饱和度完成门槛应该随难度降低
+        difficulty = min(1.0, total_tasks / 10.0) if total_tasks > 0 else 0.3
+        # w_quality > w_progress > w_difficulty
         direction.saturation = round(
-            min(1.0, verify_pass_rate * 0.6 + task_complete_rate * 0.4), 2
+            min(1.0, verify_pass_rate * 0.50 + task_complete_rate * 0.30 + (1.0 - difficulty) * 0.20), 2
         )
+        # ── Progress vs expected check ──
+        expected_min = task_complete_rate * 0.5  # expect at least 50% completion rate by now
+        if direction.cycles_completed > 5 and verify_pass_rate < expected_min:
+            self._log(f"  ⚠️ [{topic}] Progress check: verify_rate={verify_pass_rate:.2f} < expected={expected_min:.2f} "
+                      f"after {direction.cycles_completed} cycles — flagging for review")
+            direction.status = "paused"
+            self._dir_mgr.save()
+            return True
+        if direction.cycles_completed > 10 and direction.saturation < 0.3:
+            self._log(f"  ⚠️ [{topic}] Progress check: saturation={direction.saturation:.2f} after "
+                      f"{direction.cycles_completed} cycles — too slow, marking complete")
+            direction.status = "completed"
+            self._dir_mgr.save()
         self._log(f"  📊 [{topic}] saturation={direction.saturation:.2f} "
                   f"(verify_rate={verify_pass_rate:.2f}*0.6 + task_rate={task_complete_rate:.2f}*0.4, "
                   f"conf_avg={conf_avg:.2f}, entries={direction.entries_created}/5)")
