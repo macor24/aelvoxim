@@ -114,6 +114,46 @@ Control your Windows desktop through the AI — mouse, keyboard, file system, br
 
 ---
 
+## Security
+
+See [SECURITY.md](SECURITY.md) for the full security policy.
+
+**Quick security checklist for users:**
+
+| Concern | Status |
+|---------|--------|
+| Prompt injection guard | ✅ Built-in, enabled via `AELVOXIM_CONTENT_FILTER=1` |
+| API Key authentication | ✅ Required for all endpoints |
+| Rate limiting | ✅ Built into MetaCogMonitor (L5) |
+| Data encryption at rest | ⚠️ JSON file storage — encrypt at filesystem level |
+| PostgreSQL connection | ✅ Uses password auth, localhost-only by default |
+
+## CI & Code Quality
+
+| Check | Service | When |
+|-------|---------|------|
+| Lint (Ruff) | GitHub Actions | Every push/PR |
+| Tests (3 Python versions) | GitHub Actions | Every push/PR |
+| Security scan | GitHub Actions + CodeQL | Every push/PR + weekly |
+| Dependency updates | Dependabot | Weekly (security only) |
+
+All CI workflows are in [`.github/workflows/`](.github/workflows/).  
+PR template is at [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md).
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+
+**Quick rules:**
+- One feature per PR
+- All code, comments, and commit messages in **English only**
+- Stdlib-first — minimize external dependencies
+- Type hints required for public APIs
+- Run `pytest tests/ -v` before submitting
+- Update README if API or config changes
+
+---
+
 ### Port Map
 
 | Port | Service | Description |
