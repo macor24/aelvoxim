@@ -282,6 +282,7 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 - **Version:** v1.2.0
 - **GitHub:** https://github.com/macor24/aelvoxim
+- **Pages:** https://macor24.github.io/aelvoxim
 - **Issues:** https://github.com/macor24/aelvoxim/issues
 - **Docs:** https://github.com/macor24/aelvoxim/tree/master/docs
 
