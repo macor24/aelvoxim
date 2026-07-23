@@ -51,7 +51,21 @@ const config: Config = {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    function addGradientUtilities({ addUtilities }: { addUtilities: (utils: Record<string, Record<string, string>>) => void }) {
+      addUtilities({
+        '.bg-gradient-brand': {
+          background: 'linear-gradient(135deg, #6172f3 0%, #444ce7 50%, #3538cd 100%)',
+        },
+        '.text-gradient': {
+          background: 'linear-gradient(135deg, #6172f3, #444ce7)',
+          '-webkit-background-clip': 'text',
+          '-webkit-text-fill-color': 'transparent',
+          'background-clip': 'text',
+        },
+      });
+    },
+  ],
 }
 
 export default config

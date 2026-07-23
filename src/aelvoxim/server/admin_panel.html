@@ -7,25 +7,25 @@
 <title>Aelvoxim 管理后台</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
-  body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#f0f2f5;color:#1a1a2e;min-height:100vh}
-  .header{background:#1a1a2e;color:#fff;padding:12px 24px;display:flex;align-items:center;gap:16px}
+  body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg-base);color:var(--text-primary);min-height:100vh}
+  .header{background:var(--brand-950);color:#fff;padding:12px 24px;display:flex;align-items:center;gap:16px}
   .header h1{font-size:16px;font-weight:600}
-  .header .sub{font-size:12px;color:#8892b0}
+  .header .sub{font-size:12px;color:var(--text-muted)}
   .header .sp{flex:1}
-  .header .user-info{font-size:12px;color:#8892b0}
-  .header .logout-btn{background:none;border:1px solid #8892b0;color:#8892b0;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:11px}
+  .header .user-info{font-size:12px;color:var(--text-muted)}
+  .header .logout-btn{background:none;border:1px solid #8892b0;color:var(--text-muted);padding:4px 12px;border-radius:4px;cursor:pointer;font-size:11px}
   .header .logout-btn:hover{color:#fff;border-color:#fff}
-  .nav-tabs{display:flex;gap:0;background:#fff;border-bottom:1px solid #e5e7eb;padding:0 24px}
-  .nav-tabs button{padding:10px 18px;border:none;background:none;cursor:pointer;font-size:13px;color:#6b7280;border-bottom:2px solid transparent;transition:all .15s}
-  .nav-tabs button:hover{color:#1a1a2e;background:#f9fafb}
-  .nav-tabs button.active{color:#3b82f6;border-bottom-color:#3b82f6;font-weight:600}
+  .nav-tabs{display:flex;gap:0;background:var(--bg-elevated);border-bottom:1px solid var(--border);padding:0 24px}
+  .nav-tabs button{padding:10px 18px;border:none;background:none;cursor:pointer;font-size:13px;color:var(--text-secondary);border-bottom:2px solid transparent;transition:all .15s}
+  .nav-tabs button:hover{color:var(--text-primary);background:var(--bg-surface)}
+  .nav-tabs button.active{color:var(--brand-500);border-bottom-color:var(--brand-500);font-weight:600}
   .tab-content{display:none}
   .tab-content.active{display:block}
   .container{max-width:1200px;margin:0 auto;padding:20px 24px}
   .stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px}
-  .stat-card{background:#fff;border-radius:10px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08)}
-  .stat-card .num{font-size:28px;font-weight:700;color:#1a1a2e}
-  .stat-card .label{font-size:12px;color:#6b7280;margin-top:2px}
+  .stat-card{background:var(--bg-elevated);border-radius:10px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08)}
+  .stat-card .num{font-size:28px;font-weight:700;color:var(--text-primary)}
+  .stat-card .label{font-size:12px;color:var(--text-secondary);margin-top:2px}
   .stat-card.blue{border-left:3px solid #3b82f6}
   .stat-card.green{border-left:3px solid #10b981}
   .stat-card.orange{border-left:3px solid #f59e0b}
@@ -33,49 +33,49 @@
   .stat-card.red{border-left:3px solid #ef4444}
   .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
   .toolbar input{padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;flex:1;min-width:200px;outline:none}
-  .toolbar input:focus{border-color:#3b82f6}
-  .toolbar select{padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;outline:none;background:#fff}
-  .toolbar .count{font-size:12px;color:#6b7280;white-space:nowrap}
-  .table-wrap{background:#fff;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,0.08);overflow-x:auto}
+  .toolbar input:focus{border-color:var(--brand-500)}
+  .toolbar select{padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;outline:none;background:var(--bg-elevated)}
+  .toolbar .count{font-size:12px;color:var(--text-secondary);white-space:nowrap}
+  .table-wrap{background:var(--bg-elevated);border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,0.08);overflow-x:auto}
   table{width:100%;border-collapse:collapse;font-size:13px}
-  th{text-align:left;padding:10px 14px;background:#f8fafc;color:#6b7280;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid #e5e7eb;white-space:nowrap}
-  td{padding:10px 14px;border-bottom:1px solid #f3f4f6;color:#374151}
-  tr:hover td{background:#f9fafb}
+  th{text-align:left;padding:10px 14px;background:var(--bg-surface);color:var(--text-secondary);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid var(--border);white-space:nowrap}
+  td{padding:10px 14px;border-bottom:1px solid #f3f4f6;color:var(--text-primary)}
+  tr:hover td{background:var(--bg-surface)}
   tr.clickable{cursor:pointer}
   .plan-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500}
   .plan-badge.enterprise{background:#ede9fe;color:#6d28d9}
   .plan-badge.pro{background:#fef3c7;color:#b45309}
   .plan-badge.growth{background:#dbeafe;color:#1d4ed8}
   .plan-badge.starter{background:#d1fae5;color:#047857}
-  .plan-badge.community{background:#f3f4f6;color:#6b7280}
-  .plan-badge.free{background:#f3f4f6;color:#9ca3af}
+  .plan-badge.community{background:var(--bg-surface);color:var(--text-secondary)}
+  .plan-badge.free{background:var(--bg-surface);color:var(--text-muted)}
   .plan-badge.basic{background:#fce7f3;color:#be185d}
   .plan-badge.disabled{background:#fee2e2;color:#dc2626}
   .role-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500}
   .role-badge.admin{background:#fee2e2;color:#dc2626}
   .role-badge.user{background:#e0e7ff;color:#4338ca}
-  .action-btn{background:none;border:none;color:#6b7280;cursor:pointer;font-size:12px;padding:3px 8px;border-radius:4px}
-  .action-btn:hover{background:#f3f4f6;color:#1a1a2e}
-  .action-btn.edit:hover{color:#3b82f6}
+  .action-btn{background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:12px;padding:3px 8px;border-radius:4px}
+  .action-btn:hover{background:var(--bg-surface);color:var(--text-primary)}
+  .action-btn.edit:hover{color:var(--brand-500)}
   .action-btn.delete{color:#dc2626;margin-left:4px}
   .action-btn.delete:hover{color:#b91c1c;background:#fef2f2}
-  .pagination{display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;font-size:12px;color:#6b7280}
-  .pagination button{padding:4px 10px;border:1px solid #d1d5db;border-radius:4px;background:#fff;cursor:pointer;font-size:11px}
-  .pagination button:hover{background:#f3f4f6}
+  .pagination{display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;font-size:12px;color:var(--text-secondary)}
+  .pagination button{padding:4px 10px;border:1px solid #d1d5db;border-radius:4px;background:var(--bg-elevated);cursor:pointer;font-size:11px}
+  .pagination button:hover{background:var(--bg-surface)}
   .pagination button:disabled{opacity:0.4;cursor:default}
   .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center}
   .modal-overlay.active{display:flex}
-  .modal{background:#fff;border-radius:12px;padding:24px;width:400px;max-width:90vw;box-shadow:0 4px 24px rgba(0,0,0,0.15)}
+  .modal{background:var(--bg-elevated);border-radius:12px;padding:24px;width:400px;max-width:90vw;box-shadow:0 4px 24px rgba(0,0,0,0.15)}
   .modal h2{font-size:15px;margin-bottom:14px}
   .modal .fg{margin-bottom:12px}
-  .modal .fg label{display:block;font-size:12px;color:#6b7280;margin-bottom:3px}
+  .modal .fg label{display:block;font-size:12px;color:var(--text-secondary);margin-bottom:3px}
   .modal .fg input,.modal .fg select{width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;outline:none;box-sizing:border-box}
-  .modal .fg select:focus,.modal .fg input:focus{border-color:#3b82f6}
+  .modal .fg select:focus,.modal .fg input:focus{border-color:var(--brand-500)}
   .modal .btn-row{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
   .modal .btn-row button{padding:7px 16px;border-radius:6px;border:none;cursor:pointer;font-size:12px}
-  .modal .btn-row .primary{background:#3b82f6;color:#fff}
-  .modal .btn-row .primary:hover{background:#2563eb}
-  .modal .btn-row .secondary{background:#f3f4f6;color:#374151}
+  .modal .btn-row .primary{background:var(--brand-500);color:#fff}
+  .modal .btn-row .primary:hover{background:var(--brand-600)}
+  .modal .btn-row .secondary{background:var(--bg-surface);color:var(--text-primary)}
   .modal .btn-row .secondary:hover{background:#e5e7eb}
   .modal .btn-row .danger{background:#ef4444;color:#fff}
   .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);padding:10px 20px;border-radius:8px;font-size:13px;z-index:9999;display:none;box-shadow:0 2px 8px rgba(0,0,0,0.15)}
@@ -83,41 +83,41 @@
   .toast.error{display:block;background:#fee2e2;color:#dc2626;border:1px solid #fecaca}
   .toast.info{display:block;background:#dbeafe;color:#1d4ed8;border:1px solid #bfdbfe}
   .login-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);z-index:2000;display:flex;align-items:center;justify-content:center}
-  .login-box{background:#fff;border-radius:12px;padding:28px;width:340px;box-shadow:0 4px 24px rgba(0,0,0,0.15)}
+  .login-box{background:var(--bg-elevated);border-radius:12px;padding:28px;width:340px;box-shadow:0 4px 24px rgba(0,0,0,0.15)}
   .login-box h2{font-size:16px;margin-bottom:16px;text-align:center}
   .login-box .fg{margin-bottom:12px}
-  .login-box .fg label{display:block;font-size:12px;color:#6b7280;margin-bottom:3px}
+  .login-box .fg label{display:block;font-size:12px;color:var(--text-secondary);margin-bottom:3px}
   .login-box .fg input{width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;outline:none;box-sizing:border-box}
-  .login-box .fg input:focus{border-color:#3b82f6}
+  .login-box .fg input:focus{border-color:var(--brand-500)}
   .login-box .btn-row{display:flex;gap:8px;margin-top:14px}
   .login-box .btn-row button{flex:1;padding:8px;border-radius:6px;border:none;cursor:pointer;font-size:13px}
-  .login-box .btn-row .primary{background:#3b82f6;color:#fff}
-  .login-box .btn-row .primary:hover{background:#2563eb}
+  .login-box .btn-row .primary{background:var(--brand-500);color:#fff}
+  .login-box .btn-row .primary:hover{background:var(--brand-600)}
   .login-box .err{font-size:12px;color:#dc2626;min-height:20px;text-align:center}
   .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;font-size:13px}
-  .detail-grid .item{padding:8px 12px;background:#f8fafc;border-radius:6px}
-  .detail-grid .item .dl{font-size:11px;color:#6b7280;margin-bottom:2px}
-  .detail-grid .item .dd{font-size:13px;color:#1a1a2e;word-break:break-all}
-  .log-entry{padding:6px 10px;border-bottom:1px solid #f3f4f6;font-size:12px;font-family:monospace;color:#374151;line-height:1.5}
-  .log-entry .ts{color:#6b7280;margin-right:8px}
+  .detail-grid .item{padding:8px 12px;background:var(--bg-surface);border-radius:6px}
+  .detail-grid .item .dl{font-size:11px;color:var(--text-secondary);margin-bottom:2px}
+  .detail-grid .item .dd{font-size:13px;color:var(--text-primary);word-break:break-all}
+  .log-entry{padding:6px 10px;border-bottom:1px solid #f3f4f6;font-size:12px;font-family:monospace;color:var(--text-primary);line-height:1.5}
+  .log-entry .ts{color:var(--text-secondary);margin-right:8px}
   .log-entry .lvl{display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;margin-right:6px;font-weight:600}
   .lvl.ERROR{background:#fee2e2;color:#dc2626}
   .lvl.WARN{background:#fef3c7;color:#b45309}
   .lvl.INFO{background:#dbeafe;color:#1d4ed8}
   .health-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
-  .health-card{background:#fff;border-radius:10px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);display:flex;align-items:center;gap:14px}
+  .health-card{background:var(--bg-elevated);border-radius:10px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);display:flex;align-items:center;gap:14px}
   .health-card .dot{width:12px;height:12px;border-radius:50%;flex-shrink:0}
   .health-card .dot.green{background:#10b981}
   .health-card .dot.red{background:#ef4444}
   .health-card .dot.yellow{background:#f59e0b}
   .health-card .dot.gray{background:#d1d5db}
-  .health-card .info .name{font-size:14px;font-weight:600;color:#1a1a2e}
-  .health-card .info .desc{font-size:11px;color:#6b7280;margin-top:2px}
-  .log-box{background:#1a1a2e;color:#e5e7eb;border-radius:8px;padding:12px;font-family:monospace;font-size:11px;line-height:1.6;max-height:400px;overflow-y:auto;white-space:pre-wrap}
-  .llm-card{background:#fff;border-radius:10px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);margin-bottom:12px}
-  .llm-card h3{font-size:13px;font-weight:600;margin-bottom:8px;color:#1a1a2e}
-  .llm-card .row{display:flex;gap:16px;font-size:12px;color:#374151;margin-bottom:4px}
-  .llm-card .row .key{color:#6b7280;min-width:80px}
+  .health-card .info .name{font-size:14px;font-weight:600;color:var(--text-primary)}
+  .health-card .info .desc{font-size:11px;color:var(--text-secondary);margin-top:2px}
+  .log-box{background:var(--brand-950);color:#e5e7eb;border-radius:8px;padding:12px;font-family:monospace;font-size:11px;line-height:1.6;max-height:400px;overflow-y:auto;white-space:pre-wrap}
+  .llm-card{background:var(--bg-elevated);border-radius:10px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);margin-bottom:12px}
+  .llm-card h3{font-size:13px;font-weight:600;margin-bottom:8px;color:var(--text-primary)}
+  .llm-card .row{display:flex;gap:16px;font-size:12px;color:var(--text-primary);margin-bottom:4px}
+  .llm-card .row .key{color:var(--text-secondary);min-width:80px}
 </style>
 </head>
 <body>
@@ -141,7 +141,8 @@
   <span class="sub">管理后台</span>
   <span class="sp"></span>
   <span class="user-info" id="headerUser"></span>
-  <button class="logout-btn" id="logoutBtn" onclick="doLogout()" style="display:none">退出</button>
+  <button class="theme-btn" id="themeToggleBtn" onclick="toggleTheme()" title="切换主题">☀️ </button>
+    <button class="logout-btn" id="logoutBtn" onclick="doLogout()" style="display:none">退出</button>
 </div>
 
 <div class="nav-tabs">
@@ -200,7 +201,7 @@
           </tr>
         </thead>
         <tbody id="userTableBody">
-          <tr><td colspan="7" style="text-align:center;color:#9ca3af;padding:30px">加载中...</td></tr>
+          <tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:30px">加载中...</td></tr>
         </tbody>
       </table>
       <div class="pagination" id="pagination">
@@ -216,8 +217,8 @@
 <div id="tab-logs" class="tab-content">
   <div class="container">
     <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
-      <button class="action-btn" onclick="loadLogs()" style="background:#3b82f6;color:#fff;padding:6px 14px;border-radius:6px">🔄 刷新</button>
-      <span style="font-size:12px;color:#6b7280">最近 100 条日志</span>
+      <button class="action-btn" onclick="loadLogs()" style="background:var(--brand-500);color:#fff;padding:6px 14px;border-radius:6px">🔄 刷新</button>
+      <span style="font-size:12px;color:var(--text-secondary)">最近 100 条日志</span>
     </div>
     <div id="logContainer" class="log-box">加载中...</div>
   </div>
@@ -227,10 +228,10 @@
 <div id="tab-llm" class="tab-content">
   <div class="container">
     <div id="llmContainer">
-      <p style="color:#6b7280;font-size:13px">加载中...</p>
+      <p style="color:var(--text-secondary);font-size:13px">加载中...</p>
     </div>
     <div style="margin-top:12px">
-      <button class="action-btn" onclick="showLlmEdit()" style="background:#3b82f6;color:#fff;padding:6px 14px;border-radius:6px">✏️ 编辑 LLM 配置</button>
+      <button class="action-btn" onclick="showLlmEdit()" style="background:var(--brand-500);color:#fff;padding:6px 14px;border-radius:6px">✏️ 编辑 LLM 配置</button>
       <button class="action-btn" onclick="loadLlmStatus()" style="background:#6b7280;color:#fff;padding:6px 14px;border-radius:6px;margin-left:6px">🔄 刷新</button>
     </div>
   </div>
@@ -239,16 +240,16 @@
 <!-- ⚙️ 配置 -->
 <div id="tab-sentrikit" class="tab-content">
   <div class="container">
-    <div style="margin-bottom:16px;font-size:13px;color:#6b7280">管理外部服务连接配置。</div>
+    <div style="margin-bottom:16px;font-size:13px;color:var(--text-secondary)">管理外部服务连接配置。</div>
 
     <!-- LLM 模型区块 -->
     <div class="llm-card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
         <h3 style="font-size:14px;font-weight:600">🤖 LLM 模型</h3>
-        <button class="action-btn" onclick="showLlmEdit()" style="background:#3b82f6;color:#fff;padding:4px 12px;border-radius:6px;font-size:12px">➕ 新增</button>
+        <button class="action-btn" onclick="showLlmEdit()" style="background:var(--brand-500);color:#fff;padding:4px 12px;border-radius:6px;font-size:12px">➕ 新增</button>
       </div>
       <div id="llmConfigList">
-        <p style="color:#6b7280;font-size:12px">加载中...</p>
+        <p style="color:var(--text-secondary);font-size:12px">加载中...</p>
       </div>
     </div>
 
@@ -259,7 +260,7 @@
       <div class="fg"><label>服务器地址</label><input type="text" id="skHost" value="https://127.0.0.1:8899"></div>
       <div class="fg"><label>API Key</label><input type="password" id="skKey" placeholder="输入 SentriKit API Key" autocomplete="off"></div>
       <div class="btn-row" style="margin-top:12px">
-        <button class="action-btn" style="background:#3b82f6;color:#fff;padding:6px 14px;border-radius:6px">💾 保存 SentriKit</button>
+        <button class="action-btn" style="background:var(--brand-500);color:#fff;padding:6px 14px;border-radius:6px">💾 保存 SentriKit</button>
         <button class="action-btn" onclick="testSentrikit()" style="background:#10b981;color:#fff;padding:6px 14px;border-radius:6px;margin-left:6px">🔍 测试连接</button>
       </div>
       <div id="skResult" style="font-size:12px;margin-top:8px;min-height:20px"></div>
@@ -272,11 +273,11 @@
 <div id="tab-plans" class="tab-content">
   <div class="container">
     <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
-      <button class="action-btn" onclick="loadPlans()" style="background:#3b82f6;color:#fff;padding:6px 14px;border-radius:6px">🔄 刷新</button>
-      <span style="font-size:12px;color:#6b7280">当前学习计划和进度</span>
+      <button class="action-btn" onclick="loadPlans()" style="background:var(--brand-500);color:#fff;padding:6px 14px;border-radius:6px">🔄 刷新</button>
+      <span style="font-size:12px;color:var(--text-secondary)">当前学习计划和进度</span>
     </div>
     <div id="plansContainer">
-      <p style="color:#6b7280;font-size:13px">加载中...</p>
+      <p style="color:var(--text-secondary);font-size:13px">加载中...</p>
     </div>
   </div>
 </div>
@@ -285,7 +286,7 @@
 <div id="tab-dashboard" class="tab-content">
   <div class="container">
     <div id="dashboardContainer">
-      <p style="color:#6b7280;font-size:13px">加载中...</p>
+      <p style="color:var(--text-secondary);font-size:13px">加载中...</p>
     </div>
   </div>
 </div>
@@ -294,11 +295,11 @@
 <div id="tab-skill" class="tab-content">
   <div class="container">
     <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
-      <h2 style="font-size:14px;font-weight:600;color:#1a1a2e">🧠 技能成长时间线</h2>
-      <span style="font-size:12px;color:#6b7280">按月份展示已完成的学习方向和知识积累</span>
+      <h2 style="font-size:14px;font-weight:600;color:var(--text-primary)">🧠 技能成长时间线</h2>
+      <span style="font-size:12px;color:var(--text-secondary)">按月份展示已完成的学习方向和知识积累</span>
     </div>
     <div id="skillTimeline" style="margin-top:16px;">
-      <p style="color:#6b7280;font-size:13px">加载中...</p>
+      <p style="color:var(--text-secondary);font-size:13px">加载中...</p>
     </div>
   </div>
 </div>
@@ -307,41 +308,41 @@
 <div id="tab-learn" class="tab-content">
   <div class="container" style="max-width:600px">
     <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px">
-      <h2 style="font-size:14px;font-weight:600;color:#1a1a2e">📚 知识库目录学习</h2>
-      <span style="font-size:12px;color:#6b7280">自动扫描目录文件，提取知识存入知识库</span>
+      <h2 style="font-size:14px;font-weight:600;color:var(--text-primary)">📚 知识库目录学习</h2>
+      <span style="font-size:12px;color:var(--text-secondary)">自动扫描目录文件，提取知识存入知识库</span>
     </div>
 
     <div class="card" style="padding:16px;margin-bottom:12px">
-      <div style="font-size:13px;font-weight:500;color:#1a1a2e;margin-bottom:10px">扫描目录配置</div>
+      <div style="font-size:13px;font-weight:500;color:var(--text-primary);margin-bottom:10px">扫描目录配置</div>
       <div class="fg" style="margin-bottom:8px">
-        <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:4px">目录路径</label>
+        <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:4px">目录路径</label>
         <input type="text" id="learnDir" value="" placeholder="例: /mnt/c/知识库" style="width:100%;padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
       </div>
       <div style="display:flex;gap:8px;margin-bottom:8px">
-        <label style="font-size:12px;color:#6b7280;display:flex;align-items:center;gap:4px">
+        <label style="font-size:12px;color:var(--text-secondary);display:flex;align-items:center;gap:4px">
           <input type="checkbox" id="learnRecursive" checked> 递归子目录
         </label>
       </div>
       <div class="fg" style="margin-bottom:8px">
-        <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:4px">扫描间隔（分钟，0=仅手动）</label>
+        <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:4px">扫描间隔（分钟，0=仅手动）</label>
         <input type="number" id="learnInterval" value="0" min="0" style="width:100px;padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
       </div>
       <div style="display:flex;gap:6px;margin-top:10px">
-        <button class="action-btn" onclick="saveLearnConfig()" style="background:#3b82f6;color:#fff;padding:6px 14px;border-radius:6px">保存配置</button>
+        <button class="action-btn" onclick="saveLearnConfig()" style="background:var(--brand-500);color:#fff;padding:6px 14px;border-radius:6px">保存配置</button>
         <button class="action-btn" onclick="scanNow()" style="background:#10b981;color:#fff;padding:6px 14px;border-radius:6px">立即扫描</button>
         <button class="action-btn" onclick="loadLearnStatus()" style="background:#6b7280;color:#fff;padding:6px 14px;border-radius:6px">刷新状态</button>
       </div>
-      <div id="learnMsg" style="margin-top:8px;font-size:12px;color:#6b7280"></div>
+      <div id="learnMsg" style="margin-top:8px;font-size:12px;color:var(--text-secondary)"></div>
     </div>
 
     <div class="card" style="padding:16px">
-      <div style="font-size:13px;font-weight:500;color:#1a1a2e;margin-bottom:10px">已学习文件统计</div>
+      <div style="font-size:13px;font-weight:500;color:var(--text-primary);margin-bottom:10px">已学习文件统计</div>
       <div id="learnStats" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <div class="stat-card blue"><div class="num" id="statTotalFiles">-</div><div class="label">总文件</div></div>
         <div class="stat-card green"><div class="num" id="statUniqueFiles">-</div><div class="label">独立指纹</div></div>
-        <div class="stat-card" style="grid-column:1/3;background:#f8fafc;padding:10px;border-radius:8px">
-          <div style="font-size:12px;color:#6b7280;margin-bottom:6px">文件类型分布</div>
-          <div id="statByType" style="font-size:12px;color:#374151">加载中...</div>
+        <div class="stat-card" style="grid-column:1/3;background:var(--bg-surface);padding:10px;border-radius:8px">
+          <div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px">文件类型分布</div>
+          <div id="statByType" style="font-size:12px;color:var(--text-primary)">加载中...</div>
         </div>
       </div>
     </div>
@@ -352,7 +353,7 @@
 <div class="modal-overlay" id="editModal" onclick="if(event.target===this)closeEdit()">
   <div class="modal">
     <h2>编辑用户</h2>
-    <div class="fg"><label>邮箱</label><input type="text" id="editEmail" readonly style="background:#f3f4f6"></div>
+    <div class="fg"><label>邮箱</label><input type="text" id="editEmail" readonly style="background:var(--bg-surface)"></div>
     <div class="detail-grid" id="editDetailGrid"></div>
     <div class="fg"><label>套餐</label><select id="editPlan"><option value="community">Community</option><option value="pro">Pro</option><option value="enterprise">Enterprise</option><option value="starter">Starter</option><option value="growth">Growth</option></select></div>
     <div class="fg"><label>角色</label><select id="editRole"><option value="user">User</option><option value="admin">Admin</option></select></div>
@@ -429,7 +430,7 @@ function doLogout() {
   document.getElementById('loginOverlay').style.display = 'flex';
   document.getElementById('headerUser').textContent = '';
   document.getElementById('logoutBtn').style.display = 'none';
-  document.getElementById('userTableBody').innerHTML = '<tr><td colspan="7" style="text-align:center;color:#9ca3af;padding:30px">请先登录</td></tr>';
+  document.getElementById('userTableBody').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:30px">请先登录</td></tr>';
 }
 
 function switchTab(name) {
@@ -503,7 +504,7 @@ function renderTable() {
   var tbody = document.getElementById('userTableBody');
 
   if (pageUsers.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#9ca3af;padding:30px">无匹配用户</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:30px">无匹配用户</td></tr>';
   } else {
     var html = '';
     pageUsers.forEach(function(u){
@@ -515,8 +516,8 @@ function renderTable() {
         + '<td>' + esc(u.username || '-') + '</td>'
         + '<td><span class="plan-badge ' + planClass + '">' + esc(u.plan || 'community') + '</span></td>'
         + '<td><span class="role-badge ' + roleClass + '">' + esc(u.role || 'user') + '</span></td>'
-        + '<td style="font-size:11px;color:#6b7280">' + (usage.tasks||0) + ' 任务</td>'
-        + '<td style="font-size:11px;color:#6b7280">' + (u.created_at ? u.created_at.slice(0,10) : '-') + '</td>'
+        + '<td style="font-size:11px;color:var(--text-secondary)">' + (usage.tasks||0) + ' 任务</td>'
+        + '<td style="font-size:11px;color:var(--text-secondary)">' + (u.created_at ? u.created_at.slice(0,10) : '-') + '</td>'
         + '<td><button class="action-btn edit" onclick="event.stopPropagation();openEdit(\'' + esc(u.email) + '\')">编辑</button>'
         + '<button class="action-btn delete" onclick="event.stopPropagation();confirmDelete(\'' + esc(u.email) + '\')">删除</button></td>'
         + '</tr>';
@@ -636,7 +637,7 @@ function loadLogs() {
 
 // ── LLM 状态 ──
 function loadLlmStatus() {
-  document.getElementById('llmContainer').innerHTML = '<p style="color:#6b7280;font-size:13px">加载中...</p>';
+  document.getElementById('llmContainer').innerHTML = '<p style="color:var(--text-secondary);font-size:13px">加载中...</p>';
   fetch('/v1/llm/config', {headers: {'Authorization': 'Bearer ' + _apiKey}})
     .then(function(r){return r.json();})
     .then(function(d){
@@ -656,7 +657,7 @@ function loadLlmStatus() {
           + '<div class="row"><span class="key">API Key</span><span style="font-weight:' + (m.api_key?'500':'600') + ';color:' + (m.api_key?'#10b981':'#ef4444') + '">' + keyStatus + '</span></div>'
           + '</div>';
       }).join('');
-      if (!html) html = '<p style="color:#6b7280">无 LLM 配置</p>';
+      if (!html) html = '<p style="color:var(--text-secondary)">无 LLM 配置</p>';
       document.getElementById('llmContainer').innerHTML = html;
     }).catch(function(e){
       document.getElementById('llmContainer').innerHTML = '<p style="color:#dc2626">加载失败: ' + (e.message||'未知错误') + '</p>';
@@ -762,7 +763,7 @@ function loadSentrikit() {
       if (!Array.isArray(models)) models = [models];
       var list = document.getElementById('llmConfigList');
       if (models.length === 0) {
-        list.innerHTML = '<p style="color:#6b7280;font-size:12px">未配置 LLM 模型</p>';
+        list.innerHTML = '<p style="color:var(--text-secondary);font-size:12px">未配置 LLM 模型</p>';
         return;
       }
       var html = '';
@@ -772,7 +773,7 @@ function loadSentrikit() {
         var base = m.base_url || '-';
         var def = m.is_default ? ' ✅' : '';
         html += '<div style="padding:8px 0;border-bottom:1px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center">'
-          + '<div><strong>' + esc(name) + '</strong>' + def + '<br><span style="font-size:11px;color:#6b7280">' + esc(prov) + ' · ' + esc(base) + ' · ' + (m.api_key?'✅ Key 已配置':'❌ 无 Key') + '</span></div>'
+          + '<div><strong>' + esc(name) + '</strong>' + def + '<br><span style="font-size:11px;color:var(--text-secondary)">' + esc(prov) + ' · ' + esc(base) + ' · ' + (m.api_key?'✅ Key 已配置':'❌ 无 Key') + '</span></div>'
           + '<button class="action-btn edit" onclick="showLlmEditByIndex('+i+')" style="font-size:11px">编辑</button>'
           + '</div>';
       });
@@ -831,13 +832,13 @@ function testSentrikit() {
 
 // ── 📋 学习计划 ──
 function loadPlans() {
-  document.getElementById('plansContainer').innerHTML = '<p style="color:#6b7280;font-size:13px">加载中...</p>';
+  document.getElementById('plansContainer').innerHTML = '<p style="color:var(--text-secondary);font-size:13px">加载中...</p>';
   fetch('/v1/admin/overview', {headers: {'Authorization': 'Bearer ' + _apiKey}})
     .then(function(r){return r.json();})
     .then(function(d){
       var dirs = d.learner && d.learner.directions ? d.learner.directions : [];
       if (dirs.length === 0) {
-        document.getElementById('plansContainer').innerHTML = '<p style="color:#6b7280;font-size:13px">暂无学习方向。系统会自动创建。</p>';
+        document.getElementById('plansContainer').innerHTML = '<p style="color:var(--text-secondary);font-size:13px">暂无学习方向。系统会自动创建。</p>';
         return;
       }
       var html = '';
@@ -857,7 +858,7 @@ function loadPlans() {
           + '<div style="margin-bottom:8px;height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden">'
           + '<div style="height:100%;width:'+pct+'%;background:'+statusColor+';border-radius:3px;transition:width 0.3s"></div>'
           + '</div>'
-          + '<div style="font-size:11px;color:#6b7280;display:flex;gap:12px;margin-bottom:6px">'
+          + '<div style="font-size:11px;color:var(--text-secondary);display:flex;gap:12px;margin-bottom:6px">'
           + '<span>📝 条目 ' + (p.entries || 0) + '</span>'
           + '<span>🔄 饱和度 ' + (p.saturation || 0) + '</span>'
           + (p.completed_at ? '<span>✅ ' + p.completed_at.slice(0,10) + '</span>' : '')
@@ -872,13 +873,13 @@ function loadPlans() {
 
 // ── 📊 仪表盘 ──
 function loadDashboard() {
-  document.getElementById('dashboardContainer').innerHTML = '<p style="color:#6b7280;font-size:13px">加载中...</p>';
+  document.getElementById('dashboardContainer').innerHTML = '<p style="color:var(--text-secondary);font-size:13px">加载中...</p>';
   fetch('/v1/admin/data', {headers: {'Authorization': 'Bearer ' + _apiKey}})
     .then(function(r){return r.json();})
     .then(function(d){
       var html = '';
       // 服务状态卡片
-      html += '<div style="font-size:13px;font-weight:600;margin-bottom:8px;color:#1a1a2e">服务状态</div>';
+      html += '<div style="font-size:13px;font-weight:600;margin-bottom:8px;color:var(--text-primary)">服务状态</div>';
       html += '<div class="health-grid" style="margin-bottom:16px">';
       var services = d.services || {};
       var svcOrder = ['API 9701','ChatAEL 9702','9705 Gateway','8899 SentriKit','5432 PostgreSQL'];
@@ -895,12 +896,12 @@ function loadDashboard() {
         var running = learner.running ? '✅ 运行中' : '⏸️ 已停止';
         html += '<div class="llm-card"><h3>🧠 Learner 学习引擎 ' + running + '</h3>'
           + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px">'
-          + '<div style="background:#f8fafc;padding:10px;border-radius:8px;text-align:center"><div style="font-size:22px;font-weight:700;color:#3b82f6">'+learner.total+'</div><div style="font-size:11px;color:#6b7280">总方向</div></div>'
-          + '<div style="background:#f8fafc;padding:10px;border-radius:8px;text-align:center"><div style="font-size:22px;font-weight:700;color:#10b981">'+learner.active+'</div><div style="font-size:11px;color:#6b7280">活跃</div></div>'
-          + '<div style="background:#f8fafc;padding:10px;border-radius:8px;text-align:center"><div style="font-size:22px;font-weight:700;color:#6b7280">'+learner.completed+'</div><div style="font-size:11px;color:#6b7280">已完成</div></div>'
-          + '<div style="background:#f8fafc;padding:10px;border-radius:8px;text-align:center"><div style="font-size:22px;font-weight:700;color:#f59e0b">'+learner.total_entries+'</div><div style="font-size:11px;color:#6b7280">知识条目</div></div>'
-          + '<div style="background:#f8fafc;padding:10px;border-radius:8px;text-align:center"><div style="font-size:22px;font-weight:700;color:#8b5cf6">'+learner.total_cycles+'</div><div style="font-size:11px;color:#6b7280">学习轮次</div></div>'
-          + '<div style="background:#f8fafc;padding:10px;border-radius:8px;text-align:center"><div style="font-size:22px;font-weight:700;color:#ef4444">'+learner.paused+'</div><div style="font-size:11px;color:#6b7280">已暂停</div></div>'
+          + '<div style="background:var(--bg-surface);padding:10px;border-radius:8px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--brand-500)">'+learner.total+'</div><div style="font-size:11px;color:var(--text-secondary)">总方向</div></div>'
+          + '<div style="background:var(--bg-surface);padding:10px;border-radius:8px;text-align:center"><div style="font-size:22px;font-weight:700;color:#10b981">'+learner.active+'</div><div style="font-size:11px;color:var(--text-secondary)">活跃</div></div>'
+          + '<div style="background:var(--bg-surface);padding:10px;border-radius:8px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--text-secondary)">'+learner.completed+'</div><div style="font-size:11px;color:var(--text-secondary)">已完成</div></div>'
+          + '<div style="background:var(--bg-surface);padding:10px;border-radius:8px;text-align:center"><div style="font-size:22px;font-weight:700;color:#f59e0b">'+learner.total_entries+'</div><div style="font-size:11px;color:var(--text-secondary)">知识条目</div></div>'
+          + '<div style="background:var(--bg-surface);padding:10px;border-radius:8px;text-align:center"><div style="font-size:22px;font-weight:700;color:#8b5cf6">'+learner.total_cycles+'</div><div style="font-size:11px;color:var(--text-secondary)">学习轮次</div></div>'
+          + '<div style="background:var(--bg-surface);padding:10px;border-radius:8px;text-align:center"><div style="font-size:22px;font-weight:700;color:#ef4444">'+learner.paused+'</div><div style="font-size:11px;color:var(--text-secondary)">已暂停</div></div>'
           + '</div></div>';
       }
 
@@ -909,8 +910,8 @@ function loadDashboard() {
       if (plans.total !== undefined) {
         html += '<div class="llm-card"><h3>📋 学习计划</h3>'
           + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">'
-          + '<div style="background:#f8fafc;padding:10px;border-radius:8px;text-align:center"><div style="font-size:22px;font-weight:700;color:#3b82f6">'+plans.total+'</div><div style="font-size:11px;color:#6b7280">总计划</div></div>'
-          + '<div style="background:#f8fafc;padding:10px;border-radius:8px;text-align:center"><div style="font-size:22px;font-weight:700;color:#10b981">'+plans.active+'</div><div style="font-size:11px;color:#6b7280">进行中</div></div>'
+          + '<div style="background:var(--bg-surface);padding:10px;border-radius:8px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--brand-500)">'+plans.total+'</div><div style="font-size:11px;color:var(--text-secondary)">总计划</div></div>'
+          + '<div style="background:var(--bg-surface);padding:10px;border-radius:8px;text-align:center"><div style="font-size:22px;font-weight:700;color:#10b981">'+plans.active+'</div><div style="font-size:11px;color:var(--text-secondary)">进行中</div></div>'
           + '</div></div>';
       }
 
@@ -964,7 +965,7 @@ function esc(s) {
 function loadSkillTimeline() {
   var el = document.getElementById('skillTimeline');
   if (!el) return;
-  el.innerHTML = '<p style="color:#6b7280;font-size:13px">加载中...</p>';
+  el.innerHTML = '<p style="color:var(--text-secondary);font-size:13px">加载中...</p>';
   fetch('/v1/admin/skill-timeline?months=6', {headers: {'Authorization': 'Bearer ' + _apiKey}})
     .then(function(r){return r.json();})
     .then(function(d){
@@ -973,9 +974,9 @@ function loadSkillTimeline() {
       tl.forEach(function(m){
         if (!m.completed && !m.entries) return;
         html += '<div style="margin-bottom:20px;position:relative">'
-          + '<div style="position:absolute;left:-29px;top:4px;width:12px;height:12px;border-radius:50%;background:#3b82f6;border:2px solid #fff"></div>'
-          + '<div style="font-size:13px;font-weight:600;color:#1a1a2e;margin-bottom:4px">' + m.month + '</div>'
-          + '<div style="font-size:12px;color:#6b7280">完成 <strong>' + m.completed + '</strong> 个方向，新增 <strong>' + m.entries + '</strong> 条知识</div>';
+          + '<div style="position:absolute;left:-29px;top:4px;width:12px;height:12px;border-radius:50%;background:var(--brand-500);border:2px solid #fff"></div>'
+          + '<div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:4px">' + m.month + '</div>'
+          + '<div style="font-size:12px;color:var(--text-secondary)">完成 <strong>' + m.completed + '</strong> 个方向，新增 <strong>' + m.entries + '</strong> 条知识</div>';
         if (m.topics && m.topics.length > 0) {
           html += '<div style="margin-top:4px">' + m.topics.slice(0, 5).map(function(t){
             return '<span class="badge completed">' + esc(t.slice(0, 30)) + '</span> ';
@@ -984,7 +985,7 @@ function loadSkillTimeline() {
         html += '</div>';
       });
       html += '</div>';
-      html += '<div style="margin-top:12px;padding:12px;background:#f8fafc;border-radius:8px;font-size:12px;color:#6b7280">'
+      html += '<div style="margin-top:12px;padding:12px;background:var(--bg-surface);border-radius:8px;font-size:12px;color:var(--text-secondary)">'
         + '共完成 <strong>' + (d.total_completed || 0) + '</strong> 个方向，积累 <strong>' + (d.total_entries || 0) + '</strong> 条知识'
         + '</div>';
       el.innerHTML = html;

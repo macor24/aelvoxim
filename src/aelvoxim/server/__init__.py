@@ -206,9 +206,10 @@ def create_app() -> FastAPI:
     async def root():
         from fastapi.responses import HTMLResponse
         from pathlib import Path
+        from .aelvoxim_theme import inject_theme
         _html = Path(__file__).parent / "portal.html"
         if _html.exists():
-            return HTMLResponse(content=_html.read_text(encoding="utf-8"), status_code=200)
+            return HTMLResponse(content=inject_theme(_html.read_text(encoding="utf-8"), title="Aelvoxim"), status_code=200)
         return {
             "name": "Aelvoxim API",
             "version": "1.0.0",
@@ -238,16 +239,18 @@ def create_app() -> FastAPI:
     @app.get("/api")
     async def console_page():
         from pathlib import Path
+        from .aelvoxim_theme import inject_theme
         html = Path(__file__).parent.parent.joinpath("api", "API.html").read_text(encoding="utf-8")
         from fastapi.responses import HTMLResponse
-        return HTMLResponse(html)
+        return HTMLResponse(inject_theme(html, title="Aelvoxim API"))
 
     @app.get("/v1/admin/panel")
     async def admin_panel():
         from pathlib import Path
+        from .aelvoxim_theme import inject_theme
         html = Path(__file__).parent.joinpath("admin_panel.html").read_text(encoding="utf-8")
         from fastapi.responses import HTMLResponse
-        return HTMLResponse(html)
+        return HTMLResponse(inject_theme(html, title="Aelvoxim Admin"))
 
     @app.get("/v1/admin/dash-full")
     async def admin_dash_full(token: str = ""):
@@ -357,7 +360,7 @@ def create_app() -> FastAPI:
 
     # Serve ChatAEL frontend (built SPA) at /chatael
     from pathlib import Path as _Path
-    _chatael_dist = _Path(__file__).resolve().parent.parent.parent.parent / "frontend" / "chatael-v2" / "dist"
+    _chatael_dist = _Path(__file__).resolve().parent.parent.parent.parent / "frontend" / "chatael" / "dist"
     if _chatael_dist.exists():
         @app.get("/chatael")
         async def chatael_index():

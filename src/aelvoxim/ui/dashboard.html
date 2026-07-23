@@ -4,37 +4,37 @@
 <title>Aelvoxim Dashboard</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f0f2f5;color:#1a1a2e;font-size:14px;line-height:1.5;min-height:100vh}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg-base);color:var(--text-primary);font-size:14px;line-height:1.5;min-height:100vh}
 .app{max-width:1100px;margin:0 auto;padding:24px 16px}
-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid #e0e0e0}
+header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid var(--border)}
 header .left{display:flex;align-items:center;gap:12px}
 header .right{display:flex;align-items:center;gap:10px}
 header h1{font-size:20px;font-weight:600}
-header .meta{font-size:12px;color:#666}
+header .meta{font-size:12px;color:var(--text-secondary)}
 .status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
 .status-dot.green{background:#22c55e}
-.lang-select{font-size:12px;padding:4px 8px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer}
-.btn{background:none;border:1px solid #ddd;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:13px}
-.btn:hover{background:#f5f5f5}
+.lang-select{font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-elevated);cursor:pointer}
+.btn{background:none;border:1px solid var(--border);border-radius:6px;padding:6px 14px;cursor:pointer;font-size:13px}
+.btn:hover{background:var(--bg-surface)}
 .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px}
-.card{background:#fff;border-radius:10px;padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.06)}
-.card h3{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#888;margin-bottom:10px}
+.card{background:var(--bg-elevated);border-radius:10px;padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.06)}
+.card h3{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:10px}
 .card .big{font-size:28px;font-weight:700}
 .card .row{display:flex;justify-content:space-between;padding:3px 0;font-size:13px}
-.card .row span:last-child{color:#555}
+.card .row span:last-child{color:var(--text-secondary)}
 .section{margin-bottom:20px}
-.section h2{font-size:14px;font-weight:600;margin-bottom:10px;color:#333}
-table{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.06)}
-th{background:#f8f9fa;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#888;padding:10px 14px;text-align:left;font-weight:600}
-td{padding:8px 14px;border-top:1px solid #f0f0f0;font-size:13px}
-tr:hover td{background:#fafbfc}
+.section h2{font-size:14px;font-weight:600;margin-bottom:10px;color:var(--text-primary)}
+table{width:100%;border-collapse:collapse;background:var(--bg-elevated);border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.06)}
+th{background:var(--bg-surface);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);padding:10px 14px;text-align:left;font-weight:600}
+td{padding:8px 14px;border-top:1px solid var(--border-light);font-size:13px}
+tr:hover td{background:var(--bg-hover)}
 .badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500}
 .badge.active{background:#dcfce7;color:#166534}
-.badge.completed{background:#f0f0f0;color:#666}
+.badge.completed{background:#f0f0f0;color:var(--text-secondary)}
 .badge.mastery{background:#fef3c7;color:#92400e}
-.tag{display:inline-block;padding:2px 8px;margin:2px;background:#eef2ff;color:#4338ca;border-radius:4px;font-size:11px}
-.stat{font-size:13px;color:#555}
-.loading{text-align:center;padding:40px;color:#999;font-size:13px}
+.tag{display:inline-block;padding:2px 8px;margin:2px;background:color-mix(in srgb, var(--brand-500) 12%, transparent);color:var(--brand-700);border-radius:4px;font-size:11px}
+.stat{font-size:13px;color:var(--text-secondary)}
+.loading{text-align:center;padding:40px;color:var(--text-muted);font-size:13px}
 footer{text-align:center;font-size:11px;color:#aaa;padding:20px 0 10px}
 @media(max-width:768px){.grid{grid-template-columns:repeat(2,1fr)}}
 </style></head>
@@ -46,6 +46,7 @@ footer{text-align:center;font-size:11px;color:#aaa;padding:20px 0 10px}
       <div class="meta" id="metaInfo">v1.0.0</div>
     </div>
     <div class="right">
+      <button class="theme-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Toggle theme" style="font-size:16px;padding:3px 8px;border-radius:6px">☀️ </button>
       <select class="lang-select" id="langSelect" onchange="switchLang(this.value)">
         <option value="en">EN</option><option value="zh">中文</option>
       </select>
@@ -63,7 +64,7 @@ footer{text-align:center;font-size:11px;color:#aaa;padding:20px 0 10px}
 
   <div class="section"><h2>Top Knowledge Topics</h2><div id="topTopics" class="loading">Loading...</div></div>
   <div class="section"><h2>Learning Directions</h2><div id="directionsTable" class="loading">Loading...</div></div>
-  <div class="section"><h2>Knowledge Graph</h2><div id="graphStats" class="loading">Loading...</div><div id="knowledgeGraph" style="width:100%;height:400px;cursor:grab;background:#f5f5f5;border-radius:8px;"></div></div>
+  <div class="section"><h2>Knowledge Graph</h2><div id="graphStats" class="loading">Loading...</div><div id="knowledgeGraph" style="width:100%;height:400px;cursor:grab;background:var(--bg-surface);border-radius:8px;"></div></div>
 
   <footer>Aelvoxim v1.0.0</footer>
 </div>
@@ -106,7 +107,7 @@ function render(d){
  document.getElementById('selfmodelSnapshots').textContent=sm.snapshots??0;
  var te=document.getElementById('topTopics');
  if(k.top_topics&&k.top_topics.length)te.innerHTML=k.top_topics.map(function(t){return'<span class="tag">'+esc(t.topic)+' ('+t.count+')</span>'}).join('');
- else te.innerHTML='<span style="color:#999;font-size:13px;">'+t('no.knowledge')+'</span>';
+ else te.innerHTML='<span style="color:var(--text-muted);font-size:13px;">'+t('no.knowledge')+'</span>';
  var de=document.getElementById('directionsTable');
  if(l.directions&&l.directions.length){
   var h='<table><thead><tr><th>Topic</th><th>Status</th><th>Entries</th><th>Saturation</th></tr></thead><tbody>';
@@ -115,7 +116,7 @@ function render(d){
    h+='<tr><td>'+esc(d.topic)+'</td><td><span class="badge '+sc+'">'+esc(d.status)+'</span></td><td>'+(d.entries??0)+'</td><td>'+(d.saturation!=null?(d.saturation*100).toFixed(0)+'%':'-')+'</td></tr>'
   });
   de.innerHTML=h+'</tbody></table>'
- }else de.innerHTML='<span style="color:#999;font-size:13px;">'+t('no.directions')+'</span>'
+ }else de.innerHTML='<span style="color:var(--text-muted);font-size:13px;">'+t('no.directions')+'</span>'
 }
 function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML}
 

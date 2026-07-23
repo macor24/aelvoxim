@@ -687,7 +687,9 @@ _DASHBOARD_HTML: str | None = None
 def _load_dashboard_html() -> str:
     global _DASHBOARD_HTML
     if _DASHBOARD_HTML is None:
-        _DASHBOARD_HTML = (Path(__file__).parent.parent / "ui" / "dashboard.html").read_text(encoding="utf-8")
+        from .aelvoxim_theme import inject_theme
+        raw = (Path(__file__).parent.parent / "ui" / "dashboard.html").read_text(encoding="utf-8")
+        _DASHBOARD_HTML = inject_theme(raw, title="Aelvoxim Dashboard")
     return _DASHBOARD_HTML
 
 @router.get("/admin/overview")

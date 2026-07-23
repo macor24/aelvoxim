@@ -7,36 +7,36 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
-body { font-family:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif; background:#f5f7fb; color:#1e293b; height:100vh; overflow:hidden; }
+body { font-family:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif; background:var(--bg-base); color:var(--text-primary); height:100vh; overflow:hidden; }
 
 /* ── Layout ── */
 .app { display:flex; height:100vh; width:100%; overflow:hidden; }
 
 /* ── Sidebar ── */
-.sidebar { width:240px; background:#fff; border-right:1px solid #e2e8f0; display:flex; flex-direction:column; overflow-y:auto; z-index:10; }
-.logo { padding:20px 20px; border-bottom:1px solid #edf2f7; display:flex; align-items:center; gap:8px; }
-.logo i { color:#3b82f6; font-size:22px; }
-.logo span { font-weight:700; font-size:18px; background:linear-gradient(135deg,#2563eb,#1e40af); background-clip:text; -webkit-background-clip:text; color:transparent; }
+.sidebar { width:240px; background:var(--bg-elevated); border-right:1px solid var(--border); display:flex; flex-direction:column; overflow-y:auto; z-index:10; }
+.logo { padding:20px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px; }
+.logo i { color:var(--brand-500); font-size:22px; }
+.logo span { font-weight:700; font-size:18px; background:var(--gradient-brand); background-clip:text; -webkit-background-clip:text; color:transparent; }
 .nav { flex:1; padding:12px; }
 .nav-item { list-style:none; margin-bottom:2px; }
-.nav-link { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:10px; color:#475569; font-size:13px; font-weight:500; cursor:pointer; transition:all 0.15s; text-decoration:none; }
-.nav-link:hover { background:#f1f5f9; color:#0f172a; }
-.nav-link.active { background:#eef2ff; color:#2563eb; font-weight:600; }
+.nav-link { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:10px; color:var(--text-secondary); font-size:13px; font-weight:500; cursor:pointer; transition:all 0.15s; text-decoration:none; }
+.nav-link:hover { background:var(--bg-hover); color:var(--text-primary); }
+.nav-link.active { background:color-mix(in srgb, var(--brand-500) 12%, transparent); color:var(--brand-600); font-weight:600; }
 .nav-link i { width:18px; text-align:center; font-size:15px; }
-.nav-hr { margin:12px 0; border:none; border-top:1px solid #eef2ff; }
+.nav-hr { margin:12px 0; border:none; border-top:1px solid var(--border); }
 
 /* ── Main ── */
 .main { flex:1; display:flex; flex-direction:column; overflow:hidden; }
-.topbar { background:#fff; padding:10px 24px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; min-height:52px; }
-.topbar .title { font-size:14px; font-weight:600; color:#0f172a; }
-.topbar .title i { color:#3b82f6; margin-right:6px; }
+.topbar { background:var(--bg-elevated); padding:10px 24px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; min-height:52px; }
+.topbar .title { font-size:14px; font-weight:600; color:var(--text-primary); }
+.topbar .title i { color:var(--brand-500); margin-right:6px; }
 .auth-area { display:flex; gap:8px; align-items:center; font-size:13px; }
-.auth-area .user-info { color:#2563eb; font-weight:500; }
-.btn-sm { padding:5px 14px; border-radius:20px; font-size:12px; font-weight:500; cursor:pointer; border:1px solid #cbd5e1; background:#fff; color:#475569; transition:0.15s; }
-.btn-sm:hover { background:#f1f5f9; }
-.btn-primary-sm { padding:5px 14px; border-radius:20px; font-size:12px; font-weight:500; cursor:pointer; border:none; background:#2563eb; color:#fff; transition:0.15s; }
-.btn-primary-sm:hover { background:#1d4ed8; }
-.btn-danger-sm { padding:5px 14px; border-radius:20px; font-size:12px; font-weight:500; cursor:pointer; border:1px solid #fca5a5; background:#fff; color:#dc2626; transition:0.15s; }
+.auth-area .user-info { color:var(--brand-600); font-weight:500; }
+.btn-sm { padding:5px 14px; border-radius:20px; font-size:12px; font-weight:500; cursor:pointer; border:1px solid var(--border); background:var(--bg-elevated); color:var(--text-secondary); transition:0.15s; }
+.btn-sm:hover { background:var(--bg-hover); }
+.btn-primary-sm { padding:5px 14px; border-radius:20px; font-size:12px; font-weight:500; cursor:pointer; border:none; background:var(--brand-600); color:#fff; transition:0.15s; }
+.btn-primary-sm:hover { background:var(--brand-700); }
+.btn-danger-sm { padding:5px 14px; border-radius:20px; font-size:12px; font-weight:500; cursor:pointer; border:1px solid #fca5a5; background:var(--bg-elevated); color:#dc2626; transition:0.15s; }
 .btn-danger-sm:hover { background:#fef2f2; }
 
 /* ── Content ── */
@@ -45,51 +45,51 @@ body { font-family:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
 .panel.active { display:block; animation:fadeIn 0.2s ease; }
 @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
 .panel h2 { font-size:20px; font-weight:600; margin-bottom:20px; display:flex; align-items:center; gap:8px; }
-.panel h2 i { color:#3b82f6; }
+.panel h2 i { color:var(--brand-500); }
 
 /* ── Cards ── */
-.card { background:#fff; border-radius:16px; padding:20px; box-shadow:0 1px 3px rgba(0,0,0,0.04); border:1px solid #eef2ff; margin-bottom:16px; }
+.card { background:var(--bg-elevated); border-radius:16px; padding:20px; box-shadow:var(--shadow-sm); border:1px solid var(--border); margin-bottom:16px; }
 .card h3 { font-size:15px; font-weight:600; margin-bottom:12px; display:flex; align-items:center; gap:6px; }
 .card-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:16px; margin-bottom:16px; }
-.info-row { display:flex; justify-content:space-between; padding:8px 0; font-size:13px; border-bottom:1px solid #f8fafc; }
+.info-row { display:flex; justify-content:space-between; padding:8px 0; font-size:13px; border-bottom:1px solid var(--border-light); }
 .info-row:last-child { border-bottom:none; }
-.info-row .label { color:#64748b; }
-.info-row .value { font-weight:500; color:#0f172a; }
-.badge { padding:2px 10px; border-radius:20px; font-size:11px; font-weight:600; background:#eef2ff; color:#2563eb; display:inline-block; }
+.info-row .label { color:var(--text-muted); }
+.info-row .value { font-weight:500; color:var(--text-primary); }
+.badge { padding:2px 10px; border-radius:20px; font-size:11px; font-weight:600; background:color-mix(in srgb, var(--brand-500) 12%, transparent); color:var(--brand-600); display:inline-block; }
 
 /* ── API Key management ── */
-.key-row { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f8fafc; border-radius:10px; border:1px solid #eef2ff; margin-bottom:8px; }
-.key-row code { font-size:13px; font-family:'JetBrains Mono',monospace; cursor:pointer; user-select:all; color:#0f172a; }
+.key-row { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:var(--bg-surface); border-radius:10px; border:1px solid var(--border); margin-bottom:8px; }
+.key-row code { font-size:13px; font-family:'JetBrains Mono',monospace; cursor:pointer; user-select:all; color:var(--text-primary); }
 .key-actions { display:flex; gap:4px; }
-.key-actions .badge-link { padding:3px 8px; border-radius:30px; font-size:11px; cursor:pointer; transition:0.1s; color:#64748b; }
+.key-actions .badge-link { padding:3px 8px; border-radius:30px; font-size:11px; cursor:pointer; transition:0.1s; color:var(--text-muted); }
 .key-actions .badge-link:hover { background:#e2e8f0; }
 .key-actions .badge-link.danger { color:#ef4444; }
 .key-actions .badge-link.danger:hover { background:#fef2f2; }
 
 /* ── Plan cards ── */
 .plan-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; }
-.plan-card { background:#fff; border-radius:16px; padding:20px; text-align:center; border:1px solid #eef2ff; }
-.plan-card.recommended { border-color:#2563eb; box-shadow:0 0 0 2px rgba(37,99,235,0.1); }
+.plan-card { background:var(--bg-elevated); border-radius:16px; padding:20px; text-align:center; border:1px solid var(--border); }
+.plan-card.recommended { border-color:var(--brand-600); box-shadow:0 0 0 2px rgba(37,99,235,0.1); }
 .plan-name { font-size:15px; font-weight:700; margin-bottom:4px; }
-.plan-price { font-size:24px; font-weight:800; color:#2563eb; margin-bottom:8px; }
-.plan-price small { font-size:12px; font-weight:400; color:#64748b; }
-.plan-features { list-style:none; font-size:12px; color:#475569; line-height:2; }
+.plan-price { font-size:24px; font-weight:800; color:var(--brand-600); margin-bottom:8px; }
+.plan-price small { font-size:12px; font-weight:400; color:var(--text-muted); }
+.plan-features { list-style:none; font-size:12px; color:var(--text-secondary); line-height:2; }
 
 /* ── API docs table ── */
 .api-table { width:100%; border-collapse:collapse; font-size:13px; }
-.api-table th { background:#f8fafc; text-align:left; padding:10px 12px; font-weight:600; border-bottom:2px solid #e2e8f0; }
-.api-table td { padding:10px 12px; border-bottom:1px solid #f1f5f9; font-family:'JetBrains Mono',monospace; font-size:12px; }
-.api-table tr:hover td { background:#f8fafc; }
+.api-table th { background:var(--bg-surface); text-align:left; padding:10px 12px; font-weight:600; border-bottom:2px solid var(--border); }
+.api-table td { padding:10px 12px; border-bottom:1px solid var(--border-light); font-family:'JetBrains Mono',monospace; font-size:12px; }
+.api-table tr:hover td { background:var(--bg-surface); }
 .method { padding:2px 8px; border-radius:20px; font-weight:600; font-size:11px; }
 .method-get { background:#dcfce7; color:#166534; }
-.method-post { background:#dbeafe; color:#1e40af; }
+.method-post { background:color-mix(in srgb, var(--brand-500) 20%, transparent); color:#1e40af; }
 .method-delete { background:#fce7f3; color:#9d174d; }
 
-.loading { color:#64748b; font-size:13px; padding:20px; text-align:center; }
+.loading { color:var(--text-muted); font-size:13px; padding:20px; text-align:center; }
 .error { color:#ef4444; font-size:13px; padding:12px; }
 
-.login-prompt { text-align:center; padding:60px 20px; color:#64748b; }
-.login-prompt i { font-size:48px; color:#3b82f6; margin-bottom:16px; }
+.login-prompt { text-align:center; padding:60px 20px; color:var(--text-muted); }
+.login-prompt i { font-size:48px; color:var(--brand-500); margin-bottom:16px; }
 .login-prompt p { font-size:14px; margin-bottom:12px; }
 
 @media(max-width:700px) {
@@ -165,7 +165,7 @@ body { font-family:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
         <h2><i class="fas fa-coins"></i> 充值</h2>
         <div class="card">
           <h3><i class="fas fa-crown"></i> 升级套餐</h3>
-          <p style="font-size:13px;color:#64748b;margin-bottom:16px;">选择适合你的套餐，解锁更多调用次数和功能。</p>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">选择适合你的套餐，解锁更多调用次数和功能。</p>
           <div class="plan-grid">
             <div class="plan-card">
               <div class="plan-name">入门版</div>
@@ -207,22 +207,22 @@ body { font-family:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
         </div>
         <div class="card">
           <h3><i class="fas fa-credit-card"></i> 付款方式</h3>
-          <p style="font-size:13px;color:#64748b;margin-bottom:12px;">目前支持以下方式升级套餐：</p>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">目前支持以下方式升级套餐：</p>
           <div class="card-grid">
             <div class="card" style="text-align:center;cursor:pointer;" onclick="alert('请联系 billing@aelvoxim.ai')">
-              <i class="fas fa-envelope" style="font-size:24px;color:#3b82f6;margin-bottom:6px;"></i>
+              <i class="fas fa-envelope" style="font-size:24px;color:var(--brand-500);margin-bottom:6px;"></i>
               <p style="font-size:13px;font-weight:600;">邮件联系</p>
-              <p style="font-size:12px;color:#64748b;">billing@aelvoxim.ai</p>
+              <p style="font-size:12px;color:var(--text-muted);">billing@aelvoxim.ai</p>
             </div>
             <div class="card" style="text-align:center;cursor:pointer;" onclick="window.open('https://github.com/macor24/aelvoxim/issues','_blank')">
-              <i class="fab fa-github" style="font-size:24px;color:#3b82f6;margin-bottom:6px;"></i>
+              <i class="fab fa-github" style="font-size:24px;color:var(--brand-500);margin-bottom:6px;"></i>
               <p style="font-size:13px;font-weight:600;">GitHub Issues</p>
-              <p style="font-size:12px;color:#64748b;">提交需求</p>
+              <p style="font-size:12px;color:var(--text-muted);">提交需求</p>
             </div>
             <div class="card" style="text-align:center;cursor:pointer;" onclick="alert('Telegram 群组联系管理员')">
-              <i class="fab fa-telegram" style="font-size:24px;color:#3b82f6;margin-bottom:6px;"></i>
+              <i class="fab fa-telegram" style="font-size:24px;color:var(--brand-500);margin-bottom:6px;"></i>
               <p style="font-size:13px;font-weight:600;">Telegram</p>
-              <p style="font-size:12px;color:#64748b;">群组联系</p>
+              <p style="font-size:12px;color:var(--text-muted);">群组联系</p>
             </div>
           </div>
         </div>
@@ -233,7 +233,7 @@ body { font-family:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
         <h2><i class="fas fa-receipt"></i> 账单</h2>
         <div class="card">
           <h3>账单记录</h3>
-          <p style="font-size:13px;color:#64748b;">暂无账单记录。充值功能开发中。</p>
+          <p style="font-size:13px;color:var(--text-muted);">暂无账单记录。充值功能开发中。</p>
         </div>
       </div>
 
@@ -289,7 +289,7 @@ body { font-family:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
         <h2><i class="fas fa-file-alt"></i> 接口文档</h2>
         <div class="card">
           <h3>认证方式</h3>
-          <p style="font-size:13px;color:#475569;margin-bottom:8px;">所有 API 请求需要在 HTTP Header 中携带 API Key：</p>
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">所有 API 请求需要在 HTTP Header 中携带 API Key：</p>
           <pre style="background:#1e293b;color:#e2e8f0;padding:12px 16px;border-radius:10px;font-size:12px;overflow-x:auto;">Authorization: Bearer sk-your-api-key-here</pre>
         </div>
         <div class="card">
@@ -319,7 +319,7 @@ body { font-family:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
         <div class="card-grid">
           <div class="card">
             <h3><i class="fas fa-book"></i> 快速开始</h3>
-            <p style="font-size:13px;color:#475569;line-height:1.8;">
+            <p style="font-size:13px;color:var(--text-secondary);line-height:1.8;">
               1. 注册账号并登录<br>
               2. 在 API Keys 页面创建 Key<br>
               3. 在请求头中携带 Authorization: Bearer &lt;key&gt;<br>
@@ -328,7 +328,7 @@ body { font-family:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
           </div>
           <div class="card">
             <h3><i class="fas fa-life-ring"></i> 技术支持</h3>
-            <p style="font-size:13px;color:#475569;line-height:1.8;">
+            <p style="font-size:13px;color:var(--text-secondary);line-height:1.8;">
               📧 dev@aelvoxim.ai<br>
               🐛 GitHub Issues<br>
               💬 Telegram 群组
@@ -336,7 +336,7 @@ body { font-family:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
           </div>
           <div class="card">
             <h3><i class="fas fa-exclamation-triangle"></i> 常见问题</h3>
-            <p style="font-size:13px;color:#475569;line-height:1.8;">
+            <p style="font-size:13px;color:var(--text-secondary);line-height:1.8;">
               <strong>API Key 失效？</strong> 刷新或重新创建<br>
               <strong>配额不足？</strong> 联系升级套餐<br>
               <strong>请求超时？</strong> 检查网络和服务状态
@@ -351,24 +351,24 @@ body { font-family:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
         <!-- 快捷操作按钮 -->
         <div class="card-grid" style="margin-bottom:16px;">
           <div class="card" style="text-align:center;cursor:pointer;" onclick="windowsScreenshot()">
-            <i class="fas fa-camera" style="font-size:24px;color:#3b82f6;margin-bottom:6px;"></i>
+            <i class="fas fa-camera" style="font-size:24px;color:var(--brand-500);margin-bottom:6px;"></i>
             <p style="font-size:13px;font-weight:600;">截图</p>
-            <p style="font-size:11px;color:#64748b;">查看桌面</p>
+            <p style="font-size:11px;color:var(--text-muted);">查看桌面</p>
           </div>
           <div class="card" style="text-align:center;cursor:pointer;" onclick="windowsProcesses()">
-            <i class="fas fa-tasks" style="font-size:24px;color:#3b82f6;margin-bottom:6px;"></i>
+            <i class="fas fa-tasks" style="font-size:24px;color:var(--brand-500);margin-bottom:6px;"></i>
             <p style="font-size:13px;font-weight:600;">进程列表</p>
-            <p style="font-size:11px;color:#64748b;">运行中的应用</p>
+            <p style="font-size:11px;color:var(--text-muted);">运行中的应用</p>
           </div>
           <div class="card" style="text-align:center;cursor:pointer;" onclick="windowsDisplay()">
-            <i class="fas fa-desktop" style="font-size:24px;color:#3b82f6;margin-bottom:6px;"></i>
+            <i class="fas fa-desktop" style="font-size:24px;color:var(--brand-500);margin-bottom:6px;"></i>
             <p style="font-size:13px;font-weight:600;">显示器信息</p>
-            <p style="font-size:11px;color:#64748b;">分辨率/DPI</p>
+            <p style="font-size:11px;color:var(--text-muted);">分辨率/DPI</p>
           </div>
           <div class="card" style="text-align:center;cursor:pointer;" onclick="windowsNotepad()">
-            <i class="fas fa-sticky-note" style="font-size:24px;color:#3b82f6;margin-bottom:6px;"></i>
+            <i class="fas fa-sticky-note" style="font-size:24px;color:var(--brand-500);margin-bottom:6px;"></i>
             <p style="font-size:13px;font-weight:600;">发送通知</p>
-            <p style="font-size:11px;color:#64748b;">Windows 弹窗</p>
+            <p style="font-size:11px;color:var(--text-muted);">Windows 弹窗</p>
           </div>
         </div>
 
@@ -518,15 +518,15 @@ function loadApiKeys() {
     }
     var keys = data.keys || [];
     if (keys.length === 0) {
-      el.innerHTML = '<div class="card"><p style="font-size:13px;color:#64748b;margin-bottom:12px;">暂无 API Key</p>'
+      el.innerHTML = '<div class="card"><p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">暂无 API Key</p>'
         + '<button class="btn-primary-sm" onclick="createApiKey()"><i class="fas fa-plus"></i> 新建 API Key</button></div>';
       return;
     }
     var html = '<div style="display:flex;gap:8px;margin-bottom:16px;">'
       + '<button class="btn-primary-sm" onclick="createApiKey()"><i class="fas fa-plus"></i> 新建 API Key</button>'
-      + '<span style="font-size:12px;color:#64748b;align-self:center;">共 ' + keys.length + ' 个 Key</span></div>';
+      + '<span style="font-size:12px;color:var(--text-muted);align-self:center;">共 ' + keys.length + ' 个 Key</span></div>';
     keys.forEach(function(k) {
-      var displayName = k.name ? '<span style="font-size:11px;color:#64748b;margin-right:6px;">' + k.name + '</span>' : '';
+      var displayName = k.name ? '<span style="font-size:11px;color:var(--text-muted);margin-right:6px;">' + k.name + '</span>' : '';
       html += '<div class="key-row">'
         + '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;">'
         + displayName

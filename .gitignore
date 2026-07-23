@@ -80,3 +80,6 @@ Windows-MCP/docs/
 # Automation logs
 @AutomationLog.txt
 dist/
+
+# Nested repo clone
+aelvoxim/
