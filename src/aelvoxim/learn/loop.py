@@ -715,6 +715,16 @@ class Learner:
             except Exception:
                 _log.exception("loop error")
 
+            # ── Bayesian belief update for each active direction ──
+            try:
+                from ..core.belief import BeliefPool
+                _bp = BeliefPool()
+                for _t, _d in getattr(self, '_directions', {}).items():
+                    if _d.status == "active" and _d.cycles_completed > 0:
+                        _bp.record_learner_cycle(_t, _d.entries_created, _d.cycles_completed)
+            except Exception:
+                _log.exception("loop error")
+
             # ── Determine current focus from active goals ──
             _current_focus = "balanced"
             _current_skip = set()

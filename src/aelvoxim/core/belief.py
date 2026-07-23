@@ -295,20 +295,23 @@ class BeliefPool:
     def record_batch(self, key: str, successes: int, total: int) -> BeliefUnit:
         return self.update(key, {"successes": successes, "total": total, "source": "skill_exec"})
 
-    def record_learner_cycle(self, topic: str, entries_created: int, cycles: int) -> BeliefUnit:
+    def record_learner_cycle(self, topic: str, entries_created: int, cycles_completed: int) -> BeliefUnit:
         """Record a learner cycle result into the belief pool.
+
+        Each cycle with entries_created > 0 counts as a success.
+        Each cycle with entries_created == 0 counts as a failure.
 
         Args:
             topic: Learning direction topic.
-            entries_created: Number of knowledge entries created this cycle.
-            cycles: Total cycles completed for this direction.
+            entries_created: Knowledge entries created this cycle.
+            cycles_completed: Total cycles completed for this direction.
 
         Returns:
             Updated BeliefUnit.
         """
         key = f"learner:{topic}"
-        successes = entries_created
-        total = max(cycles, 1)
+        successes = 1 if entries_created > 0 else 0
+        total = 1
         return self.update(key, {
             "successes": successes,
             "total": total,

@@ -227,8 +227,23 @@ def run_code(code: str, timeout: int = 15) -> Dict[str, Any]:
 
 @register("web_search")
 def web_search(query: str) -> Dict[str, Any]:
-    """Search the web for current information."""
-    return {"success": False, "error": "Web search is disabled in ChatAEL mode. Use the '联网' toggle in the chat interface instead."}
+    """Search the web for current information. Returns up to 5 results."""
+    try:
+        from ..learn.search import search as _web_search
+        results = _web_search(query[:200], max_results=5)
+        if results:
+            safe = []
+            for r in results[:5]:
+                title = (r.get("title") or "")[:120]
+                snippet = (r.get("snippet") or "")[:300]
+                url = (r.get("url") or "")[:200]
+                if title.strip() or snippet.strip():
+                    safe.append({"title": title, "snippet": snippet, "url": url})
+            if safe:
+                return {"success": True, "results": safe}
+        return {"success": False, "error": "No results found"}
+    except Exception as e:
+        return {"success": False, "error": f"Search failed: {str(e)}"}
 
 
 @register("gateway")

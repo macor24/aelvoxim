@@ -423,7 +423,7 @@ def search(query: str, max_results: int = 5,
             r = _bing_search(query, max_results)
             if r:
                 return r
-            return []  # reject Mock
+            return _mock_search(query, max_results)
         results = _media_search(query, max_results)
         if results:
             return results
@@ -431,7 +431,7 @@ def search(query: str, max_results: int = 5,
             r = fn(query, max_results)
             if r:
                 return r
-        return []  # reject Mock
+        return _mock_search(query, max_results)
 
     # Bing
     if engine == "bing":
@@ -439,12 +439,12 @@ def search(query: str, max_results: int = 5,
         if results:
             return results
         if not _HTML_SCRAPE_ENABLED:
-            return []
+            return _mock_search(query, max_results)
         for fn in [_duckduckgo_search, _bing_cn_search, _so_search]:
             r = fn(query, max_results)
             if r:
                 return r
-        return []
+        return _mock_search(query, max_results)
 
     # Bing China (direct access from China)
     if engine == "bing_cn":
@@ -452,7 +452,7 @@ def search(query: str, max_results: int = 5,
             r = _bing_search(query, max_results)
             if r:
                 return r
-            return []
+            return _mock_search(query, max_results)
         results = _bing_cn_search(query, max_results)
         if results:
             return results
@@ -460,7 +460,7 @@ def search(query: str, max_results: int = 5,
             r = fn(query, max_results)
             if r:
                 return r
-        return []
+        return _mock_search(query, max_results)
 
     # DuckDuckGo
     if engine == "duckduckgo":
@@ -468,7 +468,7 @@ def search(query: str, max_results: int = 5,
             r = _bing_search(query, max_results)
             if r:
                 return r
-            return []
+            return _mock_search(query, max_results)
         results = _duckduckgo_search(query, max_results)
         if results:
             return results
@@ -476,7 +476,7 @@ def search(query: str, max_results: int = 5,
             r = fn(query, max_results)
             if r:
                 return r
-        return []
+        return _mock_search(query, max_results)
 
     # Unknown engine -> auto degrade
     if _HTML_SCRAPE_ENABLED:
@@ -488,7 +488,7 @@ def search(query: str, max_results: int = 5,
         r = _bing_search(query, max_results)
         if r:
             return r
-    return []
+    return _mock_search(query, max_results)
 
 
 def get_available_engines() -> list:
