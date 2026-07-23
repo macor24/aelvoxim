@@ -12,6 +12,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 from .routes import _verify_key
 
+_log = logging.getLogger("aelvoxim.routes")
 router = APIRouter()
 
 
@@ -662,6 +663,7 @@ async def llm_chat_stream(
                     _chat_log.warning("  Stream tool execution error: %s", _exc)
             yield "data: [DONE]\n\n"
         except Exception as e:
+            _log.exception("routes_chat stream error")  # log real error
             yield f"data: {json.dumps({'error': 'Internal error'})}\n\n"
         # Save assistant response after stream finishes (best-effort)
         _text = "".join(_pg_collected)
