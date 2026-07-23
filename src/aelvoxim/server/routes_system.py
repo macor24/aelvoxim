@@ -486,7 +486,9 @@ async def webhook_subscribe(body: dict, current_user: dict = Depends(_verify_key
         raise HTTPException(400, detail=f"unsupported events: {invalid}. Supported: {sorted(SUPPORTED_EVENTS)}")
     result = subscribe(url, events, user_id=current_user.get("email", ""), description=description)
     if "error" in result:
-        raise HTTPException(500, detail=result["error"])
+        import logging
+        logging.getLogger("aelvoxim.routes").warning("webhook subscribe failed: %s", result["error"])
+        raise HTTPException(500, detail="webhook subscription failed")
     return {"success": True, "data": result}
 
 @router.get("/webhook/subscriptions")
