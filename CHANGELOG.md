@@ -1,5 +1,38 @@
 # Changelog
 
+## v1.2.0 (2026-07-23)
+
+### Added
+- 5-phase meta-cognition improvement:
+  - Failure threshold: track consecutive validation failures, pause direction + emit
+    reflection log after threshold (adaptive: simple=2, medium=3, complex=5)
+  - Saturation v3: weighted formula verify_pass_rate(0.50) + task_rate(0.30) + difficulty(0.20)
+  - Strategy pre-check: query SelfModel engine history before switch; cache result
+  - Execution guard: prevent re-execution of completed tasks
+  - Meta-reviewer daemon (`meta_reviewer.py`): scans metacog logs every 10 ticks,
+    detects low scores/stagnation/repair failures, writes to dedicated meta_review.log
+- Failure categorization: `fail_by_reason` JSON dict (timeout/quality/search_empty/validation)
+- Cost-benefit termination: compare cycles invested vs estimated remaining before aborting
+- Topic normalization: auto-merge fullwidth/halfwidth punctuation in knowledge topics
+- MetaCogTrigger persistence: metacog history saved to `metacog_history.jsonl`, loaded on restart
+- Learner loop now gracefully degrades when PostgreSQL is unavailable (JSON file fallback)
+- `CORS`: default `allow_origins=*` for easier cross-origin deployment
+- PR/issue templates (.github/): PR template, bug report, feature request
+- CI badge: Ruff lint, pytest (3.10/3.11/3.12), CodeQL, Dependabot
+
+### Changed
+- KnowledgeBase `store()` now auto-normalizes topic punctuation
+- Saturation evaluation: from pure entry-ratio heuristic to verification-quality-weighted formula
+- CORS: default origins changed to `*` (configurable via `AELVOXIM_CORS_ORIGINS`)
+- Documentation: README now includes Security table, CI table, Contributing quick rules
+
+### Fixed
+- Learner loop stuck on PG unavailable — now falls back to JSON storage instead of blocking
+- `sentrikit.py`: missing `import logging` (NameError at module level)
+- `routes_chat.py`: SSE stream errors now logged via `_log.exception()` instead of swallowed
+- Webhook subscribe endpoint no longer leaks `result["error"]` to client
+- CORS preflight for `POST /v1/llm/chat/stream` — now returns proper 200 OPTIONS
+
 ## v1.0.0 (2026-06-06)
 
 ### Added

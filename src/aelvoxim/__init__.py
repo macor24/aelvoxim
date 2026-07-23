@@ -8,4 +8,4 @@ from __future__ import annotations
 import os
 
 _EDITION = os.environ.get("AELVOXIM_EDITION", "enterprise")
-__version__ = "1.0.1"
+__version__ = "1.2.0"

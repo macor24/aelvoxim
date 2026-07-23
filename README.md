@@ -280,5 +280,12 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 ## Links
 
+- **Version:** v1.2.0
 - **GitHub:** https://github.com/macor24/aelvoxim
 - **Issues:** https://github.com/macor24/aelvoxim/issues
+- **Docs (EN):** https://github.com/macor24/aelvoxim/tree/master/docs
+- **Quickstart (中文):** https://github.com/macor24/aelvoxim/blob/master/docs/quickstart-cn.md
+
+---
+
+*Built with no GPU required.*
