@@ -365,30 +365,54 @@ class Learner:
 
         if not result:
             direction.cycles_completed += 1
-            # ── 失败阈值追踪 ──
+            # ── Failure tracking by category ──
             direction.fail_streak += 1
             _fail_streak = direction.fail_streak
+            # Categorize failure reason
+            _task_lower = task.lower()
+            _reason_cat = "validation"
+            _timeout_kw = ["timeout", "too long", "timed out", "no response"]
+            _quality_kw = ["generic", "template", "irrelevant", "empty", "no content"]
+            _search_kw = ["search empty", "no result", "not found", "no data"]
+            if any(k in _task_lower for k in _timeout_kw):
+                _reason_cat = "timeout"
+            elif any(k in _task_lower for k in _quality_kw):
+                _reason_cat = "quality"
+            elif any(k in _task_lower for k in _search_kw):
+                _reason_cat = "search_empty"
+            # Update fail_by_reason dict
+            _reasons = {}
+            if direction.fail_by_reason:
+                try:
+                    _reasons = json.loads(direction.fail_by_reason)
+                except (json.JSONDecodeError, ValueError):
+                    _reasons = {}
+            _reasons[_reason_cat] = _reasons.get(_reason_cat, 0) + 1
+            direction.fail_by_reason = json.dumps(_reasons)
             done = json.loads(direction.completed_tasks or "[]")
             done.append(task)
             direction.completed_tasks = json.dumps(done)
             direction.current_task = ""
             self._dir_mgr.save()
 
-            if _fail_streak >= 3:
-                # 强制中断：暂停当前方向，输出反思日志
+            # ── Adaptive threshold based on task complexity ──
+            _complexity = max(1, len(json.loads(direction.task_queue or "[]"))) + max(1, len(json.loads(direction.completed_tasks or "[]")))
+            _threshold = 5 if _complexity > 8 else (3 if _complexity > 4 else 2)
+
+            if _fail_streak >= _threshold:
                 direction.status = "paused"
                 self._dir_mgr.save()
-                self._log(f"  🛑 [{topic}] 连续{_fail_streak}次验证失败，暂停方向 — "
-                          f"触发强制反思")
-                self._log(f"  🧠 [{topic}] 反思建议："
-                          f"1) 检查当前方法是否有误 "
-                          f"2) 是否需要补充前置知识 "
-                          f"3) 是否问题定义不清晰")
-                # 记录到元认知日志
+                # Log with reason breakdown
+                _reason_detail = "; ".join(f"{k}={v}" for k, v in sorted(_reasons.items()))
+                self._log(f"  🛑 [{topic}] {_fail_streak}x consecutive fails — pausing "
+                          f"(reasons: {_reason_detail})")
+                self._log(f"  🧠 [{topic}] Reflection: "
+                          f"1) check approach 2) prerequisite knowledge 3) problem definition")
+                # Record to metacog
                 try:
-                    from ..core.metacog import MetaCogReport, MetaCogTrigger, TriggerResult, TriggerLevel
+                    from ..core.metacog import MetaCogTrigger
                     _tr = MetaCogTrigger()
-                    _report = _tr.evaluate(
+                    _tr.evaluate(
                         success_rate_7d=0.0, success_rate_3d=0.0, success_rate_1d=0.0,
                         days_since_last_improvement=0,
                         repeat_error_count=_fail_streak,
@@ -398,7 +422,7 @@ class Learner:
                     _log.exception("loop error")
                 return True
 
-            self._log(f"  ⏭️ [{topic}] 跳过无效任务({_fail_streak}/3): {task}")
+            self._log(f"  ⏭️ [{topic}] Skip ({_fail_streak}/3, {_reason_cat}): {task}")
 
             try:
                 from ..hooks.analyzer import analyze
@@ -472,10 +496,15 @@ class Learner:
             self._dir_mgr.save()
             return True
         if direction.cycles_completed > 10 and direction.saturation < 0.3:
-            self._log(f"  ⚠️ [{topic}] Progress check: saturation={direction.saturation:.2f} after "
-                      f"{direction.cycles_completed} cycles — too slow, marking complete")
-            direction.status = "completed"
-            self._dir_mgr.save()
+            # Cost-benefit check before termination
+            _cost_invested = direction.cycles_completed
+            _cost_remaining = max(1, total_tasks - len(done_tasks)) * 3  # estimate 3 cycles per remaining task
+            if _cost_invested > _cost_remaining:
+                self._log(f"  ⚠️ [{topic}] Cost check: invested {_cost_invested}cyc > remaining ~{_cost_remaining}cyc, terminating")
+                direction.status = "completed"
+                self._dir_mgr.save()
+            else:
+                self._log(f"  ⚠️ [{topic}] Cost check: invested {_cost_invested}cyc <= remaining ~{_cost_remaining}cyc, continuing")
         self._log(f"  📊 [{topic}] saturation={direction.saturation:.2f} "
                   f"(verify_rate={verify_pass_rate:.2f}*0.6 + task_rate={task_complete_rate:.2f}*0.4, "
                   f"conf_avg={conf_avg:.2f}, entries={direction.entries_created}/5)")

@@ -47,7 +47,8 @@ class LearningDirection:
     entries_created: int = 0
     cycles_completed: int = 0
     reflect_no_produce: int = 0
-    fail_streak: int = 0      # 连续验证失败次数（第一阶段：失败阈值追踪）
+    fail_streak: int = 0          # consecutive failures (total, for quick threshold check)
+    fail_by_reason: str = ""      # JSON dict: {"timeout": 2, "quality": 1, "search_empty": 0, "validation": 1}
     review_history: str = ""
     last_verified: str = ""
     added_from: str = ""
