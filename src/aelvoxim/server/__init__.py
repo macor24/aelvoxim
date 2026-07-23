@@ -51,13 +51,18 @@ def create_app() -> FastAPI:
         description="Self-evolving AI Agent — Standard Public API",
     )
 
-    # CORS: allow specific origins via env var, default to safe localhost
-    _cors_origins = os.environ.get("AELVOXIM_CORS_ORIGINS", "http://localhost:3000,http://localhost:9702")
+    # CORS: allow specific origins via env var, default to all origins for flexibility
+    _cors_origins = os.environ.get("AELVOXIM_CORS_ORIGINS", "*")
     _origins_list = [o.strip() for o in _cors_origins.split(",") if o.strip()]
+    _allow_creds = False
+    if _cors_origins == "*":
+        _allow_creds = False  # credentials not allowed with wildcard
+    else:
+        _allow_creds = True
     app.add_middleware(
         CORSMiddleware,
         allow_origins=_origins_list,
-        allow_credentials=False,
+        allow_credentials=_allow_creds,
         allow_methods=["*"],
         allow_headers=["*"],
     )
