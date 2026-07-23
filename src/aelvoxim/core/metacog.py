@@ -8,9 +8,11 @@ Standalone, zero external deps (injection optional, works without).
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from enum import Enum
+from pathlib import Path
 from typing import Dict, List, Optional, TYPE_CHECKING
 
 import logging
@@ -97,6 +99,7 @@ class MetaCogTrigger:
         self._cal = None  # 懒加载
         self._last_memory_check: Optional[str] = None
         self._cached_memory_metrics: Dict = {}
+        self.load_history()
 
     @property
     def _calibration(self):
@@ -181,6 +184,15 @@ class MetaCogTrigger:
         except Exception:
             _log.exception("metacog error")
         self._history.append(report)
+        # ── Persist history to file ──
+        try:
+            from ..utils import METACORE_DIR
+            _hist_file = METACORE_DIR / "metacog_history.jsonl"
+            _hist_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(str(_hist_file), "a") as _fh:
+                _fh.write(report.to_json() + "\n")
+        except Exception:
+            _log.exception("metacog error")
         return report
 
     @staticmethod
@@ -474,6 +486,45 @@ class MetaCogTrigger:
 
     def get_history(self, limit: int = 10) -> List[Dict]:
         return [r.to_dict() for r in self._history[-limit:]]
+
+    def load_history(self) -> None:
+        """Load persisted metacog history from JSONL file into memory."""
+        try:
+            from ..utils import METACORE_DIR
+            _hist_file = METACORE_DIR / "metacog_history.jsonl"
+            if _hist_file.exists():
+                with open(str(_hist_file)) as _fh:
+                    for line in _fh:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            data = json.loads(line)
+                            # Reconstruct MetaCogReport from dict
+                            triggers = []
+                            for td in data.get("triggers", []):
+                                t = TriggerResult(
+                                    signal_name=td.get("signal_name", ""),
+                                    level=TriggerLevel(td.get("level", "mild")),
+                                    triggered=td.get("triggered", False),
+                                    score=td.get("score", 0.0),
+                                    reason=td.get("reason", ""),
+                                    details=td.get("details", {}),
+                                )
+                                triggers.append(t)
+                            report = MetaCogReport(
+                                timestamp=data.get("timestamp", ""),
+                                should_evolve=data.get("should_evolve", False),
+                                max_level=data.get("max_level", "mild"),
+                                overall_score=data.get("overall_score", 0.0),
+                                triggers=triggers,
+                                suggested_actions=data.get("suggested_actions", []),
+                            )
+                            self._history.append(report)
+                        except Exception:
+                            _log.exception("metacog error")
+        except Exception:
+            _log.exception("metacog error")
 
 
 __all__ = [

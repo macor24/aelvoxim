@@ -803,17 +803,18 @@ class Learner:
         while self._running:
             try:
                 self._last_heartbeat = time.time()
-                # Check PG availability
+                # Check PG availability — warn but don't block (JSON fallback works)
                 try:
                     from ..storage.db import use_pg as _pg_ok
-                    if not _pg_ok():
-                        from ..storage.db import get_pool as _get_pool
-                        if not _get_pool():
-                            self._log("  ⏸️ PG unavailable, pausing learning until PG is back")
-                            self._sleep(30)
-                            continue
+                    _pg_available = _pg_ok()
+                    if not _pg_available:
+                        try:
+                            from ..storage.db import get_pool as _get_pool
+                            _pg_available = _get_pool() is not None
+                        except Exception:
+                            _pg_available = False
                 except Exception:
-                    _log.exception("loop error")
+                    _pg_available = False
 
                 # Refresh LLM + search status
                 self._detect_llm_status()

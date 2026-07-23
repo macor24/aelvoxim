@@ -478,6 +478,13 @@ class KnowledgeBase:
     # ── Pending zone management ──
 
     @staticmethod
+    def _normalize_topic(topic: str) -> str:
+        """Normalize Chinese punctuation in topic names to prevent split topics."""
+        topic = topic.replace("：", ":").replace("（", "(").replace("）", ")")
+        topic = topic.replace("【", "[").replace("】", "]").replace("、", ",")
+        return topic
+
+    @staticmethod
     def store(
         topic: str,
         title: str,
@@ -491,6 +498,7 @@ class KnowledgeBase:
         knowledge_date: str = "",
         validated: bool = False,
     ) -> dict:
+        topic = KnowledgeBase._normalize_topic(topic)
         tags = tags or []
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
