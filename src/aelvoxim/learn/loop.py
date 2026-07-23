@@ -274,6 +274,28 @@ class Learner:
         """Process one learning direction: decompose → execute → validate → review."""
         topic = direction.topic
 
+        # ── 执行前检查点：已完成任务不再执行 ──
+        if direction.current_task:
+            _done = json.loads(direction.completed_tasks or "[]")
+            if direction.current_task in _done:
+                self._log(f"  ⏭️ [{topic}] Task already completed, skipping: {direction.current_task[:50]}")
+                direction.current_task = ""
+                self._dir_mgr.save()
+                # 尝试取下一个未完成任务
+                if direction.task_queue and direction.task_queue != "[]":
+                    q = json.loads(direction.task_queue)
+                    while q:
+                        t = q.pop(0)
+                        if t not in _done:
+                            direction.current_task = t
+                            direction.task_queue = json.dumps(q)
+                            self._dir_mgr.save()
+                            break
+                    if not direction.current_task:
+                        return self._reflect_generate_tasks(direction)
+                else:
+                    return self._reflect_generate_tasks(direction)
+
         if not direction.task_queue or direction.task_queue == "[]":
             direction_meta = {
                 "saturation": direction.saturation,
@@ -343,12 +365,40 @@ class Learner:
 
         if not result:
             direction.cycles_completed += 1
+            # ── 失败阈值追踪 ──
+            direction.fail_streak += 1
+            _fail_streak = direction.fail_streak
             done = json.loads(direction.completed_tasks or "[]")
             done.append(task)
             direction.completed_tasks = json.dumps(done)
             direction.current_task = ""
             self._dir_mgr.save()
-            self._log(f"  ⏭️ [{topic}] Skipping unproductive task: {task}")
+
+            if _fail_streak >= 3:
+                # 强制中断：暂停当前方向，输出反思日志
+                direction.status = "paused"
+                self._dir_mgr.save()
+                self._log(f"  🛑 [{topic}] 连续{_fail_streak}次验证失败，暂停方向 — "
+                          f"触发强制反思")
+                self._log(f"  🧠 [{topic}] 反思建议："
+                          f"1) 检查当前方法是否有误 "
+                          f"2) 是否需要补充前置知识 "
+                          f"3) 是否问题定义不清晰")
+                # 记录到元认知日志
+                try:
+                    from ..core.metacog import MetaCogReport, MetaCogTrigger, TriggerResult, TriggerLevel
+                    _tr = MetaCogTrigger()
+                    _report = _tr.evaluate(
+                        success_rate_7d=0.0, success_rate_3d=0.0, success_rate_1d=0.0,
+                        days_since_last_improvement=0,
+                        repeat_error_count=_fail_streak,
+                        external_signal_strength=0.0,
+                    )
+                except Exception:
+                    _log.exception("loop error")
+                return True
+
+            self._log(f"  ⏭️ [{topic}] 跳过无效任务({_fail_streak}/3): {task}")
 
             try:
                 from ..hooks.analyzer import analyze
@@ -397,11 +447,24 @@ class Learner:
                                save_config_fn=self._dir_mgr.save, log_func=self._log)
                 self._dir_mgr.save()
             return True
-        saturation = sum(e.get("confidence", 0.5) for e in entries) / max(len(entries), 1)
+        # ── 饱和度评估（v2）：加权验证质量 + 任务完成度 ──
+        conf_avg = sum(e.get("confidence", 0.5) for e in entries) / max(len(entries), 1)
         entry_ratio = min(direction.entries_created / 5.0, 1.0)
-        direction.saturation = round(max(saturation * 0.3 + entry_ratio * 0.7, entry_ratio * 0.5), 2)
+        # 验证通过率：从 completed_tasks + KnowledgeBase 计算
+        done_tasks = json.loads(direction.completed_tasks or "[]")
+        total_tasks = len(done_tasks) + (len(json.loads(direction.task_queue or "[]")) if direction.task_queue and direction.task_queue != "[]" else 0)
+        # 高置信度条目比例作为验证通过率近似值
+        high_conf = sum(1 for e in entries if e.get("confidence", 0) >= 0.6)
+        verify_pass_rate = high_conf / max(len(entries), 1)
+        # 任务完成率
+        task_complete_rate = len(done_tasks) / max(total_tasks, 1) if total_tasks > 0 else 0
+        # 新公式：饱和度 = 验证通过率 * 0.6 + 任务完成率 * 0.4
+        direction.saturation = round(
+            min(1.0, verify_pass_rate * 0.6 + task_complete_rate * 0.4), 2
+        )
         self._log(f"  📊 [{topic}] saturation={direction.saturation:.2f} "
-                  f"(conf_avg={saturation:.2f}, entries={direction.entries_created}/5)")
+                  f"(verify_rate={verify_pass_rate:.2f}*0.6 + task_rate={task_complete_rate:.2f}*0.4, "
+                  f"conf_avg={conf_avg:.2f}, entries={direction.entries_created}/5)")
         if direction.reflect_no_produce >= 3 or direction.saturation >= 0.9 or direction.entries_created >= 5:
             direction.status = "completed"
             self._log(f"  ✅ [{topic}] Task completed, saturation={direction.saturation:.2f}")
@@ -592,6 +655,20 @@ class Learner:
             # 2b. Feed learner results back into SelfModel
             try:
                 sm.inject_learner_stats(learner_stats, belief_stats)
+            except Exception:
+                _log.exception("loop error")
+
+            # ── Meta-review: 元认知日志自审（每10个tick） ──
+            try:
+                _mrv = getattr(self, '_meta_review_tick', 0) + 1
+                self._meta_review_tick = _mrv
+                if _mrv % 10 == 0:
+                    from ..learn.meta_reviewer import MetaReviewer
+                    _reviewer = MetaReviewer()
+                    _result = _reviewer.review()
+                    if _result and _result.get("suggestions"):
+                        self._log(f"  🧪 Meta-review: {len(_result['suggestions'])} suggestion(s), "
+                                  f"analyzed {_result['reports_analyzed']} reports")
             except Exception:
                 _log.exception("loop error")
 

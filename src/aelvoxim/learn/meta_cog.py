@@ -138,10 +138,28 @@ def execute_reflection(
         import os as _os
         _engines = ["bing_cn", "duckduckgo", "so"]
         _current = _os.environ.get("AELVOXIM_SEARCH_ENGINE", _os.environ.get("METACORE_SEARCH_ENGINE", "bing_cn"))
-        if _current in _engines:
-            _new = _engines[(_engines.index(_current) + 1) % len(_engines)]
-            _os.environ["AELVOXIM_SEARCH_ENGINE"] = _new
-            log_func(f"  🧠 Reflected: switch search {_current}→{_new} — {analysis.get('detail','')}")
+        # ── 策略预判：检查各引擎历史有效性 ──
+        _next_engine = _engines[(_engines.index(_current) + 1) % len(_engines)] if _current in _engines else _engines[0]
+        _skip = False
+        try:
+            from ..core.selfmodel import SelfModel
+            _sm = SelfModel()
+            for _eng in _engines:
+                if _eng == _current:
+                    continue
+                _cap_name = f"search_engine_{_eng}"
+                _cap = _sm._capabilities.get(_cap_name) if hasattr(_sm, '_capabilities') else None
+                if _cap and _cap.task_count >= 3 and (_cap.success_rate or 0) < 0.2:
+                    log_func(f"  ⏭️ [Precheck] Engine '{_eng}' historical success {_cap.success_rate:.0%} (<20%, skipping)")
+                    if _eng == _next_engine:
+                        _skip = True
+        except Exception:
+            _log.exception("meta_cog error")
+        if _skip:
+            log_func(f"  ⏭️ [Precheck] All alternate engines have poor history, keeping '{_current}'")
+        else:
+            _os.environ["AELVOXIM_SEARCH_ENGINE"] = _next_engine
+            log_func(f"  🧠 Reflected: switch search {_current}→{_next_engine} — {analysis.get('detail','')}")
     elif action == "tighten_gate":
         log_func(f"  🧠 Reflected: tightening quality gates — {analysis.get('detail','')}")
     elif action == "cleanup_kb":
