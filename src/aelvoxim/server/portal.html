@@ -1,182 +1,210 @@
 <!DOCTYPE html>
-<html lang="en"><!-- aelvoxim-theme-present -->
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Aelvoxim — More than a chatbot. A brain that learns.</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<title>Aelvoxim — Cognitive AI Brain</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{
- font-family:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
- font-feature-settings:'cv01','ss03';
- background:var(--bg-base);color:var(--text-primary);
- min-height:100vh;display:flex;flex-direction:column;
- -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
- position:relative;overflow-x:hidden
-}
-body::before{
- content:'';position:fixed;top:-50%;left:-50%;width:200%;height:200%;
- background:radial-gradient(ellipse at 30% 20%,color-mix(in srgb,var(--brand-500) 6%,transparent),transparent 50%),
- radial-gradient(ellipse at 70% 80%,color-mix(in srgb,var(--brand-400) 4%,transparent),transparent 50%);
- pointer-events:none;z-index:0
-}
-.header{position:relative;z-index:1;padding:28px 32px 0;display:flex;align-items:center;justify-content:space-between;max-width:800px;margin:0 auto;width:100%}
-.logo img{height:36px;width:auto;display:block}
-.header-actions{display:flex;gap:6px;align-items:center}
-.header-actions .user{font-size:12px;color:var(--text-muted);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.toggle-group{display:flex;gap:3px;align-items:center;background:var(--bg-surface-rgb);border:1px solid var(--border-rgb);border-radius:8px;padding:2px}
-.toggle-group button{font-family:'Inter',sans-serif;color:var(--text-muted);border:none;background:transparent;cursor:pointer;border-radius:6px;transition:all .15s;font-size:12px;font-weight:500;padding:4px 8px;line-height:1}
-.toggle-group button:hover{color:var(--text-primary)}
-.toggle-group .sep{width:1px;height:14px;background:var(--border-rgb);margin:0 2px}
-.btn-ghost{font-family:'Inter',sans-serif;font-size:12px;font-weight:500;padding:5px 12px;border-radius:8px;border:1px solid var(--border-rgb);background:transparent;color:var(--text-secondary);cursor:pointer;transition:all .15s}
-.btn-ghost:hover{background:var(--bg-hover);color:var(--text-primary);border-color:var(--text-muted)}
-.btn-primary{font-family:'Inter',sans-serif;font-size:12px;font-weight:500;padding:5px 14px;border-radius:8px;border:none;background:var(--gradient-brand);color:#fff;cursor:pointer;transition:opacity .15s}
-.btn-primary:hover{opacity:.9}
-.hero{position:relative;z-index:1;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 32px 40px;max-width:800px;margin:0 auto;width:100%}
-.hero-badge{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:.3px;text-transform:uppercase;padding:5px 12px;border-radius:20px;background:color-mix(in srgb,var(--brand-500) 10%,transparent);color:var(--brand-400);margin-bottom:24px;border:1px solid color-mix(in srgb,var(--brand-500) 15%,transparent)}
-.hero h1{font-size:44px;font-weight:650;line-height:1.12;letter-spacing:-1px;text-align:center;margin-bottom:16px;max-width:640px}
-.hero h1 .gradient-text{background:var(--gradient-brand-text);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.hero p{font-size:16px;line-height:1.65;letter-spacing:-.15px;color:var(--text-secondary);text-align:center;max-width:520px;margin-bottom:40px}
-.hero-actions{display:flex;gap:10px;margin-bottom:56px}
-.cta-primary{font-family:'Inter',sans-serif;font-size:14px;font-weight:500;padding:10px 24px;border-radius:10px;border:none;background:var(--gradient-brand);color:#fff;cursor:pointer;transition:transform .15s,box-shadow .15s;box-shadow:0 4px 14px color-mix(in srgb,var(--brand-600) 30%,transparent);text-decoration:none;display:inline-flex;align-items:center;gap:8px}
-.cta-primary:hover{transform:translateY(-1px);box-shadow:0 6px 20px color-mix(in srgb,var(--brand-600) 40%,transparent)}
-.cta-secondary{font-family:'Inter',sans-serif;font-size:14px;font-weight:500;padding:10px 24px;border-radius:10px;border:1px solid var(--border-rgb);background:transparent;color:var(--text-primary);cursor:pointer;transition:all .15s;text-decoration:none;display:inline-flex;align-items:center;gap:8px}
-.cta-secondary:hover{background:var(--bg-hover);border-color:var(--text-muted)}
-.card-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;width:100%;max-width:800px}
-.card{display:flex;flex-direction:column;align-items:flex-start;text-align:left;padding:28px 24px 24px;border-radius:14px;background:var(--bg-elevated);border:1px solid var(--border);text-decoration:none;color:var(--text-primary);transition:all .25s;cursor:pointer;position:relative;overflow:hidden}
-.card::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,color-mix(in srgb,var(--brand-500) 6%,transparent),transparent 60%);opacity:0;transition:opacity .3s;pointer-events:none}
-.card:hover{transform:translateY(-2px);border-color:var(--brand-500);box-shadow:0 8px 24px color-mix(in srgb,var(--brand-600) 12%,transparent)}
-.card:hover::before{opacity:1}
-.card .icon{font-size:22px;margin-bottom:14px;width:42px;height:42px;display:flex;align-items:center;justify-content:center;border-radius:10px;background:color-mix(in srgb,var(--brand-500) 10%,transparent);border:1px solid color-mix(in srgb,var(--brand-500) 15%,transparent);position:relative;z-index:1}
-.card .name{font-size:15px;font-weight:600;letter-spacing:-.15px;margin-bottom:6px;position:relative;z-index:1}
-.card .desc{font-size:12px;line-height:1.6;color:var(--text-muted);position:relative;z-index:1}
-.footer{position:relative;z-index:1;padding:20px 32px 28px;text-align:center;font-size:11px;color:var(--text-muted)}
-.modal-overlay{display:none;position:fixed;inset:0;background:var(--overlay-rgb);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:1000;align-items:center;justify-content:center}
-.modal-overlay.active{display:flex}
-.modal{background:var(--bg-elevated);border:1px solid var(--border);border-radius:14px;padding:28px;width:360px;max-width:90vw;box-shadow:0 16px 48px rgba(0,0,0,.15);animation:modalIn .2s ease}
-@keyframes modalIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
-.modal h2{font-size:18px;font-weight:600;letter-spacing:-.2px;margin-bottom:4px}
-.modal .hint{font-size:13px;color:var(--text-muted);margin-bottom:20px}
-.modal .fg{margin-bottom:14px}
-.modal .fg label{display:block;font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:4px}
-.modal .fg input{width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg-surface);color:var(--text-primary);font-size:14px;font-family:'Inter',sans-serif;outline:none;transition:border-color .15s}
-.modal .fg input:focus{border-color:var(--brand-500)}
-.modal .fg input::placeholder{color:var(--text-muted)}
-.modal .success{font-size:12px;color:#4ade80;min-height:18px;text-align:center;margin-top:8px}
-.modal .err{font-size:12px;color:#f87171;min-height:18px;text-align:center;margin-top:8px}
-.modal .btn-row{display:flex;gap:8px;margin-top:16px}
-.modal .btn-row button{flex:1;padding:9px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:500;font-family:'Inter',sans-serif}
-.modal .btn-row .primary{background:var(--gradient-brand);color:#fff}
-.modal .btn-row .primary:hover{opacity:.9}
-.modal .btn-row .ghost{background:transparent;border:1px solid var(--border);color:var(--text-secondary)}
-.modal .btn-row .ghost:hover{color:var(--text-primary);border-color:var(--text-muted)}
-.modal .link-btn{font-size:12px;color:var(--brand-500);text-align:center;margin-top:12px;cursor:pointer;display:block}
-.modal .link-btn:hover{opacity:.8}
-.modal .back-link{font-size:12px;color:var(--text-secondary);text-align:center;margin-top:8px;cursor:pointer}
-.modal .back-link:hover{color:var(--text-primary)}
-.modal .token-display{background:var(--bg-surface);border-radius:8px;padding:10px;font-family:monospace;font-size:12px;word-break:break-all;margin-bottom:14px;color:var(--text-secondary)}
-.modal .inline-switch{display:flex;gap:1px;background:var(--bg-surface);border-radius:8px;padding:2px;margin-bottom:20px}
-.modal .inline-switch button{flex:1;padding:6px 12px;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:500;font-family:'Inter',sans-serif;background:transparent;color:var(--text-muted);transition:all .15s}
-.modal .inline-switch button.active{background:var(--gradient-brand);color:#fff}
-.modal .inline-switch button:hover:not(.active){color:var(--text-primary)}
-@media(max-width:700px){
-.header{padding:18px 16px 0}
-.hero{padding:40px 16px 32px}
-.hero h1{font-size:30px;letter-spacing:-.6px}
-.hero-actions{flex-direction:column;width:100%;max-width:280px}
-.card-grid{grid-template-columns:1fr;gap:10px;max-width:400px}
-.card{padding:20px 18px}
-.cta-primary,.cta-secondary{justify-content:center}
-}
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    background:var(--bg-base);
+    color:var(--text-primary);
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+  }
+  .site-wrap{max-width:1900px;margin:0 auto;width:100%;padding:0;display:flex;flex-direction:column;min-height:100vh}
+  .header{padding:16px 0 0;display:flex;align-items:center;justify-content:space-between;margin-left:30px;margin-right:30px}
+  .logo svg{width:122px;height:auto;display:block}
+  .logo svg .st0{fill:var(--brand-500)}
+  .header-actions{display:flex;gap:6px;align-items:center}
+  .header-actions .user{font-size:13px;color:var(--text-muted)}
+  .icon-btn{font-size:18px;padding:6px;border-radius:6px;border:1px solid var(--border);background:transparent;cursor:pointer;text-decoration:none;line-height:1;display:inline-flex;align-items:center;justify-content:center;transition:all .15s;width:32px;height:32px}
+  .icon-btn:hover{border-color:var(--brand-500);transform:translateY(-1px)}
+  .lang-group{display:flex;gap:1px;background:var(--bg-surface);border-radius:6px;padding:2px}
+  .lang-group button{font-family:'Inter',sans-serif;font-size:11px;font-weight:500;padding:4px 8px;border:none;border-radius:5px;cursor:pointer;background:transparent;color:var(--text-muted);transition:all .15s}
+  .lang-group button.active{background:var(--gradient-brand);color:#fff}
+  .lang-group button:hover:not(.active){color:var(--text-primary)}
+
+  /* ── Hero ── */
+  .hero{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:80px 0 60px}
+  .hero-badge{display:none}
+  .hero-logo{margin-bottom:28px}
+  .hero-logo svg{height:108px;width:auto;display:block;margin:0 auto}
+  .hero-logo svg .st0{fill:var(--brand-500);opacity:0.8}
+  .hero h1{font-size:30px;font-weight:500;letter-spacing:-0.4px;line-height:1.2;margin-bottom:12px;max-width:520px;white-space:nowrap}
+  .hero h1 .highlight{font-weight:600}
+  .hero p{font-size:16px;line-height:1.6;color:var(--text-secondary);max-width:560px;margin:0 auto 36px}
+  .hero-actions{display:flex;gap:14px;margin-bottom:56px;flex-wrap:wrap;justify-content:center}
+  .hero-actions .btn{
+    font-family:'Inter',sans-serif;font-size:16px;font-weight:500;
+    padding:14px 32px;border-radius:10px;cursor:pointer;transition:all .2s;
+    display:inline-flex;align-items:center;gap:8px;text-decoration:none;
+  }
+  .hero-actions .btn.primary{
+    background:var(--gradient-brand);color:#fff;border:none;
+    box-shadow:0 4px 14px color-mix(in srgb,var(--brand-600) 25%,transparent);
+  }
+  .hero-actions .btn.primary:hover{opacity:.92;transform:translateY(-2px);box-shadow:0 6px 20px color-mix(in srgb,var(--brand-600) 35%,transparent)}
+  .hero-actions .btn.secondary{background:transparent;color:var(--text-primary);border:1.5px solid var(--border)}
+  .hero-actions .btn.secondary:hover{border-color:var(--brand-500);background:color-mix(in srgb,var(--brand-500) 4%,transparent);transform:translateY(-2px)}
+
+  /* ── Feature Cards ── */
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%;max-width:480px;margin:0 auto}
+  .card{
+    padding:32px 20px 24px;border-radius:12px;
+    background:var(--bg-elevated);border:1px solid var(--border);
+    text-align:center;transition:all .25s;cursor:pointer;
+    text-decoration:none;color:inherit;display:block;
+  }
+  .card:hover{
+    border-color:var(--brand-500);
+    transform:translateY(-3px);
+    box-shadow:0 8px 24px color-mix(in srgb,var(--brand-600) 10%,transparent);
+  }
+  .card .icon{font-size:32px;margin-bottom:14px}
+  .card .name{font-size:16px;font-weight:600;margin-bottom:6px;color:var(--text-primary)}
+  .card .desc{font-size:13px;color:var(--text-muted);line-height:1.6}
+  .card .desc .tag{
+    display:inline-block;padding:2px 10px;margin:2px;border-radius:6px;font-size:11px;
+    background:color-mix(in srgb,var(--brand-500) 8%,transparent);color:var(--brand-500);
+    border:1px solid color-mix(in srgb,var(--brand-500) 12%,transparent);
+  }
+
+  /* ── Footer ── */
+  .footer{padding:32px 0 36px;text-align:center;font-size:13px;color:var(--text-muted)}
+
+  /* ── Modal ── */
+  .modal-overlay{display:none;position:fixed;inset:0;background:color-mix(in srgb,var(--text-primary) 35%,transparent);backdrop-filter:blur(8px);z-index:1000;align-items:center;justify-content:center}
+  .modal-overlay.active{display:flex}
+  .modal{background:var(--bg-elevated);border:1px solid var(--border);border-radius:14px;padding:32px;width:380px;max-width:90vw}
+  .modal h2{font-size:20px;font-weight:600;color:var(--text-primary);margin-bottom:4px}
+  .modal .hint{font-size:14px;color:var(--text-muted);margin-bottom:20px}
+  .modal .fg{margin-bottom:16px}
+  .modal .fg label{display:block;font-size:13px;font-weight:500;color:var(--text-secondary);margin-bottom:5px}
+  .modal .fg input{width:100%;padding:11px 14px;border:1px solid var(--border);border-radius:8px;background:var(--bg-surface);color:var(--text-primary);font-size:15px;font-family:'Inter',sans-serif;outline:none;box-sizing:border-box;transition:border-color .15s}
+  .modal .fg input:focus{border-color:var(--brand-500)}
+  .modal .fg input::placeholder{color:var(--text-muted)}
+  .modal .err{font-size:13px;color:#f87171;min-height:20px;text-align:center;margin-top:8px}
+  .modal .success{font-size:13px;color:#4ade80;min-height:20px;text-align:center;margin-top:8px}
+  .modal .btn-row{display:flex;gap:10px;margin-top:20px}
+  .modal .btn-row button{flex:1;padding:11px;border-radius:8px;border:none;cursor:pointer;font-size:14px;font-weight:500;font-family:'Inter',sans-serif;transition:all .15s}
+  .modal .btn-row .primary{background:var(--gradient-brand);color:#fff}
+  .modal .btn-row .primary:hover{opacity:.9}
+  .modal .btn-row .ghost{background:transparent;border:1px solid var(--border);color:var(--text-secondary)}
+  .modal .btn-row .ghost:hover{color:var(--text-primary);border-color:var(--brand-500)}
+  .modal .link-btn{font-size:13px;color:var(--brand-500);text-align:center;margin-top:14px;cursor:pointer;display:block}
+  .modal .link-btn:hover{opacity:.8}
+  .modal .back-link{font-size:13px;color:var(--text-secondary);text-align:center;margin-top:10px;cursor:pointer}
+  .modal .back-link:hover{color:var(--text-primary)}
+  .modal .token-display{background:var(--bg-surface);border-radius:8px;padding:12px;font-family:monospace;font-size:13px;word-break:break-all;margin-bottom:16px;color:var(--text-secondary)}
+  .modal .inline-switch{display:flex;gap:2px;background:var(--bg-surface);border-radius:8px;padding:3px;margin-bottom:20px}
+  .modal .inline-switch button{flex:1;padding:8px 14px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:500;font-family:'Inter',sans-serif;background:transparent;color:var(--text-muted);transition:all .15s}
+  .modal .inline-switch button.active{background:var(--gradient-brand);color:#fff}
+  .modal .inline-switch button:hover:not(.active){color:var(--text-primary)}
+
+  @media(max-width:600px){
+    .site-wrap{padding:0}
+    .header{padding:20px 0 0;margin-left:16px;margin-right:16px}
+    .logo svg{width:90px}
+    .header-actions{gap:4px}
+    .lang-group button{font-size:10px;padding:3px 6px}
+    .hero{padding:36px 16px 32px}
+    .hero-badge{font-size:11px;padding:4px 12px;margin-bottom:20px}
+    .hero h1{font-size:28px;letter-spacing:-0.5px}
+    .hero p{font-size:14px;margin-bottom:28px}
+    .hero-actions{flex-direction:column;width:100%;gap:8px;margin-bottom:32px}
+    .hero-actions .btn{justify-content:center;padding:12px 20px;font-size:15px}
+    .grid{grid-template-columns:1fr;gap:8px;max-width:320px}
+    .card{padding:20px 14px 16px}
+    .card .icon{font-size:26px;margin-bottom:8px}
+    .card .name{font-size:15px}
+    .footer{padding:20px 16px 24px;font-size:12px}
+    .modal{padding:24px 20px;width:100%;max-width:360px}
+    .modal h2{font-size:18px}
+    .modal .fg input{font-size:14px}
+  }
 </style>
-:root{  --brand-50: #eef2ff;  --brand-100: #e0e5ff;  --brand-200: #c4cdff;  --brand-300: #9ea8ff;  --brand-400: #7c84ff;  --brand-500: #6172f3;  --brand-600: #444ce7;  --brand-700: #3538cd;  --brand-800: #2d31a4;  --brand-900: #2a2f7a;--bg-base:#ffffff;--bg-surface:#f8f9fa;--bg-elevated:#ffffff;--bg-hover:#f0f2f5;--text-primary:#1a1a2e;--text-secondary:#6b7280;--text-muted:#9ca3af;--border:#e0e0e0;--border-light:#f0f0f0;--gradient-brand:linear-gradient(135deg,var(--brand-500),var(--brand-600),var(--brand-700));--gradient-brand-text:linear-gradient(135deg,var(--brand-500),var(--brand-600));--bg-surface-rgb:rgba(0,0,0,0.02);--bg-hover-rgb:rgba(0,0,0,0.04);--border-rgb:rgba(0,0,0,0.08);--overlay-rgb:rgba(0,0,0,0.25)}
-.dark{--bg-base:#0f1117;--bg-surface:#1a1b23;--bg-elevated:#22232d;--bg-hover:#2a2b36;--text-primary:#e4e6eb;--text-secondary:#9ca3af;--text-muted:#6b7280;--border:#2d2d3a;--border-light:#22232d;--bg-surface-rgb:rgba(255,255,255,0.03);--bg-hover-rgb:rgba(255,255,255,0.06);--border-rgb:rgba(255,255,255,0.08);--overlay-rgb:rgba(0,0,0,0.55)}
-html:not(.dark){--bg-surface-rgb:rgba(0,0,0,0.02);--bg-hover-rgb:rgba(0,0,0,0.04);--border-rgb:rgba(0,0,0,0.08);--overlay-rgb:rgba(0,0,0,0.25)}
+<script>localStorage.setItem('ael_theme','light');document.documentElement.classList.remove('dark');</script>
 </head>
 <body>
-<div class="header">
-  <a class="logo" href="/"><img src="/static/logo.jpg" alt="Aelvoxim" id="logoImg"><span class="logo-fallback" style="display:none;font-size:20px;font-weight:600;color:var(--text-primary)">Aelvoxim<span style="color:var(--brand-500)">.</span></span></a>
-  <div class="header-actions">
-    <div class="toggle-group">
-      <button class="theme-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Toggle theme">☀️</button>
-      <div class="sep"></div>
-      <button id="langToggleBtn" onclick="toggleLang()">EN</button>
+<div class="site-wrap">
+  <div class="header">
+    <div class="logo"><svg version="1.1" viewBox="0 0 294.26 80.35" xmlns="http://www.w3.org/2000/svg">
+<path class="st0" d="M240.48,26.74c1-1.16,1.82-2.3,2.82-3.26c3.41-3.27,7.47-4.43,12.07-3.31c3.01,0.73,5.13,2.62,6.37,5.47c0.13,0.3,0.25,0.6,0.38,0.9c0.02,0.03,0.06,0.05,0.16,0.13c0.81-1.55,1.95-2.83,3.25-3.97c3.9-3.43,10.26-3.97,14.4-1.14c3.02,2.07,4.6,5.09,5.18,8.63c0.23,1.39,0.28,2.83,0.29,4.24c0.03,5.2-0.01,10.4,0.02,15.6c0.01,1.15,0.15,2.31,0.39,3.43c0.21,0.97,0.82,1.79,1.64,2.38c1.06,0.77,2.17,0.86,3.31,0.16c0.17-0.11,0.36-0.19,0.54-0.29c0.04,0.05,0.09,0.11,0.13,0.16c-0.31,0.3-0.6,0.65-0.95,0.9c-1.21,0.9-2.57,1.36-4.1,1.32c-4.08-0.11-7.32-1.7-9.37-5.34c-0.81-1.44-1.07-3.04-1.08-4.68c-0.02-4.17-0.01-8.35-0.05-12.52c-0.01-1.29-0.01-2.59-0.21-3.85c-0.31-1.99-1.17-3.71-3.08-4.69c-2.15-1.1-4.73-0.72-6.64,1c-1.92,1.73-2.72,3.95-2.72,6.5c0,7.43,0,14.86-0.01,22.29c0,1.12,0.1,1-1.04,1c-2.47,0-4.94,0.01-7.41,0.02c-0.21,0-0.43,0-0.71,0c-0.02-0.32-0.05-0.59-0.05-0.87c0-7.23,0.03-14.47,0-21.7c-0.01-1.45-0.07-2.95-0.4-4.35c-0.74-3.2-3.18-4.9-6.26-4.43c-2.12,0.32-3.74,1.51-4.88,3.33c-0.95,1.52-1.43,3.17-1.43,4.97c-0.01,7.15-0.04,14.29-0.06,21.44c0,1.57,0,1.57-1.53,1.57c-2.43,0-4.85,0-7.28,0.03c-0.5,0.01-0.62-0.14-0.62-0.63c0-11.38-0.01-22.77-0.04-34.15c0-0.55,0.13-0.78,0.69-0.93c2.39-0.63,4.76-1.31,7.13-1.97c0.33-0.09,0.68-0.11,1.12-0.18C240.48,22.25,240.48,24.46,240.48,26.74z"/>
+<path class="st0" d="M3.83,39.56c0.32-0.33,0.61-0.7,0.95-1c3.24-2.78,6.99-4.44,11.22-4.95c0.87-0.11,1.24-0.48,1.56-1.25c2.77-6.65,5.59-13.29,8.39-19.93c0.41-0.97,0.83-1.92,1.25-2.89c0.53-1.21,0.42-1.92-0.54-2.83c-0.52-0.5-1.15-0.88-1.83-1.4c0.25-0.02,0.4-0.04,0.54-0.04c2.67,0,5.33-0.01,8,0c0.39,0,0.78,0.05,1.18,0.08c1.22,0.11,2.19,0.68,2.72,1.79c0.87,1.81,1.75,3.62,2.46,5.49c3.33,8.68,6.59,17.4,9.93,26.08c1.72,4.46,3.44,8.93,5.36,13.3c1.72,3.89,4.24,7.26,7.49,10.07c6.51,5.64,14.64,5.81,21.04,1.18c0.99-0.71,1.89-1.55,2.83-2.33c0.2-0.16,0.39-0.32,0.59-0.48c0.05,0.03,0.09,0.07,0.14,0.1c-0.12,0.21-0.21,0.44-0.35,0.64c-5.18,7.18-12.12,10.29-20.9,8.73c-5.1-0.91-9.44-3.41-13.22-6.95c-2.65-2.48-4.86-5.31-6.9-8.29c-1.22-1.78-2.4-3.61-3.75-5.29c-2.23-2.79-5-5.02-8.37-6.24c-5.01-1.81-9.58-0.87-13.57,2.71c-0.23,0.2-0.44,0.42-0.66,0.63c-0.03,0.03-0.07,0.04-0.11,0.06c0.37-1.37,3.81-3.91,6.28-4.61c2.63-0.75,5.25-0.64,7.88,0.12c0.02-0.07,0.05-0.14,0.07-0.2c-0.79-0.56-1.57-1.14-2.38-1.66c-5.16-3.34-10.85-4.74-16.96-4.41c-3.53,0.19-6.74,1.37-9.58,3.49c-0.2,0.15-0.41,0.28-0.61,0.43C3.93,39.66,3.88,39.61,3.83,39.56z M40.62,42.64c0.06-0.05,0.11-0.1,0.17-0.15c-3.37-9.11-6.75-18.22-10.18-27.5c-2.53,6.32-4.98,12.42-7.48,18.65C30.35,34.08,35.84,37.67,40.62,42.64z"/>
+<path class="st0" d="M161.17,19.77c7.19,0.14,12.75,3.16,16.27,9.51c3.99,7.18,3.06,18.27-5.12,24.74c-7.17,5.68-17.37,5.59-24.43-0.2c-5.14-4.22-7.27-9.72-6.72-16.24c0.57-6.91,4.15-11.98,10.11-15.37C154.42,20.43,157.48,19.8,161.17,19.77z M170.26,38.44c0-0.55,0.04-1.09-0.01-1.64c-0.24-3.05-0.97-5.94-2.87-8.43c-2.39-3.12-6.48-4.29-10.02-2.79c-2.36,1.01-3.95,2.85-5.07,5.1c-1.67,3.33-1.97,6.9-1.62,10.55c0.31,3.2,1.41,6.11,3.44,8.64c2.43,3.05,6.07,3.95,9.5,2.3c1.49-0.72,2.65-1.84,3.62-3.16C169.52,45.86,170.32,42.27,170.26,38.44z"/>
+<path class="st0" d="M64.67,39.7c0.13,2.11,0.6,4.04,1.44,5.89c2.75,6.07,9.08,7.4,14.19,5.78c2.85-0.9,5.14-2.56,7.16-4.66c0.38-0.39,0.77-0.76,1.16-1.15c0.07,0.05,0.13,0.1,0.2,0.14c-0.03,0.2-0.04,0.41-0.08,0.61c-1.24,5.67-4.81,9.17-10.24,10.86c-8.39,2.61-17.66-1.46-21.33-9.43c-3.13-6.82-2.94-13.61,1.05-20.04c2.82-4.54,7.13-7.05,12.42-7.75c3.98-0.53,7.8,0.01,11.31,2.1c3.62,2.16,5.59,5.48,6.6,9.46c0.63,2.48,0.64,5.01,0.52,7.56c-0.03,0.61-0.33,0.69-0.84,0.69c-7.56-0.03-15.12-0.05-22.68-0.06C65.3,39.7,65.04,39.7,64.67,39.7z M64.66,35.18c5.35,0,10.56,0,15.72,0c0.07-0.13,0.1-0.16,0.11-0.2c0.02-0.08,0.04-0.17,0.03-0.26c-0.07-2.35-0.58-4.58-1.79-6.62c-2.18-3.69-6.13-3.86-8.82-2.4C66.18,27.7,65.16,31.29,64.66,35.18z"/>
+<path class="st0" d="M214.35,57.7c-0.27,0.03-0.46,0.07-0.64,0.07c-1.94,0.01-3.89,0.01-5.83,0.02c-3.24,0.02-5.71-1.51-7.63-3.95c-1.55-1.97-2.91-4.09-4.35-6.15c-0.81-1.16-1.6-2.33-2.47-3.59c-0.92,1.26-1.79,2.44-2.66,3.64c-2.31,3.19-4.6,6.38-6.92,9.55c-0.16,0.22-0.47,0.44-0.72,0.45c-2.25,0.05-4.5,0.06-6.75,0.07c-0.06,0-0.11-0.04-0.26-0.1c0.14-0.22,0.26-0.42,0.39-0.59c4.41-5.73,8.82-11.46,13.25-17.17c0.45-0.58,0.5-0.97,0.06-1.58c-3.22-4.46-6.4-8.96-9.62-13.42c-1.23-1.7-2.68-3.17-4.64-4.04c-0.09-0.04-0.16-0.11-0.34-0.24c0.24-0.04,0.35-0.08,0.47-0.08c3.3-0.01,6.6-0.01,9.9-0.02c1.43-0.01,2.55,0.61,3.35,1.75c1.25,1.79,2.44,3.63,3.64,5.44c0.94,1.42,1.88,2.84,2.83,4.26c0.09,0.14,0.22,0.26,0.38,0.45c0.24-0.31,0.45-0.57,0.65-0.85c2.39-3.23,4.79-6.45,7.14-9.71c0.74-1.03,1.63-1.44,2.89-1.4c1.75,0.06,3.5,0,5.24-0.01c0.15,0,0.29,0.02,0.52,0.03c-0.12,0.2-0.19,0.35-0.29,0.47c-4.2,5.31-8.4,10.62-12.61,15.93c-0.22,0.28-0.28,0.47-0.05,0.79c3.49,4.86,6.93,9.76,10.47,14.59c1.3,1.77,2.86,3.35,4.3,5.02C214.14,57.43,214.21,57.53,214.35,57.7z"/>
+<path class="st0" d="M104.74,20.53c0.21-0.02,0.42-0.05,0.62-0.05c2.53-0.01,5.07,0.01,7.6-0.03c2.51-0.04,4.16,1.16,5,3.46c1.39,3.79,2.76,7.6,4.06,11.42c1.22,3.57,2.35,7.18,3.52,10.77c0.03,0.1,0.08,0.19,0.18,0.42c0.16-0.37,0.27-0.62,0.38-0.87c3.01-7,6.01-14,9.04-21c0.38-0.87,0.87-1.71,1.42-2.5c0.61-0.88,1.5-1.45,2.58-1.5c2.12-0.09,4.23-0.09,6.35-0.11c0.12,0,0.24,0.05,0.44,0.09c-0.15,0.16-0.23,0.29-0.35,0.37c-2.9,1.8-4.57,4.61-5.97,7.56c-2.39,5.03-4.66,10.11-6.95,15.19c-1.97,4.38-3.91,8.78-5.84,13.18c-0.28,0.64-0.62,0.92-1.36,0.89c-1.31-0.06-2.62-0.02-3.93,0c-0.39,0.01-0.6-0.09-0.76-0.51c-2.36-6.25-4.75-12.49-7.14-18.73c-1.6-4.16-3.21-8.31-4.84-12.46c-0.82-2.08-1.93-3.97-3.84-5.26c-0.09-0.06-0.2-0.1-0.3-0.15C104.68,20.65,104.71,20.59,104.74,20.53z"/>
+<path class="st0" d="M108.69,54.4c-1.41,1.99-3.22,3.38-5.77,3.54c-4.51,0.3-9.51-3.21-9.59-8.91c-0.06-4.67-0.04-9.35-0.04-14.02c0-8.83,0-17.65,0.03-26.48c0-0.9-0.08-1.66-1.07-2.02c3.51-1.24,6.96-2.46,10.52-3.72c0.02,0.41,0.05,0.71,0.05,1c0,15.29-0.02,30.58-0.01,45.88c0,1.11,0.03,2.25,0.31,3.31c0.57,2.2,2.77,2.95,4.67,1.72c0.25-0.16,0.5-0.32,0.75-0.48C108.61,54.28,108.65,54.34,108.69,54.4z"/>
+<path class="st0" d="M214.65,22.25c3.53-0.78,7.05-1.56,10.6-2.35c0,12.69,0,25.33,0,38.15c-1.13-0.18-2.18-0.24-3.17-0.51c-3-0.82-5.32-2.45-6.04-5.69c-0.17-0.78-0.22-1.6-0.22-2.41c0.02-8.15,0.05-16.3,0.08-24.45c0-0.31-0.03-0.62,0.01-0.92c0.1-0.81-0.22-1.35-0.97-1.65C214.83,22.39,214.73,22.3,214.65,22.25z"/>
+<path class="st0" d="M21.42,39.45c-0.23,0.55-0.45,1.04-0.65,1.54c-1.84,4.6-3.67,9.2-5.52,13.8c-0.34,0.85-0.69,1.7-1.08,2.53c-0.09,0.19-0.35,0.44-0.54,0.44c-2.22,0.03-4.45,0.02-6.76,0.02c0.08-0.24,0.13-0.46,0.22-0.67c2.44-5.67,4.88-11.34,7.32-17.02c0.44-1.03,0.45-1.04,1.58-0.99c1.64,0.07,3.27,0.17,4.9,0.26C21.04,39.36,21.18,39.4,21.42,39.45z"/>
+<path class="st0" d="M220.81,4.82c2.93,0.03,5.09,2.35,5.08,5.44c-0.02,2.76-2.45,5.31-5.05,5.29c-2.83-0.02-5.25-2.43-5.23-5.22C215.64,7.22,217.94,4.78,220.81,4.82z"/>
+</svg></div>
+    <div class="header-actions">
+      <div class="lang-group"><button class="lang-btn" id="langEn" onclick="setLang('en')">EN</button><button class="lang-btn" id="langZh" onclick="setLang('zh')">中文</button></div>
+      <span class="user" id="headerUser"></span>
+      <a class="btn icon-btn" href="/v1/admin/panel" title="Control Panel">⚙️</a>
+      <button class="btn-ghost" id="logoutBtn" onclick="doLogout()" style="display:none">@@logout@@</button>
+      <button class="btn-primary" id="loginBtn" onclick="showAuth()">@@login@@</button>
     </div>
-    <span class="user" id="headerUser"></span>
-    <button class="btn-ghost" id="logoutBtn" onclick="doLogout()" style="display:none">@@logout@@</button>
-    <button class="btn-primary" id="loginBtn" onclick="showAuth()">@@login@@</button>
   </div>
+  <div class="hero">
+    <div class="hero-logo"><svg version="1.1" viewBox="0 0 294.26 80.35" xmlns="http://www.w3.org/2000/svg">
+<path class="st0" d="M240.48,26.74c1-1.16,1.82-2.3,2.82-3.26c3.41-3.27,7.47-4.43,12.07-3.31c3.01,0.73,5.13,2.62,6.37,5.47c0.13,0.3,0.25,0.6,0.38,0.9c0.02,0.03,0.06,0.05,0.16,0.13c0.81-1.55,1.95-2.83,3.25-3.97c3.9-3.43,10.26-3.97,14.4-1.14c3.02,2.07,4.6,5.09,5.18,8.63c0.23,1.39,0.28,2.83,0.29,4.24c0.03,5.2-0.01,10.4,0.02,15.6c0.01,1.15,0.15,2.31,0.39,3.43c0.21,0.97,0.82,1.79,1.64,2.38c1.06,0.77,2.17,0.86,3.31,0.16c0.17-0.11,0.36-0.19,0.54-0.29c0.04,0.05,0.09,0.11,0.13,0.16c-0.31,0.3-0.6,0.65-0.95,0.9c-1.21,0.9-2.57,1.36-4.1,1.32c-4.08-0.11-7.32-1.7-9.37-5.34c-0.81-1.44-1.07-3.04-1.08-4.68c-0.02-4.17-0.01-8.35-0.05-12.52c-0.01-1.29-0.01-2.59-0.21-3.85c-0.31-1.99-1.17-3.71-3.08-4.69c-2.15-1.1-4.73-0.72-6.64,1c-1.92,1.73-2.72,3.95-2.72,6.5c0,7.43,0,14.86-0.01,22.29c0,1.12,0.1,1-1.04,1c-2.47,0-4.94,0.01-7.41,0.02c-0.21,0-0.43,0-0.71,0c-0.02-0.32-0.05-0.59-0.05-0.87c0-7.23,0.03-14.47,0-21.7c-0.01-1.45-0.07-2.95-0.4-4.35c-0.74-3.2-3.18-4.9-6.26-4.43c-2.12,0.32-3.74,1.51-4.88,3.33c-0.95,1.52-1.43,3.17-1.43,4.97c-0.01,7.15-0.04,14.29-0.06,21.44c0,1.57,0,1.57-1.53,1.57c-2.43,0-4.85,0-7.28,0.03c-0.5,0.01-0.62-0.14-0.62-0.63c0-11.38-0.01-22.77-0.04-34.15c0-0.55,0.13-0.78,0.69-0.93c2.39-0.63,4.76-1.31,7.13-1.97c0.33-0.09,0.68-0.11,1.12-0.18C240.48,22.25,240.48,24.46,240.48,26.74z"/>
+<path class="st0" d="M3.83,39.56c0.32-0.33,0.61-0.7,0.95-1c3.24-2.78,6.99-4.44,11.22-4.95c0.87-0.11,1.24-0.48,1.56-1.25c2.77-6.65,5.59-13.29,8.39-19.93c0.41-0.97,0.83-1.92,1.25-2.89c0.53-1.21,0.42-1.92-0.54-2.83c-0.52-0.5-1.15-0.88-1.83-1.4c0.25-0.02,0.4-0.04,0.54-0.04c2.67,0,5.33-0.01,8,0c0.39,0,0.78,0.05,1.18,0.08c1.22,0.11,2.19,0.68,2.72,1.79c0.87,1.81,1.75,3.62,2.46,5.49c3.33,8.68,6.59,17.4,9.93,26.08c1.72,4.46,3.44,8.93,5.36,13.3c1.72,3.89,4.24,7.26,7.49,10.07c6.51,5.64,14.64,5.81,21.04,1.18c0.99-0.71,1.89-1.55,2.83-2.33c0.2-0.16,0.39-0.32,0.59-0.48c0.05,0.03,0.09,0.07,0.14,0.1c-0.12,0.21-0.21,0.44-0.35,0.64c-5.18,7.18-12.12,10.29-20.9,8.73c-5.1-0.91-9.44-3.41-13.22-6.95c-2.65-2.48-4.86-5.31-6.9-8.29c-1.22-1.78-2.4-3.61-3.75-5.29c-2.23-2.79-5-5.02-8.37-6.24c-5.01-1.81-9.58-0.87-13.57,2.71c-0.23,0.2-0.44,0.42-0.66,0.63c-0.03,0.03-0.07,0.04-0.11,0.06c0.37-1.37,3.81-3.91,6.28-4.61c2.63-0.75,5.25-0.64,7.88,0.12c0.02-0.07,0.05-0.14,0.07-0.2c-0.79-0.56-1.57-1.14-2.38-1.66c-5.16-3.34-10.85-4.74-16.96-4.41c-3.53,0.19-6.74,1.37-9.58,3.49c-0.2,0.15-0.41,0.28-0.61,0.43C3.93,39.66,3.88,39.61,3.83,39.56z M40.62,42.64c0.06-0.05,0.11-0.1,0.17-0.15c-3.37-9.11-6.75-18.22-10.18-27.5c-2.53,6.32-4.98,12.42-7.48,18.65C30.35,34.08,35.84,37.67,40.62,42.64z"/>
+<path class="st0" d="M161.17,19.77c7.19,0.14,12.75,3.16,16.27,9.51c3.99,7.18,3.06,18.27-5.12,24.74c-7.17,5.68-17.37,5.59-24.43-0.2c-5.14-4.22-7.27-9.72-6.72-16.24c0.57-6.91,4.15-11.98,10.11-15.37C154.42,20.43,157.48,19.8,161.17,19.77z M170.26,38.44c0-0.55,0.04-1.09-0.01-1.64c-0.24-3.05-0.97-5.94-2.87-8.43c-2.39-3.12-6.48-4.29-10.02-2.79c-2.36,1.01-3.95,2.85-5.07,5.1c-1.67,3.33-1.97,6.9-1.62,10.55c0.31,3.2,1.41,6.11,3.44,8.64c2.43,3.05,6.07,3.95,9.5,2.3c1.49-0.72,2.65-1.84,3.62-3.16C169.52,45.86,170.32,42.27,170.26,38.44z"/>
+<path class="st0" d="M64.67,39.7c0.13,2.11,0.6,4.04,1.44,5.89c2.75,6.07,9.08,7.4,14.19,5.78c2.85-0.9,5.14-2.56,7.16-4.66c0.38-0.39,0.77-0.76,1.16-1.15c0.07,0.05,0.13,0.1,0.2,0.14c-0.03,0.2-0.04,0.41-0.08,0.61c-1.24,5.67-4.81,9.17-10.24,10.86c-8.39,2.61-17.66-1.46-21.33-9.43c-3.13-6.82-2.94-13.61,1.05-20.04c2.82-4.54,7.13-7.05,12.42-7.75c3.98-0.53,7.8,0.01,11.31,2.1c3.62,2.16,5.59,5.48,6.6,9.46c0.63,2.48,0.64,5.01,0.52,7.56c-0.03,0.61-0.33,0.69-0.84,0.69c-7.56-0.03-15.12-0.05-22.68-0.06C65.3,39.7,65.04,39.7,64.67,39.7z M64.66,35.18c5.35,0,10.56,0,15.72,0c0.07-0.13,0.1-0.16,0.11-0.2c0.02-0.08,0.04-0.17,0.03-0.26c-0.07-2.35-0.58-4.58-1.79-6.62c-2.18-3.69-6.13-3.86-8.82-2.4C66.18,27.7,65.16,31.29,64.66,35.18z"/>
+<path class="st0" d="M214.35,57.7c-0.27,0.03-0.46,0.07-0.64,0.07c-1.94,0.01-3.89,0.01-5.83,0.02c-3.24,0.02-5.71-1.51-7.63-3.95c-1.55-1.97-2.91-4.09-4.35-6.15c-0.81-1.16-1.6-2.33-2.47-3.59c-0.92,1.26-1.79,2.44-2.66,3.64c-2.31,3.19-4.6,6.38-6.92,9.55c-0.16,0.22-0.47,0.44-0.72,0.45c-2.25,0.05-4.5,0.06-6.75,0.07c-0.06,0-0.11-0.04-0.26-0.1c0.14-0.22,0.26-0.42,0.39-0.59c4.41-5.73,8.82-11.46,13.25-17.17c0.45-0.58,0.5-0.97,0.06-1.58c-3.22-4.46-6.4-8.96-9.62-13.42c-1.23-1.7-2.68-3.17-4.64-4.04c-0.09-0.04-0.16-0.11-0.34-0.24c0.24-0.04,0.35-0.08,0.47-0.08c3.3-0.01,6.6-0.01,9.9-0.02c1.43-0.01,2.55,0.61,3.35,1.75c1.25,1.79,2.44,3.63,3.64,5.44c0.94,1.42,1.88,2.84,2.83,4.26c0.09,0.14,0.22,0.26,0.38,0.45c0.24-0.31,0.45-0.57,0.65-0.85c2.39-3.23,4.79-6.45,7.14-9.71c0.74-1.03,1.63-1.44,2.89-1.4c1.75,0.06,3.5,0,5.24-0.01c0.15,0,0.29,0.02,0.52,0.03c-0.12,0.2-0.19,0.35-0.29,0.47c-4.2,5.31-8.4,10.62-12.61,15.93c-0.22,0.28-0.28,0.47-0.05,0.79c3.49,4.86,6.93,9.76,10.47,14.59c1.3,1.77,2.86,3.35,4.3,5.02C214.14,57.43,214.21,57.53,214.35,57.7z"/>
+<path class="st0" d="M104.74,20.53c0.21-0.02,0.42-0.05,0.62-0.05c2.53-0.01,5.07,0.01,7.6-0.03c2.51-0.04,4.16,1.16,5,3.46c1.39,3.79,2.76,7.6,4.06,11.42c1.22,3.57,2.35,7.18,3.52,10.77c0.03,0.1,0.08,0.19,0.18,0.42c0.16-0.37,0.27-0.62,0.38-0.87c3.01-7,6.01-14,9.04-21c0.38-0.87,0.87-1.71,1.42-2.5c0.61-0.88,1.5-1.45,2.58-1.5c2.12-0.09,4.23-0.09,6.35-0.11c0.12,0,0.24,0.05,0.44,0.09c-0.15,0.16-0.23,0.29-0.35,0.37c-2.9,1.8-4.57,4.61-5.97,7.56c-2.39,5.03-4.66,10.11-6.95,15.19c-1.97,4.38-3.91,8.78-5.84,13.18c-0.28,0.64-0.62,0.92-1.36,0.89c-1.31-0.06-2.62-0.02-3.93,0c-0.39,0.01-0.6-0.09-0.76-0.51c-2.36-6.25-4.75-12.49-7.14-18.73c-1.6-4.16-3.21-8.31-4.84-12.46c-0.82-2.08-1.93-3.97-3.84-5.26c-0.09-0.06-0.2-0.1-0.3-0.15C104.68,20.65,104.71,20.59,104.74,20.53z"/>
+<path class="st0" d="M108.69,54.4c-1.41,1.99-3.22,3.38-5.77,3.54c-4.51,0.3-9.51-3.21-9.59-8.91c-0.06-4.67-0.04-9.35-0.04-14.02c0-8.83,0-17.65,0.03-26.48c0-0.9-0.08-1.66-1.07-2.02c3.51-1.24,6.96-2.46,10.52-3.72c0.02,0.41,0.05,0.71,0.05,1c0,15.29-0.02,30.58-0.01,45.88c0,1.11,0.03,2.25,0.31,3.31c0.57,2.2,2.77,2.95,4.67,1.72c0.25-0.16,0.5-0.32,0.75-0.48C108.61,54.28,108.65,54.34,108.69,54.4z"/>
+<path class="st0" d="M214.65,22.25c3.53-0.78,7.05-1.56,10.6-2.35c0,12.69,0,25.33,0,38.15c-1.13-0.18-2.18-0.24-3.17-0.51c-3-0.82-5.32-2.45-6.04-5.69c-0.17-0.78-0.22-1.6-0.22-2.41c0.02-8.15,0.05-16.3,0.08-24.45c0-0.31-0.03-0.62,0.01-0.92c0.1-0.81-0.22-1.35-0.97-1.65C214.83,22.39,214.73,22.3,214.65,22.25z"/>
+<path class="st0" d="M21.42,39.45c-0.23,0.55-0.45,1.04-0.65,1.54c-1.84,4.6-3.67,9.2-5.52,13.8c-0.34,0.85-0.69,1.7-1.08,2.53c-0.09,0.19-0.35,0.44-0.54,0.44c-2.22,0.03-4.45,0.02-6.76,0.02c0.08-0.24,0.13-0.46,0.22-0.67c2.44-5.67,4.88-11.34,7.32-17.02c0.44-1.03,0.45-1.04,1.58-0.99c1.64,0.07,3.27,0.17,4.9,0.26C21.04,39.36,21.18,39.4,21.42,39.45z"/>
+<path class="st0" d="M220.81,4.82c2.93,0.03,5.09,2.35,5.08,5.44c-0.02,2.76-2.45,5.31-5.05,5.29c-2.83-0.02-5.25-2.43-5.23-5.22C215.64,7.22,217.94,4.78,220.81,4.82z"/>
+</svg></div>
+    <h1 data-i18n="titleLine"></h1>
+    <p data-i18n="subtitle"></p>
+    <div class="grid">
+      <a class="card" href="http://8.134.185.33:9702/"><div class="icon">🧠</div><div class="name" data-i18n="cardBrain">@@cardBrain@@</div><div class="desc"><span class="tag">Multi-agent</span> <span class="tag">Memory</span> <span class="tag">Metacognition</span></div></a>
+      <a class="card" href="/api"><div class="icon">🔌</div><div class="name" data-i18n="cardApi">@@cardApi@@</div><div class="desc"><span class="tag">REST API</span> <span class="tag">SSE Streaming</span> <span class="tag">Webhooks</span></div></a>
+    </div>
+  </div>
+  <div class="footer" data-i18n="footer">Aelvoxim · v1.2.0</div>
 </div>
-<div class="hero">
-  <div class="hero-badge">✦ @@tagline@@</div>
-  <h1><span class="gradient-text">@@headline1@@</span></h1>
-  <p>@@subtitle@@</p>
-  <div class="hero-actions">
-    <a class="cta-primary" href="http://8.134.185.33:9702/"><span>@@ctaChat@@</span><span>→</span></a>
-    <a class="cta-secondary" href="/api"><span>@@ctaApi@@</span><span>→</span></a>
-  </div>
-  <div class="card-grid">
-    <a class="card" href="http://8.134.185.33:9702/" id="card-chat"><div class="icon">🧠</div><div class="name">@@cardBrain@@</div><div class="desc">@@cardBrainDesc@@</div></a>
-    <a class="card" href="/api" target="_self" id="card-api"><div class="icon">🔌</div><div class="name">@@cardApi@@</div><div class="desc">@@cardApiDesc@@</div></a>
-    <a class="card" href="/v1/admin/panel" id="card-admin"><div class="icon">⚙️</div><div class="name">@@cardAdmin@@</div><div class="desc">@@cardAdminDesc@@</div></a>
-  </div>
+
+<div class="modal-overlay" id="authModal" onclick="if(event.target===this)closeAuth()">
+  <div class="modal" id="authModalContent"></div>
 </div>
-<div class="footer" data-i18n="footer">Aelvoxim · v1.0</div>
-<div class="modal-overlay" id="authModal" onclick="if(event.target===this)closeAuth()"><div class="modal" id="authModalContent"></div></div>
+
 <script>
-var _lang=localStorage.getItem("ael_lang")||(navigator.language&&navigator.language.startsWith("zh")?"zh":"en");
-var I18N={en:{login:"Login",logout:"Logout",signup:"Sign Up",forgotPassword:"Forgot password?",noAccount:"No account? Sign up",hasAccount:"Already have an account? Login",backToLogin:"Back to Login",tagline:"More than a chatbot. A brain that learns.",headline1:"More than a chatbot.<br>A brain that learns.",headline2:"A brain that learns.",subtitle:"Self-hosted AI decision layer with multi-agent orchestration, anti-hallucination, memory, tool calling, and autonomous learning.",ctaChat:"Start Chat",ctaApi:"API Access",cardBrain:"AI Brain",cardBrainDesc:"Multi-agent reasoning / Memory<br>Tool calling / Anti-hallucination",cardApi:"API Access",cardApiDesc:"REST API with API Key auth<br>Usage quota / Developer docs",cardAdmin:"Control Panel",cardAdminDesc:"Configuration / Monitoring<br>Agents / Pricing & System",loginTitle:"Login",loginHint:"Sign in to access all features",registerTitle:"Sign Up",registerHint:"Create a new account",forgotTitle:"Reset Password",forgotHint:"Enter your email to receive a reset token",resetTitle:"Set New Password",resetHint:"Token verified for",emailLabel:"Email",passwordLabel:"Password",confirmLabel:"Confirm Password",resetTokenLabel:"Reset Token",newPasswordLabel:"New Password",sendToken:"Send Reset Token",resetBtn:"Reset Password",errRequired:"Email and password are required",errEmailRequired:"Email is required",errPwShort:"Password must be at least 6 characters",errPwMismatch:"Passwords do not match",errTokenRequired:"Token and new password are required",requesting:"Requesting...",resetting:"Resetting...",resetSuccess:"Password reset successful! Redirecting to login...",tokenGenerated:"Reset token generated.",footer:"Aelvoxim · Self-hosted AI Brain",loggedIn:"Logged in"},zh:{login:"登录",logout:"退出",signup:"注册",forgotPassword:"忘记密码？",noAccount:"没有账号？去注册",hasAccount:"已有账号？去登录",backToLogin:"返回登录",tagline:"不只是聊天机器人，一个会学习的大脑",headline1:"不只是聊天机器人，<br>一个会学习的大脑。",headline2:"一个会学习的大脑。",subtitle:"自托管 AI 决策层：多智能体编排、防幻觉、记忆系统、工具调用、自主学习。",ctaChat:"开始对话",ctaApi:"API 接入",cardBrain:"AI 大脑",cardBrainDesc:"多智能体推理 / 记忆<br>工具调用 / 防幻觉",cardApi:"API 接入",cardApiDesc:"REST API + API Key 认证<br>用量配额 / 开发者文档",cardAdmin:"控制面板",cardAdminDesc:"配置 / 监控<br>智能体 / 定价与系统管理",loginTitle:"登录",loginHint:"登录以访问全部功能",registerTitle:"注册",registerHint:"创建新账号",forgotTitle:"重置密码",forgotHint:"输入邮箱获取重置令牌",resetTitle:"设置新密码",resetHint:"令牌已验证，属于",emailLabel:"邮箱",passwordLabel:"密码",confirmLabel:"确认密码",resetTokenLabel:"重置令牌",newPasswordLabel:"新密码",sendToken:"发送重置令牌",resetBtn:"重置密码",errRequired:"邮箱和密码不能为空",errEmailRequired:"请输入邮箱",errPwShort:"密码至少6位",errPwMismatch:"两次输入的密码不一致",errTokenRequired:"令牌和新密码不能为空",requesting:"请求中...",resetting:"重置中...",resetSuccess:"密码重置成功！即将跳转登录...",tokenGenerated:"重置令牌已生成。",footer:"Aelvoxim · 自托管 AI 大脑",loggedIn:"已登录"}};
+var _lang=localStorage.getItem('ael_lang')||'en';
+var I18N={en:{login:'Login',logout:'Logout',signup:'Sign Up',forgotPassword:'Forgot password?',noAccount:'No account? Sign up',hasAccount:'Already have an account? Login',backToLogin:'Back to Login',tagline:'More than a chatbot. A brain that learns.',headline1:'More than a chatbot,',headline2:'a brain that learns.',titleLine:'More than a chatbot, <span class="highlight">a brain that learns.</span>',subtitle:'A self-hosted AI cognitive engine with persistent memory, metacognition, self-learning, and expert orchestration. No GPU required.',ctaLogin:'Sign In',ctaRegister:'Create Account',cardBrain:'Chat AI Brain',cardApi:'API Platform',cardAdmin:'Control Panel',loginTitle:'Login',loginHint:'Sign in to access all features',registerTitle:'Sign Up',registerHint:'Create a new account',forgotTitle:'Reset Password',forgotHint:'Enter your email to receive a reset token',resetTitle:'Set New Password',resetHint:'Token verified for',emailLabel:'Email',passwordLabel:'Password',confirmLabel:'Confirm Password',resetTokenLabel:'Reset Token',newPasswordLabel:'New Password',sendToken:'Send Reset Token',resetBtn:'Reset Password',errRequired:'Email and password are required',errEmailRequired:'Email is required',errPwShort:'Password must be at least 6 characters',errPwMismatch:'Passwords do not match',errTokenRequired:'Token and new password are required',requesting:'Requesting...',resetting:'Resetting...',resetSuccess:'Password reset successful! Redirecting to login...',tokenGenerated:'Reset token generated.',footer:'Aelvoxim Self-hosted AI Cognitive Engine',loggedIn:'Logged in'},zh:{login:'登录',logout:'退出',signup:'注册',forgotPassword:'忘记密码？',noAccount:'没有账号？去注册',hasAccount:'已有账号？去登录',backToLogin:'返回登录',tagline:'不只是聊天机器人。一个会学习的大脑。',headline1:'不只是聊天机器人，',headline2:'一个会学习的大脑。',titleLine:'不只是聊天机器人， <span class="highlight">一个会学习的大脑。</span>',subtitle:'自托管 AI 认知引擎：持久记忆、元认知监控、自主学习、专家编排。无需 GPU。',ctaLogin:'登录',ctaRegister:'创建账号',cardBrain:'对话 AI 大脑',cardApi:'API 开放平台',cardAdmin:'控制面板',loginTitle:'登录',loginHint:'登录以访问全部功能',registerTitle:'注册',registerHint:'创建新账号',forgotTitle:'重置密码',forgotHint:'输入邮箱获取重置令牌',resetTitle:'设置新密码',resetHint:'令牌已验证，属于',emailLabel:'邮箱',passwordLabel:'密码',confirmLabel:'确认密码',resetTokenLabel:'重置令牌',newPasswordLabel:'新密码',sendToken:'发送重置令牌',resetBtn:'重置密码',errRequired:'邮箱和密码不能为空',errEmailRequired:'请输入邮箱',errPwShort:'密码至少6位',errPwMismatch:'两次输入的密码不一致',errTokenRequired:'令牌和新密码不能为空',requesting:'请求中...',resetting:'重置中...',resetSuccess:'密码重置成功！即将跳转登录...',tokenGenerated:'重置令牌已生成。',footer:'Aelvoxim 自托管 AI 认知引擎',loggedIn:'已登录'}};
 function t(k){return(I18N[_lang]&&I18N[_lang][k])||I18N.en[k]||k}
-function toggleLang(){_lang=_lang==="zh"?"en":"zh";localStorage.setItem("ael_lang",_lang);document.getElementById("langToggleBtn").textContent=_lang==="zh"?"中":"EN";applyI18n();if(document.getElementById("authModal").classList.contains("active"))renderAuthModal()}
-function applyI18n(){var w=document.createTreeWalker(document.body,4,null,false),n=[];while(w.nextNode())n.push(w.currentNode);n.forEach(function(n){if(n.nodeType===3&&n.nodeValue&&n.nodeValue.indexOf("@@")!==-1)n.nodeValue=n.nodeValue.replace(/@@(\w+)@@/g,function(m,k){return t(k)})});document.querySelectorAll("[data-i18n]").forEach(function(el){el.textContent=t(el.getAttribute("data-i18n"))});var lb=document.getElementById("loginBtn");if(lb)lb.textContent=t("login");var lob=document.getElementById("logoutBtn");if(lob)lob.textContent=t("logout");var hu=document.getElementById("headerUser");if(_token&&hu&&hu.textContent&&hu.textContent.indexOf("@")===-1)hu.textContent=t("loggedIn");if(hu&&!_token)hu.textContent="";var tl=t("tagline");document.title=tl?tl+" — Aelvoxim":"Aelvoxim"}
-var _token=(function(){try{return localStorage.getItem("ael_token")||""}catch(e){return""}})();
-var _email=(function(){try{return localStorage.getItem("ael_email")||""}catch(e){return""}})();
-document.addEventListener("DOMContentLoaded",function(){document.getElementById("langToggleBtn").textContent=_lang==="zh"?"中":"EN"});
-
-// ── Auth Modal ──
-
-function toggleTheme(){
-  var h=document.documentElement;
-  var b=document.getElementById('themeToggleBtn');
-  if(h.classList.contains('dark')){
-    h.classList.remove('dark');h.style.colorScheme='light';
-    localStorage.setItem('aelvoxim-theme','light');
-    if(b)b.textContent='\u2600\ufe0f';
-  }else{
-    h.classList.add('dark');h.style.colorScheme='dark';
-    localStorage.setItem('aelvoxim-theme','dark');
-    if(b)b.textContent='\u{1F319}';
-  }
-}
-(function(){
-  var s=localStorage.getItem('aelvoxim-theme');
-  var p=window.matchMedia('(prefers-color-scheme:dark)').matches;
-  var h=document.documentElement;
-  var b=document.getElementById('themeToggleBtn');
-  if(s==='dark'||(!s&&p)){h.classList.add('dark');h.style.colorScheme='dark';if(b)b.textContent='\u{1F319}';}
-  else{h.classList.remove('dark');h.style.colorScheme='light';if(b)b.textContent='\u2600\ufe0f';}
-})();
-function showAuth(){document.getElementById('authModal').classList.add('active');renderAuthModal()}
+function setLang(l){_lang=l;localStorage.setItem('ael_lang',l);document.getElementById('langEn').className=l==='en'?'lang-btn active':'lang-btn';document.getElementById('langZh').className=l==='zh'?'lang-btn active':'lang-btn';applyI18n();if(document.getElementById('authModal').classList.contains('active'))renderAuthModal()}
+function applyI18n(){var w=document.createTreeWalker(document.body,4,null,false),n=[];while(w.nextNode())n.push(w.currentNode);n.forEach(function(n){if(n.nodeType===3&&n.nodeValue&&n.nodeValue.indexOf('@@')!==-1)n.nodeValue=n.nodeValue.replace(/@@(\w+)@@/g,function(m,k){return t(k)})});document.querySelectorAll('[data-i18n]').forEach(function(e){var k=e.getAttribute('data-i18n');if(k==='titleLine')e.innerHTML=t(k);else e.textContent=t(k)});document.getElementById('loginBtn').textContent=t('login');document.getElementById('logoutBtn').textContent=t('logout');var hu=document.getElementById('headerUser');if(_token&&hu&&!hu.textContent.includes('@'))hu.textContent=t('loggedIn');document.title=t('tagline')+' — Aelvoxim'}
+var API_BASE='',_token=localStorage.getItem('ael_token')||'',_email=localStorage.getItem('ael_email')||'';
+(function init(){document.getElementById('langEn').className=_lang==='en'?'lang-btn active':'lang-btn';document.getElementById('langZh').className=_lang==='zh'?'lang-btn active':'lang-btn';if(_token){document.getElementById('loginBtn').style.display='none';document.getElementById('logoutBtn').style.display='';document.getElementById('headerUser').textContent=_email||t('loggedIn')}applyI18n()})();
+function showAuth(){_authMode='login';document.getElementById('authModal').classList.add('active');renderAuthModal()}
+function showRegister(){_authMode='register';document.getElementById('authModal').classList.add('active');renderAuthModal()}
 function closeAuth(){document.getElementById('authModal').classList.remove('active')}
 var _authMode='login';
 function renderAuthModal(){if(_authMode==='login')renderLogin();else if(_authMode==='register')renderRegister();else if(_authMode==='forgot')renderForgot();else if(_authMode==='reset')renderReset()}
-function renderLogin(){var h='<div class="inline-switch"><button class="active" onclick="_authMode='login';renderAuthModal()">'+t('login')+'</button><button onclick="_authMode='register';renderAuthModal()">'+t('signup')+'</button></div><h2>'+t('loginTitle')+'</h2><div class="hint">'+t('loginHint')+'</div><div class="fg"><label>'+t('emailLabel')+'</label><input type="email" id="authEmail" placeholder="your@email.com" autocomplete="email" onkeydown="if(event.key==='Enter')submitLogin()"></div><div class="fg"><label>'+t('passwordLabel')+'</label><input type="password" id="authPassword" placeholder="••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')submitLogin()"></div><div class="err" id="authErr"></div><div class="btn-row"><button class="primary" onclick="submitLogin()">'+t('login')+'</button></div><div class="link-btn" onclick="_authMode='forgot';renderAuthModal()">'+t('forgotPassword')+'</div>';document.getElementById('authModalContent').innerHTML=h;setTimeout(function(){var e=document.getElementById('authEmail');if(e)e.focus()},100)}
-function renderRegister(){var h='<div class="inline-switch"><button onclick="_authMode='login';renderAuthModal()">'+t('login')+'</button><button class="active" onclick="_authMode='register';renderAuthModal()">'+t('signup')+'</button></div><h2>'+t('registerTitle')+'</h2><div class="hint">'+t('registerHint')+'</div><div class="fg"><label>'+t('emailLabel')+'</label><input type="email" id="authEmail" placeholder="your@email.com" autocomplete="email"></div><div class="fg"><label>'+t('passwordLabel')+'</label><input type="password" id="authPassword" placeholder="At least 6 characters" autocomplete="new-password"></div><div class="fg"><label>'+t('confirmLabel')+'</label><input type="password" id="authConfirm" placeholder="Repeat password"></div><div class="err" id="authErr"></div><div class="btn-row"><button class="primary" onclick="submitRegister()">'+t('signup')+'</button></div><a class="link-btn" onclick="_authMode='login';renderAuthModal()">'+t('hasAccount')+'</a>';document.getElementById('authModalContent').innerHTML=h;setTimeout(function(){var e=document.getElementById('authEmail');if(e)e.focus()},100)}
-function submitLogin(){var email=document.getElementById('authEmail').value.trim();var pw=document.getElementById('authPassword').value;var errEl=document.getElementById('authErr');if(!email||!pw){errEl.textContent=t('errRequired');return}errEl.textContent=t('requesting');fetch(''+'/v1/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email,password:pw})}).then(function(r){return r.json()}).then(function(d){if(d.api_key){saveSession(d.api_key,d.email||email,d.plan||'');closeAuth()}else{errEl.textContent=d.detail||'Login failed'}}).catch(function(){errEl.textContent='Network error'})}
-function submitRegister(){var email=document.getElementById('authEmail').value.trim();var pw=document.getElementById('authPassword').value;var confirm=document.getElementById('authConfirm').value;var errEl=document.getElementById('authErr');if(!email||!pw){errEl.textContent=t('errRequired');return}if(pw.length<6){errEl.textContent=t('errPwShort');return}if(pw!==confirm){errEl.textContent=t('errPwMismatch');return}errEl.textContent=t('requesting');fetch(''+'/v1/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email,password:pw,plan:'community'})}).then(function(r){return r.json()}).then(function(d){if(d.api_key){saveSession(d.api_key,d.email||email,d.plan||'');closeAuth()}else{errEl.textContent=d.detail||'Registration failed'}}).catch(function(){errEl.textContent='Network error'})}
-function renderForgot(){var h='<h2>'+t('forgotTitle')+'</h2><div class="hint">'+t('forgotHint')+'</div><div class="fg"><label>'+t('emailLabel')+'</label><input type="email" id="forgotEmail" placeholder="your@email.com" autocomplete="email" onkeydown="if(event.key==='Enter')submitForgot()"></div><div class="success" id="authSuccess"></div><div class="err" id="authErr"></div><div class="btn-row"><button class="primary" onclick="submitForgot()">'+t('sendToken')+'</button></div><span class="back-link" onclick="_authMode='login';renderAuthModal()">'+t('backToLogin')+'</span>';document.getElementById('authModalContent').innerHTML=h;setTimeout(function(){var e=document.getElementById('forgotEmail');if(e)e.focus()},100)}
-var _resetToken='';
-function submitForgot(){var email=document.getElementById('forgotEmail').value.trim();var errEl=document.getElementById('authErr');var successEl=document.getElementById('authSuccess');if(!email){errEl.textContent=t('errEmailRequired');return}errEl.textContent='';successEl.textContent=t('requesting');fetch(''+'/v1/auth/forgot-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email})}).then(function(r){return r.json()}).then(function(d){if(d.token){_resetToken=d.token;_resetEmail=email;successEl.textContent=t('tokenGenerated');errEl.textContent='';_authMode='reset';renderAuthModal()}else{successEl.textContent=d.message||'If the email exists, a reset link has been sent';errEl.textContent=''}}).catch(function(){errEl.textContent='Network error'})}
-var _resetEmail='';
-function renderReset(){var h='<h2>'+t('resetTitle')+'</h2><div class="hint">'+t('resetHint')+' <strong>'+escHtml(_resetEmail)+'</strong></div><div class="fg"><label>'+t('resetTokenLabel')+'</label><input type="text" id="resetToken" value="'+escHtml(_resetToken)+'" placeholder="Paste token here"></div><div class="fg"><label>'+t('newPasswordLabel')+'</label><input type="password" id="resetPassword" placeholder="At least 6 characters" autocomplete="new-password" onkeydown="if(event.key==='Enter')submitReset()"></div><div class="fg"><label>'+t('confirmLabel')+'</label><input type="password" id="resetConfirm" placeholder="Repeat password"></div><div class="err" id="authErr"></div><div class="success" id="authSuccess"></div><div class="btn-row"><button class="primary" onclick="submitReset()">'+t('resetBtn')+'</button></div><span class="back-link" onclick="_authMode='login';renderAuthModal()">'+t('backToLogin')+'</span>';document.getElementById('authModalContent').innerHTML=h;setTimeout(function(){var e=document.getElementById('resetPassword');if(e)e.focus()},100)}
-function submitReset(){var token=document.getElementById('resetToken').value.trim();var pw=document.getElementById('resetPassword').value;var confirm=document.getElementById('resetConfirm').value;var errEl=document.getElementById('authErr');var successEl=document.getElementById('authSuccess');if(!token||!pw){errEl.textContent=t('errTokenRequired');return}if(pw.length<6){errEl.textContent=t('errPwShort');return}if(pw!==confirm){errEl.textContent=t('errPwMismatch');return}errEl.textContent='';successEl.textContent=t('resetting');fetch(''+'/v1/auth/reset-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:_resetEmail,token:token,new_password:pw})}).then(function(r){return r.json()}).then(function(d){if(d.message&&d.message.indexOf('successful')!==-1){successEl.textContent=t('resetSuccess');errEl.textContent='';setTimeout(function(){_authMode='login';renderAuthModal();var emailEl=document.getElementById('authEmail');if(emailEl)emailEl.value=_resetEmail},1500)}else{errEl.textContent=d.detail||'Reset failed';successEl.textContent=''}}).catch(function(){errEl.textContent='Network error'})}
-function saveSession(apiKey,email,plan){_token=apiKey;_email=email;localStorage.setItem('ael_token',apiKey);localStorage.setItem('ael_email',email);if(plan)localStorage.setItem('ael_plan',plan);document.getElementById('loginBtn').style.display='none';document.getElementById('logoutBtn').style.display='';document.getElementById('headerUser').textContent=_email||t('loggedIn');appendTokenToLinks(apiKey);syncToChatael(apiKey,email)}
-function doLogout(){_token='';_email='';localStorage.removeItem('ael_token');localStorage.removeItem('ael_email');localStorage.removeItem('ael_plan');document.getElementById('loginBtn').style.display='';document.getElementById('logoutBtn').style.display='none';document.getElementById('headerUser').textContent='';removeTokenFromLinks()}
-function appendTokenToLinks(token){document.querySelectorAll('.card').forEach(function(c){var href=c.getAttribute('href');if(href)c.setAttribute('href',href.split('?')[0]+'?token='+encodeURIComponent(token))})}
-function removeTokenFromLinks(){document.querySelectorAll('.card').forEach(function(c){var href=c.getAttribute('href');if(href)c.setAttribute('href',href.split('?')[0])})}
-function syncToChatael(apiKey,email){try{var raw=localStorage.getItem('chatael_tenants');var tenants=raw?JSON.parse(raw):[];var existing=false;for(var i=0;i<tenants.length;i++){if(tenants[i].email===email){tenants[i].apiKey=apiKey;existing=true;break}}if(!existing){tenants.push({id:'tenant:'+Date.now(),name:email.split('@')[0],email:email,apiKey:apiKey,apiUrl:'http://127.0.0.1:9701'})}localStorage.setItem('chatael_tenants',JSON.stringify(tenants));var activeId=tenants.length>0?tenants[tenants.length-1].id:'default';if(existing){for(var j=0;j<tenants.length;j++){if(tenants[j].email===email){activeId=tenants[j].id;break}}}localStorage.setItem('chatael_active_id',activeId)}catch(e){}}
-function escHtml(s){if(!s)return'';return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function renderLogin(){document.getElementById('authModalContent').innerHTML='<h2>'+t('loginTitle')+'</h2><div class="hint">'+t('loginHint')+'</div><div class="fg"><label>'+t('emailLabel')+'</label><input type="email" id="authEmail" placeholder="your@email.com" autocomplete="email"></div><div class="fg"><label>'+t('passwordLabel')+'</label><input type="password" id="authPassword" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key===\'Enter\')submitLogin()"></div><div class="err" id="authErr"></div><div class="btn-row"><button class="primary" onclick="submitLogin()">'+t('login')+'</button></div><span class="link-btn" onclick="_authMode=\'forgot\';renderAuthModal()">'+t('forgotPassword')+'</span><span class="link-btn" onclick="_authMode=\'register\';renderAuthModal()">'+t('noAccount')+'</span>';setTimeout(function(){var e=document.getElementById('authEmail');if(e)e.focus()},100)}
+function submitLogin(){var e=document.getElementById('authEmail').value.trim(),p=document.getElementById('authPassword').value,el=document.getElementById('authErr');if(!e||!p){el.textContent=t('errRequired');return}el.textContent=t('requesting');fetch(API_BASE+'/v1/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:e,password:p})}).then(function(r){return r.json()}).then(function(d){if(d.api_key){saveSession(d.api_key,d.email||e,d.plan||'');closeAuth()}else{el.textContent=d.detail||'Login failed'}}).catch(function(){el.textContent='Network error'})}
+function renderRegister(){document.getElementById('authModalContent').innerHTML='<h2>'+t('registerTitle')+'</h2><div class="hint">'+t('registerHint')+'</div><div class="fg"><label>'+t('emailLabel')+'</label><input type="email" id="regEmail" placeholder="your@email.com" autocomplete="email"></div><div class="fg"><label>'+t('passwordLabel')+'</label><input type="password" id="regPassword" placeholder="At least 6 characters" autocomplete="new-password"></div><div class="fg"><label>'+t('confirmLabel')+'</label><input type="password" id="regConfirm" placeholder="Repeat password" onkeydown="if(event.key===\'Enter\')submitRegister()"></div><div class="err" id="authErr"></div><div class="btn-row"><button class="primary" onclick="submitRegister()">'+t('signup')+'</button></div><span class="link-btn" onclick="_authMode=\'login\';renderAuthModal()">'+t('hasAccount')+'</span>';setTimeout(function(){var e=document.getElementById('regEmail');if(e)e.focus()},100)}
+function submitRegister(){var e=document.getElementById('regEmail').value.trim(),p=document.getElementById('regPassword').value,c=document.getElementById('regConfirm').value,el=document.getElementById('authErr');if(!e||!p){el.textContent=t('errRequired');return}if(p.length<6){el.textContent=t('errPwShort');return}if(p!==c){el.textContent=t('errPwMismatch');return}el.textContent=t('requesting');fetch(API_BASE+'/v1/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:e,password:p,plan:'community'})}).then(function(r){return r.json()}).then(function(d){if(d.api_key){saveSession(d.api_key,d.email||e,d.plan||'');closeAuth()}else{el.textContent=d.detail||'Registration failed'}}).catch(function(){el.textContent='Network error'})}
+function renderForgot(){document.getElementById('authModalContent').innerHTML='<h2>'+t('forgotTitle')+'</h2><div class="hint">'+t('forgotHint')+'</div><div class="fg"><label>'+t('emailLabel')+'</label><input type="email" id="forgotEmail" placeholder="your@email.com" autocomplete="email" onkeydown="if(event.key===\'Enter\')submitForgot()"></div><div class="success" id="authSuccess"></div><div class="err" id="authErr"></div><div class="btn-row"><button class="primary" onclick="submitForgot()">'+t('sendToken')+'</button></div><span class="back-link" onclick="_authMode=\'login\';renderAuthModal()">'+t('backToLogin')+'</span>';setTimeout(function(){var e=document.getElementById('forgotEmail');if(e)e.focus()},100)}
+var _resetToken='';function submitForgot(){var e=document.getElementById('forgotEmail').value.trim(),el=document.getElementById('authErr'),se=document.getElementById('authSuccess');if(!e){el.textContent=t('errEmailRequired');return}el.textContent='';se.textContent=t('requesting');fetch(API_BASE+'/v1/auth/forgot-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:e})}).then(function(r){return r.json()}).then(function(d){if(d.token){_resetToken=d.token;_resetEmail=e;se.textContent=t('tokenGenerated');el.textContent='';_authMode='reset';renderAuthModal()}else{se.textContent=d.message||'If the email exists, a reset link has been sent';el.textContent=''}}).catch(function(){el.textContent='Network error'})}
+var _resetEmail='';function renderReset(){document.getElementById('authModalContent').innerHTML='<h2>'+t('resetTitle')+'</h2><div class="hint">'+t('resetHint')+' <strong>'+escHtml(_resetEmail)+'</strong></div><div class="fg"><label>'+t('resetTokenLabel')+'</label><input type="text" id="resetToken" value="'+escHtml(_resetToken)+'" placeholder="Paste token here"></div><div class="fg"><label>'+t('newPasswordLabel')+'</label><input type="password" id="resetPassword" placeholder="At least 6 characters" autocomplete="new-password" onkeydown="if(event.key===\'Enter\')submitReset()"></div><div class="fg"><label>'+t('confirmLabel')+'</label><input type="password" id="resetConfirm" placeholder="Repeat password"></div><div class="err" id="authErr"></div><div class="success" id="authSuccess"></div><div class="btn-row"><button class="primary" onclick="submitReset()">'+t('resetBtn')+'</button></div><span class="back-link" onclick="_authMode=\'login\';renderAuthModal()">'+t('backToLogin')+'</span>';setTimeout(function(){var e=document.getElementById('resetPassword');if(e)e.focus()},100)}
+function submitReset(){var t=document.getElementById('resetToken').value.trim(),p=document.getElementById('resetPassword').value,c=document.getElementById('resetConfirm').value,el=document.getElementById('authErr'),se=document.getElementById('authSuccess');if(!t||!p){el.textContent=t('errTokenRequired');return}if(p.length<6){el.textContent=t('errPwShort');return}if(p!==c){el.textContent=t('errPwMismatch');return}el.textContent='';se.textContent=t('resetting');fetch(API_BASE+'/v1/auth/reset-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:_resetEmail,token:t,new_password:p})}).then(function(r){return r.json()}).then(function(d){if(d.message&&d.message.indexOf('successful')!==-1){se.textContent=t('resetSuccess');el.textContent='';setTimeout(function(){_authMode='login';renderAuthModal();var e=document.getElementById('authEmail');if(e)e.value=_resetEmail},1500)}else{el.textContent=d.detail||'Reset failed';se.textContent=''}}).catch(function(){el.textContent='Network error'})}
+function saveSession(k,e,p){_token=k;_email=e;localStorage.setItem('ael_token',k);localStorage.setItem('ael_email',e);if(p)localStorage.setItem('ael_plan',p);document.getElementById('loginBtn').style.display='none';document.getElementById('logoutBtn').style.display='';document.getElementById('headerUser').textContent=_email||t('loggedIn')}
+function doLogout(){_token='';_email='';localStorage.removeItem('ael_token');localStorage.removeItem('ael_email');localStorage.removeItem('ael_plan');document.getElementById('loginBtn').style.display='';document.getElementById('logoutBtn').style.display='none';document.getElementById('headerUser').textContent=''}
+function escHtml(s){if(!s)return '';return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 </script>
 </body>
 </html>

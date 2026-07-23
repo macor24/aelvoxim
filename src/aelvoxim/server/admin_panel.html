@@ -119,6 +119,7 @@
   .llm-card .row{display:flex;gap:16px;font-size:12px;color:var(--text-primary);margin-bottom:4px}
   .llm-card .row .key{color:var(--text-secondary);min-width:80px}
 </style>
+<script>localStorage.setItem('ael_theme','light');document.documentElement.classList.remove('dark');</script>
 </head>
 <body>
 
@@ -141,7 +142,6 @@
   <span class="sub">管理后台</span>
   <span class="sp"></span>
   <span class="user-info" id="headerUser"></span>
-  <button class="theme-btn" id="themeToggleBtn" onclick="toggleTheme()" title="切换主题">☀️ </button>
     <button class="logout-btn" id="logoutBtn" onclick="doLogout()" style="display:none">退出</button>
 </div>
 
