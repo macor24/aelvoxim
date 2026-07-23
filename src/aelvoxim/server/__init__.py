@@ -260,12 +260,13 @@ def create_app() -> FastAPI:
             return RedirectResponse(url=f"/v1/admin/panel?token={token}")
         return RedirectResponse(url="/v1/admin/panel")
 
-    # Static file serving for downloads (Gateway installer, etc.)
+    # Static file serving (logo images, downloads, etc.)
     from fastapi.staticfiles import StaticFiles
     from pathlib import Path
     _static_dir = str(Path(__file__).resolve().parent.parent.parent.parent / "static")
-    if os.path.isdir(_static_dir):
-        app.mount("/static", StaticFiles(directory=_static_dir), name="static")
+    if not os.path.isdir(_static_dir):
+        os.makedirs(_static_dir, exist_ok=True)
+    app.mount("/static", StaticFiles(directory=_static_dir), name="static")
 
     @app.post("/v1/windows-mcp")
     async def windows_mcp_proxy(body: dict):

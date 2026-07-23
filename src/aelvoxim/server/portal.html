@@ -1,703 +1,160 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en"><!-- aelvoxim-theme-present -->
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Aelvoxim — More than a chatbot. A brain that learns.</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-  body{
-    font-family:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
-    font-feature-settings:'cv01','ss03';
-    background:var(--bg-base);
-    color:var(--text-primary);
-    min-height:100vh;
-    display:flex;
-    flex-direction:column;
-    -webkit-font-smoothing:antialiased;
-    -moz-osx-font-smoothing:grayscale;
-  }
-  .header{
-    padding:40px 32px 0;
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    max-width:640px;
-    margin:0 auto;
-    width:100%;
-  }
-  .logo{font-size:20px;font-weight:590;letter-spacing:-0.24px;color:var(--text-primary)}
-  .logo span{color:var(--brand-500)}
-  .header-actions{display:flex;gap:8px;align-items:center}
-  .header-actions .user{font-size:13px;color:var(--text-muted)}
-  .lang-btn{
-    font-family:'Inter',system-ui,sans-serif;
-    font-feature-settings:'cv01','ss03';
-    font-size:11px;font-weight:510;
-    padding:4px 10px;border-radius:5px;
-    border:1px solid var(--border-rgb);
-    background:var(--bg-surface-rgb);
-    color:var(--text-muted);
-    cursor:pointer;
-    transition:all 0.15s;
-  }
-  .lang-btn.active{color:var(--text-secondary);border-color:var(--border-active-rgb);background:var(--bg-hover-rgb)}
-  .lang-btn:hover{color:var(--text-primary);border-color:var(--border-active-rgb)}
-  .btn-ghost{
-    font-family:'Inter',system-ui,sans-serif;
-    font-feature-settings:'cv01','ss03';
-    font-size:13px;font-weight:510;
-    padding:6px 14px;border-radius:6px;
-    border:1px solid var(--border-rgb);
-    background:var(--bg-surface-rgb);
-    color:var(--text-secondary);
-    cursor:pointer;
-    transition:all 0.15s;
-  }
-  .btn-ghost:hover{background:var(--bg-hover-rgb);color:var(--text-primary)}
-  .btn-primary{
-    font-family:'Inter',system-ui,sans-serif;
-    font-feature-settings:'cv01','ss03';
-    font-size:13px;font-weight:510;
-    padding:6px 14px;border-radius:6px;
-    border:none;
-    background:var(--brand-500);
-    color:#fff;
-    cursor:pointer;
-    transition:background 0.15s;
-  }
-  .btn-primary:hover{background:var(--brand-400)}
-  .hero{
-    flex:1;
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    justify-content:center;
-    padding:80px 32px 60px;
-    max-width:640px;
-    margin:0 auto;
-    width:100%;
-  }
-  .hero-label{
-    font-size:12px;font-weight:510;letter-spacing:0.3px;text-transform:uppercase;
-    color:var(--text-muted);margin-bottom:16px;
-  }
-  .hero h1{
-    font-size:36px;font-weight:510;line-height:1.13;letter-spacing:-0.7px;
-    color:var(--text-primary);text-align:center;margin-bottom:12px;
-  }
-  .hero h1 span{color:var(--brand-400)}
-  .hero p{
-    font-size:15px;font-weight:400;line-height:1.6;letter-spacing:-0.165px;
-    color:var(--text-secondary);text-align:center;max-width:440px;margin-bottom:48px;
-  }
-  .card-grid{
-    display:grid;
-    grid-template-columns:repeat(3,1fr);
-    gap:12px;
-    width:100%;
-    max-width:640px;
-  }
-  .card{
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    text-align:center;
-    padding:32px 20px 28px;
-    border-radius:12px;
-    background:var(--bg-surface-rgb);
-    border:1px solid var(--border-rgb);
-    text-decoration:none;
-    color:var(--text-primary);
-    transition:all 0.2s;
-    cursor:pointer;
-    position:relative;
-    overflow:hidden;
-  }
-  .card::before{
-    content:'';
-    position:absolute;inset:0;
-    background:radial-gradient(600px circle at var(--mx,50%) var(--my,50%),color-mix(in srgb,var(--brand-500) 8%,transparent),transparent 60%);
-    opacity:0;
-    transition:opacity 0.3s;
-    pointer-events:none;
-  }
-  .card:hover::before{opacity:1}
-  .card:hover{
-    background:var(--bg-hover-rgb);
-    border-color:var(--border-active-rgb);
-    transform:translateY(-1px);
-  }
-  .card .icon{
-    font-size:28px;margin-bottom:12px;
-    width:48px;height:48px;
-    display:flex;align-items:center;justify-content:center;
-    border-radius:10px;
-    background:var(--bg-hover-rgb);
-    border:1px solid var(--border-light-rgb);
-  }
-  .card .name{font-size:16px;font-weight:590;letter-spacing:-0.18px;color:var(--text-primary);margin-bottom:4px}
-  .card .desc{font-size:12px;font-weight:400;line-height:1.5;color:var(--text-muted)}
-  .footer{
-    padding:24px 32px 32px;
-    text-align:center;
-    font-size:12px;font-weight:400;
-    color:var(--text-muted);
-  }
-  .modal-overlay{
-    display:none;position:fixed;inset:0;
-    background:var(--overlay-rgb);
-    backdrop-filter:blur(6px);
-    -webkit-backdrop-filter:blur(6px);
-    z-index:1000;
-    align-items:center;justify-content:center;
-  }
-  .modal-overlay.active{display:flex}
-  .modal{
-    background:var(--bg-elevated);
-    border:1px solid var(--border-rgb);
-    border-radius:12px;
-    padding:28px;
-    width:360px;
-    max-width:90vw;
-  }
-  .modal h2{font-size:18px;font-weight:510;letter-spacing:-0.2px;color:var(--text-primary);margin-bottom:4px}
-  .modal .hint{font-size:13px;color:var(--text-muted);margin-bottom:20px}
-  .modal .fg{margin-bottom:14px}
-  .modal .fg label{display:block;font-size:12px;font-weight:510;color:var(--text-secondary);margin-bottom:4px}
-  .modal .fg input{
-    width:100%;padding:10px 12px;
-    border:1px solid var(--border-rgb);border-radius:6px;
-    background:var(--bg-surface-rgb);
-    color:var(--text-primary);font-size:14px;font-family:'Inter',sans-serif;
-    outline:none;box-sizing:border-box;
-    transition:border-color 0.15s;
-  }
-  .modal .fg input:focus{border-color:var(--brand-500)}
-  .modal .fg input::placeholder{color:var(--text-muted)}
-  .modal .success{font-size:12px;color:#4ade80;min-height:18px;text-align:center;margin-top:8px}
-  .modal .err{font-size:12px;color:#f87171;min-height:18px;text-align:center;margin-top:8px}
-  .modal .btn-row{display:flex;gap:8px;margin-top:16px}
-  .modal .btn-row button{
-    flex:1;padding:9px;border-radius:6px;
-    border:none;cursor:pointer;
-    font-size:13px;font-weight:510;font-family:'Inter',sans-serif;
-    font-feature-settings:'cv01','ss03';
-  }
-  .modal .btn-row .primary{background:var(--brand-500);color:#fff}
-  .modal .btn-row .primary:hover{background:var(--brand-400)}
-  .modal .btn-row .ghost{
-    background:transparent;
-    border:1px solid var(--border-rgb);
-    color:var(--text-secondary);
-  }
-  .modal .btn-row .ghost:hover{color:var(--text-primary);border-color:var(--border-active-rgb)}
-  .modal .link-btn{
-    font-size:12px;color:var(--brand-500);text-align:center;margin-top:12px;cursor:pointer;
-    display:block;
-  }
-  .modal .link-btn:hover{color:var(--brand-400)}
-  .modal .back-link{font-size:12px;color:var(--text-secondary);text-align:center;margin-top:8px;cursor:pointer}
-  .modal .back-link:hover{color:var(--text-secondary)}
-  .modal .token-display{
-    background:var(--bg-hover-rgb);border-radius:6px;
-    padding:10px;font-family:monospace;font-size:12px;word-break:break-all;
-    margin-bottom:14px;color:var(--text-secondary);
-  }
-  .modal .inline-switch{display:flex;gap:1px;background:var(--bg-hover-rgb);border-radius:6px;padding:2px;margin-bottom:20px}
-  .modal .inline-switch button{
-    flex:1;padding:6px 12px;border:none;border-radius:5px;
-    cursor:pointer;font-size:12px;font-weight:510;font-family:'Inter',sans-serif;
-    background:transparent;color:var(--text-muted);transition:all 0.15s;
-  }
-  .modal .inline-switch button.active{background:var(--brand-500);color:#fff}
-  .modal .inline-switch button:hover:not(.active){color:var(--text-primary)}
-  @media(max-width:640px){
-    .header{padding:24px 16px 0}
-    .hero{padding:48px 16px 40px}
-    .hero h1{font-size:28px;letter-spacing:-0.5px}
-    .card-grid{grid-template-columns:repeat(3,1fr);gap:16px}
-    .card{padding:24px 16px 20px;flex-direction:row;text-align:left;gap:14px}
-    .card .icon{margin-bottom:0;flex-shrink:0}
-  }
-
-/* Dark mode overrides for semi-transparent colors */
-:root {
-  --bg-surface-rgb: rgba(255,255,255,0.02);
-  --bg-hover-rgb: rgba(255,255,255,0.04);
-  --border-rgb: rgba(255,255,255,0.08);
-  --border-light-rgb: rgba(255,255,255,0.06);
-  --border-active-rgb: rgba(255,255,255,0.12);
-  --overlay-rgb: rgba(0,0,0,0.6);
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{
+ font-family:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+ font-feature-settings:'cv01','ss03';
+ background:var(--bg-base);color:var(--text-primary);
+ min-height:100vh;display:flex;flex-direction:column;
+ -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+ position:relative;overflow-x:hidden
 }
-.dark {
-  --bg-surface-rgb: rgba(255,255,255,0.02);
-  --bg-hover-rgb: rgba(255,255,255,0.04);
-  --border-rgb: rgba(255,255,255,0.08);
-  --border-light-rgb: rgba(255,255,255,0.06);
-  --border-active-rgb: rgba(255,255,255,0.12);
-  --overlay-rgb: rgba(0,0,0,0.6);
+body::before{
+ content:'';position:fixed;top:-50%;left:-50%;width:200%;height:200%;
+ background:radial-gradient(ellipse at 30% 20%,color-mix(in srgb,var(--brand-500) 6%,transparent),transparent 50%),
+ radial-gradient(ellipse at 70% 80%,color-mix(in srgb,var(--brand-400) 4%,transparent),transparent 50%);
+ pointer-events:none;z-index:0
 }
-html:not(.dark) {
-  --bg-surface-rgb: rgba(0,0,0,0.02);
-  --bg-hover-rgb: rgba(0,0,0,0.04);
-  --border-rgb: rgba(0,0,0,0.08);
-  --border-light-rgb: rgba(0,0,0,0.06);
-  --border-active-rgb: rgba(0,0,0,0.12);
-  --overlay-rgb: rgba(0,0,0,0.3);
+.header{position:relative;z-index:1;padding:28px 32px 0;display:flex;align-items:center;justify-content:space-between;max-width:800px;margin:0 auto;width:100%}
+.logo img{height:36px;width:auto;display:block}
+.header-actions{display:flex;gap:6px;align-items:center}
+.header-actions .user{font-size:12px;color:var(--text-muted);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.toggle-group{display:flex;gap:3px;align-items:center;background:var(--bg-surface-rgb);border:1px solid var(--border-rgb);border-radius:8px;padding:2px}
+.toggle-group button{font-family:'Inter',sans-serif;color:var(--text-muted);border:none;background:transparent;cursor:pointer;border-radius:6px;transition:all .15s;font-size:12px;font-weight:500;padding:4px 8px;line-height:1}
+.toggle-group button:hover{color:var(--text-primary)}
+.toggle-group .sep{width:1px;height:14px;background:var(--border-rgb);margin:0 2px}
+.btn-ghost{font-family:'Inter',sans-serif;font-size:12px;font-weight:500;padding:5px 12px;border-radius:8px;border:1px solid var(--border-rgb);background:transparent;color:var(--text-secondary);cursor:pointer;transition:all .15s}
+.btn-ghost:hover{background:var(--bg-hover);color:var(--text-primary);border-color:var(--text-muted)}
+.btn-primary{font-family:'Inter',sans-serif;font-size:12px;font-weight:500;padding:5px 14px;border-radius:8px;border:none;background:var(--gradient-brand);color:#fff;cursor:pointer;transition:opacity .15s}
+.btn-primary:hover{opacity:.9}
+.hero{position:relative;z-index:1;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 32px 40px;max-width:800px;margin:0 auto;width:100%}
+.hero-badge{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:500;letter-spacing:.3px;text-transform:uppercase;padding:5px 12px;border-radius:20px;background:color-mix(in srgb,var(--brand-500) 10%,transparent);color:var(--brand-400);margin-bottom:24px;border:1px solid color-mix(in srgb,var(--brand-500) 15%,transparent)}
+.hero h1{font-size:44px;font-weight:650;line-height:1.12;letter-spacing:-1px;text-align:center;margin-bottom:16px;max-width:640px}
+.hero h1 .gradient-text{background:var(--gradient-brand-text);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero p{font-size:16px;line-height:1.65;letter-spacing:-.15px;color:var(--text-secondary);text-align:center;max-width:520px;margin-bottom:40px}
+.hero-actions{display:flex;gap:10px;margin-bottom:56px}
+.cta-primary{font-family:'Inter',sans-serif;font-size:14px;font-weight:500;padding:10px 24px;border-radius:10px;border:none;background:var(--gradient-brand);color:#fff;cursor:pointer;transition:transform .15s,box-shadow .15s;box-shadow:0 4px 14px color-mix(in srgb,var(--brand-600) 30%,transparent);text-decoration:none;display:inline-flex;align-items:center;gap:8px}
+.cta-primary:hover{transform:translateY(-1px);box-shadow:0 6px 20px color-mix(in srgb,var(--brand-600) 40%,transparent)}
+.cta-secondary{font-family:'Inter',sans-serif;font-size:14px;font-weight:500;padding:10px 24px;border-radius:10px;border:1px solid var(--border-rgb);background:transparent;color:var(--text-primary);cursor:pointer;transition:all .15s;text-decoration:none;display:inline-flex;align-items:center;gap:8px}
+.cta-secondary:hover{background:var(--bg-hover);border-color:var(--text-muted)}
+.card-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;width:100%;max-width:800px}
+.card{display:flex;flex-direction:column;align-items:flex-start;text-align:left;padding:28px 24px 24px;border-radius:14px;background:var(--bg-elevated);border:1px solid var(--border);text-decoration:none;color:var(--text-primary);transition:all .25s;cursor:pointer;position:relative;overflow:hidden}
+.card::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,color-mix(in srgb,var(--brand-500) 6%,transparent),transparent 60%);opacity:0;transition:opacity .3s;pointer-events:none}
+.card:hover{transform:translateY(-2px);border-color:var(--brand-500);box-shadow:0 8px 24px color-mix(in srgb,var(--brand-600) 12%,transparent)}
+.card:hover::before{opacity:1}
+.card .icon{font-size:22px;margin-bottom:14px;width:42px;height:42px;display:flex;align-items:center;justify-content:center;border-radius:10px;background:color-mix(in srgb,var(--brand-500) 10%,transparent);border:1px solid color-mix(in srgb,var(--brand-500) 15%,transparent);position:relative;z-index:1}
+.card .name{font-size:15px;font-weight:600;letter-spacing:-.15px;margin-bottom:6px;position:relative;z-index:1}
+.card .desc{font-size:12px;line-height:1.6;color:var(--text-muted);position:relative;z-index:1}
+.footer{position:relative;z-index:1;padding:20px 32px 28px;text-align:center;font-size:11px;color:var(--text-muted)}
+.modal-overlay{display:none;position:fixed;inset:0;background:var(--overlay-rgb);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:1000;align-items:center;justify-content:center}
+.modal-overlay.active{display:flex}
+.modal{background:var(--bg-elevated);border:1px solid var(--border);border-radius:14px;padding:28px;width:360px;max-width:90vw;box-shadow:0 16px 48px rgba(0,0,0,.15);animation:modalIn .2s ease}
+@keyframes modalIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
+.modal h2{font-size:18px;font-weight:600;letter-spacing:-.2px;margin-bottom:4px}
+.modal .hint{font-size:13px;color:var(--text-muted);margin-bottom:20px}
+.modal .fg{margin-bottom:14px}
+.modal .fg label{display:block;font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:4px}
+.modal .fg input{width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg-surface);color:var(--text-primary);font-size:14px;font-family:'Inter',sans-serif;outline:none;transition:border-color .15s}
+.modal .fg input:focus{border-color:var(--brand-500)}
+.modal .fg input::placeholder{color:var(--text-muted)}
+.modal .success{font-size:12px;color:#4ade80;min-height:18px;text-align:center;margin-top:8px}
+.modal .err{font-size:12px;color:#f87171;min-height:18px;text-align:center;margin-top:8px}
+.modal .btn-row{display:flex;gap:8px;margin-top:16px}
+.modal .btn-row button{flex:1;padding:9px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:500;font-family:'Inter',sans-serif}
+.modal .btn-row .primary{background:var(--gradient-brand);color:#fff}
+.modal .btn-row .primary:hover{opacity:.9}
+.modal .btn-row .ghost{background:transparent;border:1px solid var(--border);color:var(--text-secondary)}
+.modal .btn-row .ghost:hover{color:var(--text-primary);border-color:var(--text-muted)}
+.modal .link-btn{font-size:12px;color:var(--brand-500);text-align:center;margin-top:12px;cursor:pointer;display:block}
+.modal .link-btn:hover{opacity:.8}
+.modal .back-link{font-size:12px;color:var(--text-secondary);text-align:center;margin-top:8px;cursor:pointer}
+.modal .back-link:hover{color:var(--text-primary)}
+.modal .token-display{background:var(--bg-surface);border-radius:8px;padding:10px;font-family:monospace;font-size:12px;word-break:break-all;margin-bottom:14px;color:var(--text-secondary)}
+.modal .inline-switch{display:flex;gap:1px;background:var(--bg-surface);border-radius:8px;padding:2px;margin-bottom:20px}
+.modal .inline-switch button{flex:1;padding:6px 12px;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:500;font-family:'Inter',sans-serif;background:transparent;color:var(--text-muted);transition:all .15s}
+.modal .inline-switch button.active{background:var(--gradient-brand);color:#fff}
+.modal .inline-switch button:hover:not(.active){color:var(--text-primary)}
+@media(max-width:700px){
+.header{padding:18px 16px 0}
+.hero{padding:40px 16px 32px}
+.hero h1{font-size:30px;letter-spacing:-.6px}
+.hero-actions{flex-direction:column;width:100%;max-width:280px}
+.card-grid{grid-template-columns:1fr;gap:10px;max-width:400px}
+.card{padding:20px 18px}
+.cta-primary,.cta-secondary{justify-content:center}
 }
-
 </style>
+:root{--bg-surface-rgb:rgba(255,255,255,0.03);--bg-hover-rgb:rgba(255,255,255,0.06);--border-rgb:rgba(255,255,255,0.08);--overlay-rgb:rgba(0,0,0,0.55)}
+.dark{--bg-surface-rgb:rgba(255,255,255,0.03);--bg-hover-rgb:rgba(255,255,255,0.06);--border-rgb:rgba(255,255,255,0.08);--overlay-rgb:rgba(0,0,0,0.55)}
+html:not(.dark){--bg-surface-rgb:rgba(0,0,0,0.02);--bg-hover-rgb:rgba(0,0,0,0.04);--border-rgb:rgba(0,0,0,0.08);--overlay-rgb:rgba(0,0,0,0.25)}
 </head>
 <body>
-
 <div class="header">
-  <div class="logo">aelvoxim<span>.</span></div>
+  <a class="logo" href="/"><img src="/static/logo.jpg" alt="Aelvoxim" id="logoImg"><span class="logo-fallback" style="display:none;font-size:20px;font-weight:600;color:var(--text-primary)">Aelvoxim<span style="color:var(--brand-500)">.</span></span></a>
   <div class="header-actions">
-    <button class="theme-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Toggle theme">☀️</button>
-    <button class="lang-btn" id="langEn" onclick="setLang('en')">EN</button>
-    <button class="lang-btn" id="langZh" onclick="setLang('zh')">中文</button>
+    <div class="toggle-group">
+      <button class="theme-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Toggle theme">☀️</button>
+      <div class="sep"></div>
+      <button id="langToggleBtn" onclick="toggleLang()">EN</button>
+    </div>
     <span class="user" id="headerUser"></span>
     <button class="btn-ghost" id="logoutBtn" onclick="doLogout()" style="display:none">@@logout@@</button>
     <button class="btn-primary" id="loginBtn" onclick="showAuth()">@@login@@</button>
   </div>
 </div>
-
 <div class="hero">
-  <div class="hero-label">@@tagline@@</div>
-  <h1>@@headline1@@ <span>@@headline2@@</span></h1>
+  <div class="hero-badge">✦ @@tagline@@</div>
+  <h1><span class="gradient-text">@@headline1@@</span></h1>
   <p>@@subtitle@@</p>
-
+  <div class="hero-actions">
+    <a class="cta-primary" href="http://8.134.185.33:9702/"><span>@@ctaChat@@</span><span>→</span></a>
+    <a class="cta-secondary" href="/api"><span>@@ctaApi@@</span><span>→</span></a>
+  </div>
   <div class="card-grid">
-    <a class="card" href="http://8.134.185.33:9702/" id="card-chat">
-      <div class="icon">🧠</div>
-      <div class="card-body">
-        <div class="name">@@cardBrain@@</div>
-        <div class="desc">@@cardBrainDesc@@</div>
-      </div>
-    </a>
-    <a class="card" href="/api" target="_self" id="card-api">
-      <div class="icon">🔌</div>
-      <div class="card-body">
-        <div class="name">@@cardApi@@</div>
-        <div class="desc">@@cardApiDesc@@</div>
-      </div>
-    </a>
-    <a class="card" href="/v1/admin/panel" id="card-admin">
-      <div class="icon">⚙️</div>
-      <div class="card-body">
-        <div class="name">@@cardAdmin@@</div>
-        <div class="desc">@@cardAdminDesc@@</div>
-      </div>
-    </a>
+    <a class="card" href="http://8.134.185.33:9702/" id="card-chat"><div class="icon">🧠</div><div class="name">@@cardBrain@@</div><div class="desc">@@cardBrainDesc@@</div></a>
+    <a class="card" href="/api" target="_self" id="card-api"><div class="icon">🔌</div><div class="name">@@cardApi@@</div><div class="desc">@@cardApiDesc@@</div></a>
+    <a class="card" href="/v1/admin/panel" id="card-admin"><div class="icon">⚙️</div><div class="name">@@cardAdmin@@</div><div class="desc">@@cardAdminDesc@@</div></a>
   </div>
 </div>
-
 <div class="footer" data-i18n="footer">Aelvoxim · v1.0</div>
-
-<!-- Auth Modal -->
-<div class="modal-overlay" id="authModal" onclick="if(event.target===this)closeAuth()">
-  <div class="modal" id="authModalContent">
-    <!-- Dynamic content rendered by JS -->
-  </div>
-</div>
-
+<div class="modal-overlay" id="authModal" onclick="if(event.target===this)closeAuth()"><div class="modal" id="authModalContent"></div></div>
 <script>
-// ── i18n ──
-var _lang = localStorage.getItem('ael_lang') || 'en';
-var I18N = {
-  en: {
-    login: 'Login', logout: 'Logout', signup: 'Sign Up',
-    forgotPassword: 'Forgot password?', noAccount: 'No account? Sign up',
-    hasAccount: 'Already have an account? Login', backToLogin: 'Back to Login',
-    tagline: 'More than a chatbot. A brain that learns.',
-    headline1: 'More than a chatbot.', headline2: 'A brain that learns.',
-    subtitle: 'A self-hosted AI decision layer with multi-agent orchestration, anti-hallucination, memory, tool calling, desktop control, and autonomous learning.',
-    cardBrain: 'AI Brain', cardBrainDesc: 'Multi-agent reasoning / Memory<br>Tool calling / Anti-hallucination',
-    cardApi: 'API Access', cardApiDesc: 'REST API with API Key auth<br>Usage quota / Developer docs',
-    cardAdmin: 'Control Panel', cardAdminDesc: 'Configuration / Monitoring<br>Agents / Pricing & System',
-    loginTitle: 'Login', loginHint: 'Sign in to access all features',
-    registerTitle: 'Sign Up', registerHint: 'Create a new account',
-    forgotTitle: 'Reset Password', forgotHint: 'Enter your email to receive a reset token',
-    resetTitle: 'Set New Password', resetHint: 'Token verified for',
-    emailLabel: 'Email', passwordLabel: 'Password', confirmLabel: 'Confirm Password',
-    resetTokenLabel: 'Reset Token', newPasswordLabel: 'New Password',
-    sendToken: 'Send Reset Token', resetBtn: 'Reset Password',
-    errRequired: 'Email and password are required',
-    errEmailRequired: 'Email is required',
-    errPwShort: 'Password must be at least 6 characters',
-    errPwMismatch: 'Passwords do not match',
-    errTokenRequired: 'Token and new password are required',
-    requesting: 'Requesting...',
-    resetting: 'Resetting...',
-    resetSuccess: 'Password reset successful! Redirecting to login...',
-    tokenGenerated: 'Reset token generated.',
-    footer: 'Aelvoxim · Self-hosted AI Brain',
-    loggedIn: 'Logged in',
-  },
-  zh: {
-    login: '登录', logout: '退出', signup: '注册',
-    forgotPassword: '忘记密码？', noAccount: '没有账号？去注册',
-    hasAccount: '已有账号？去登录', backToLogin: '返回登录',
-    tagline: '不只是聊天机器人。一个会学习的大脑。',
-    headline1: '不只是聊天机器人，', headline2: '一个会学习的大脑。',
-    subtitle: '自托管 AI 决策层：多智能体编排、防幻觉、记忆系统、工具调用、桌面控制、自主学习。',
-    cardBrain: 'AI 大脑', cardBrainDesc: '多智能体推理 / 记忆<br>工具调用 / 防幻觉',
-    cardApi: 'API 接入', cardApiDesc: 'REST API + API Key 认证<br>用量配额 / 开发者文档',
-    cardAdmin: '控制面板', cardAdminDesc: '配置 / 监控<br>智能体 / 定价与系统管理',
-    loginTitle: '登录', loginHint: '登录以访问全部功能',
-    registerTitle: '注册', registerHint: '创建新账号',
-    forgotTitle: '重置密码', forgotHint: '输入邮箱获取重置令牌',
-    resetTitle: '设置新密码', resetHint: '令牌已验证，属于',
-    emailLabel: '邮箱', passwordLabel: '密码', confirmLabel: '确认密码',
-    resetTokenLabel: '重置令牌', newPasswordLabel: '新密码',
-    sendToken: '发送重置令牌', resetBtn: '重置密码',
-    errRequired: '邮箱和密码不能为空',
-    errEmailRequired: '请输入邮箱',
-    errPwShort: '密码至少6位',
-    errPwMismatch: '两次输入的密码不一致',
-    errTokenRequired: '令牌和新密码不能为空',
-    requesting: '请求中...',
-    resetting: '重置中...',
-    resetSuccess: '密码重置成功！即将跳转登录...',
-    tokenGenerated: '重置令牌已生成。',
-    footer: 'Aelvoxim · 自托管 AI 大脑',
-    loggedIn: '已登录',
-  },
-};
+var _lang=localStorage.getItem("ael_lang")||(navigator.language&&navigator.language.startsWith("zh")?"zh":"en");
+var I18N={en:{login:"Login",logout:"Logout",signup:"Sign Up",forgotPassword:"Forgot password?",noAccount:"No account? Sign up",hasAccount:"Already have an account? Login",backToLogin:"Back to Login",tagline:"More than a chatbot. A brain that learns.",headline1:"More than a chatbot.<br>A brain that learns.",headline2:"A brain that learns.",subtitle:"Self-hosted AI decision layer with multi-agent orchestration, anti-hallucination, memory, tool calling, and autonomous learning.",ctaChat:"Start Chat",ctaApi:"API Access",cardBrain:"AI Brain",cardBrainDesc:"Multi-agent reasoning / Memory<br>Tool calling / Anti-hallucination",cardApi:"API Access",cardApiDesc:"REST API with API Key auth<br>Usage quota / Developer docs",cardAdmin:"Control Panel",cardAdminDesc:"Configuration / Monitoring<br>Agents / Pricing & System",loginTitle:"Login",loginHint:"Sign in to access all features",registerTitle:"Sign Up",registerHint:"Create a new account",forgotTitle:"Reset Password",forgotHint:"Enter your email to receive a reset token",resetTitle:"Set New Password",resetHint:"Token verified for",emailLabel:"Email",passwordLabel:"Password",confirmLabel:"Confirm Password",resetTokenLabel:"Reset Token",newPasswordLabel:"New Password",sendToken:"Send Reset Token",resetBtn:"Reset Password",errRequired:"Email and password are required",errEmailRequired:"Email is required",errPwShort:"Password must be at least 6 characters",errPwMismatch:"Passwords do not match",errTokenRequired:"Token and new password are required",requesting:"Requesting...",resetting:"Resetting...",resetSuccess:"Password reset successful! Redirecting to login...",tokenGenerated:"Reset token generated.",footer:"Aelvoxim \u00b7 Self-hosted AI Brain",loggedIn:"Logged in"},zh:{login:"\u767b\u5f55",logout:"\u9000\u51fa",signup:"\u6ce8\u518c",forgotPassword:"\u5fd8\u8bb0\u5bc6\u7801\uff1f",noAccount:"\u6ca1\u6709\u8d26\u53f7\uff1f\u53bb\u6ce8\u518c",hasAccount:"\u5df2\u6709\u8d26\u53f7\uff1f\u53bb\u767b\u5f55",backToLogin:"\u8fd4\u56de\u767b\u5f55",tagline:"\u4e0d\u53ea\u662f\u804a\u5929\u673a\u5668\u4eba\uff0c\u4e00\u4e2a\u4f1a\u5b66\u4e60\u7684\u5927\u8111",headline1:"\u4e0d\u53ea\u662f\u804a\u5929\u673a\u5668\u4eba\uff0c<br>\u4e00\u4e2a\u4f1a\u5b66\u4e60\u7684\u5927\u8111\u3002",headline2:"\u4e00\u4e2a\u4f1a\u5b66\u4e60\u7684\u5927\u8111\u3002",subtitle:"\u81ea\u6258\u7ba1 AI \u51b3\u7b56\u5c42\uff1a\u591a\u667a\u80fd\u4f53\u7f16\u6392\u3001\u9632\u5e7b\u89c9\u3001\u8bb0\u5fc6\u7cfb\u7edf\u3001\u5de5\u5177\u8c03\u7528\u3001\u81ea\u4e3b\u5b66\u4e60\u3002",ctaChat:"\u5f00\u59cb\u5bf9\u8bdd",ctaApi:"API \u63a5\u5165",cardBrain:"AI \u5927\u8111",cardBrainDesc:"\u591a\u667a\u80fd\u4f53\u63a8\u7406 / \u8bb0\u5fc6<br>\u5de5\u5177\u8c03\u7528 / \u9632\u5e7b\u89c9",cardApi:"API \u63a5\u5165",cardApiDesc:"REST API + API Key \u8ba4\u8bc1<br>\u7528\u91cf\u914d\u989d / \u5f00\u53d1\u8005\u6587\u6863",cardAdmin:"\u63a7\u5236\u9762\u677f",cardAdminDesc:"\u914d\u7f6e / \u76d1\u63a7<br>\u667a\u80fd\u4f53 / \u5b9a\u4ef7\u4e0e\u7cfb\u7edf\u7ba1\u7406",loginTitle:"\u767b\u5f55",loginHint:"\u767b\u5f55\u4ee5\u8bbf\u95ee\u5168\u90e8\u529f\u80fd",registerTitle:"\u6ce8\u518c",registerHint:"\u521b\u5efa\u65b0\u8d26\u53f7",forgotTitle:"\u91cd\u7f6e\u5bc6\u7801",forgotHint:"\u8f93\u5165\u90ae\u7bb1\u83b7\u53d6\u91cd\u7f6e\u4ee4\u724c",resetTitle:"\u8bbe\u7f6e\u65b0\u5bc6\u7801",resetHint:"\u4ee4\u724c\u5df2\u9a8c\u8bc1\uff0c\u5c5e\u4e8e",emailLabel:"\u90ae\u7bb1",passwordLabel:"\u5bc6\u7801",confirmLabel:"\u786e\u8ba4\u5bc6\u7801",resetTokenLabel:"\u91cd\u7f6e\u4ee4\u724c",newPasswordLabel:"\u65b0\u5bc6\u7801",sendToken:"\u53d1\u9001\u91cd\u7f6e\u4ee4\u724c",resetBtn:"\u91cd\u7f6e\u5bc6\u7801",errRequired:"\u90ae\u7bb1\u548c\u5bc6\u7801\u4e0d\u80fd\u4e3a\u7a7a",errEmailRequired:"\u8bf7\u8f93\u5165\u90ae\u7bb1",errPwShort:"\u5bc6\u7801\u81f3\u5c116\u4f4d",errPwMismatch:"\u4e24\u6b21\u8f93\u5165\u7684\u5bc6\u7801\u4e0d\u4e00\u81f4",errTokenRequired:"\u4ee4\u724c\u548c\u65b0\u5bc6\u7801\u4e0d\u80fd\u4e3a\u7a7a",requesting:"\u8bf7\u6c42\u4e2d...",resetting:"\u91cd\u7f6e\u4e2d...",resetSuccess:"\u5bc6\u7801\u91cd\u7f6e\u6210\u529f\uff01\u5373\u5c06\u8df3\u8f6c\u767b\u5f55...",tokenGenerated:"\u91cd\u7f6e\u4ee4\u724c\u5df2\u751f\u6210\u3002",footer:"Aelvoxim \u00b7 \u81ea\u6258\u7ba1 AI \u5927\u8111",loggedIn:"\u5df2\u767b\u5f55"}};
+function t(k){return(I18N[_lang]&&I18N[_lang][k])||I18N.en[k]||k}
+function toggleLang(){_lang=_lang==="zh"?"en":"zh";localStorage.setItem("ael_lang",_lang);document.getElementById("langToggleBtn").textContent=_lang==="zh"?"中":"EN";applyI18n();if(document.getElementById("authModal").classList.contains("active"))renderAuthModal()}
+function applyI18n(){var w=document.createTreeWalker(document.body,4,null,false),n=[];while(w.nextNode())n.push(w.currentNode);n.forEach(function(n){if(n.nodeType===3&&n.nodeValue&&n.nodeValue.indexOf("@@")!==-1)n.nodeValue=n.nodeValue.replace(/@@(\w+)@@/g,function(m,k){return t(k)})});document.querySelectorAll("[data-i18n]").forEach(function(el){el.textContent=t(el.getAttribute("data-i18n"))});var lb=document.getElementById("loginBtn");if(lb)lb.textContent=t("login");var lob=document.getElementById("logoutBtn");if(lob)lob.textContent=t("logout");var hu=document.getElementById("headerUser");if(_token&&hu&&hu.textContent&&hu.textContent.indexOf("@")===-1)hu.textContent=t("loggedIn");if(hu&&!_token)hu.textContent="";var tl=t("tagline");document.title=tl?tl+" \u2014 Aelvoxim":"Aelvoxim"}
+var _token=(function(){try{return localStorage.getItem("ael_token")||""}catch(e){return""}})();
+var _email=(function(){try{return localStorage.getItem("ael_email")||""}catch(e){return""}})();
+document.addEventListener("DOMContentLoaded",function(){document.getElementById("langToggleBtn").textContent=_lang==="zh"?"中":"EN"});
 
-function t(key) { return (I18N[_lang] && I18N[_lang][key]) || I18N.en[key] || key; }
-
-function setLang(lang) {
-  _lang = lang;
-  localStorage.setItem('ael_lang', lang);
-  document.getElementById('langEn').className = lang === 'en' ? 'lang-btn active' : 'lang-btn';
-  document.getElementById('langZh').className = lang === 'zh' ? 'lang-btn active' : 'lang-btn';
-  applyI18n();
-  // Re-render modal if open
-  if (document.getElementById('authModal').classList.contains('active')) renderAuthModal();
-}
-
-function applyI18n() {
-  // Replace @@placeholders@@ in all text nodes (not innerHTML — preserves bindings)
-  var walker = document.createTreeWalker(document.body, 4 /* NodeFilter.SHOW_TEXT */, null, false);
-  var nodes = [];
-  while (walker.nextNode()) nodes.push(walker.currentNode);
-  nodes.forEach(function(n) {
-    if (n.nodeType === 3 && n.nodeValue && n.nodeValue.indexOf('@@') !== -1) {
-      n.nodeValue = n.nodeValue.replace(/@@(\w+)@@/g, function(m, k) { return t(k); });
-    }
-  });
-  // data-i18n attribute elements
-  document.querySelectorAll('[data-i18n]').forEach(function(el) {
-    el.textContent = t(el.getAttribute('data-i18n'));
-  });
-  // Manual overrides for dynamic elements
-  document.getElementById('loginBtn').textContent = t('login');
-  document.getElementById('logoutBtn').textContent = t('logout');
-  var hu = document.getElementById('headerUser');
-  if (_token && hu && !hu.textContent.includes('@')) hu.textContent = t('loggedIn');
-  // Update title
-  document.title = t('tagline') + ' — Aelvoxim';
-}
-
-// ── Constants ──
-var API_BASE = '';
-var STORAGE_KEY = 'ael_token';
-var STORAGE_EMAIL = 'ael_email';
-var STORAGE_PLAN = 'ael_plan';
-var CHATAEL_TENANTS_KEY = 'chatael_tenants';
-var CHATAEL_ACTIVE_KEY = 'chatael_active_id';
-
-// ── State ──
-var _token = localStorage.getItem(STORAGE_KEY) || '';
-var _email = localStorage.getItem(STORAGE_EMAIL) || '';
-
-// ── Initialisation ──
-(function init() {
-  // Init lang buttons
-  document.getElementById('langEn').className = _lang === 'en' ? 'lang-btn active' : 'lang-btn';
-  document.getElementById('langZh').className = _lang === 'zh' ? 'lang-btn active' : 'lang-btn';
-  if (_token) {
-    document.getElementById('loginBtn').style.display = 'none';
-    document.getElementById('logoutBtn').style.display = '';
-    document.getElementById('headerUser').textContent = _email || t('loggedIn');
-    appendTokenToLinks(_token);
-  }
-  applyI18n();
-})();
-
-// ── Modal helpers ──
-function showAuth() { document.getElementById('authModal').classList.add('active'); renderAuthModal(); }
-function closeAuth() { document.getElementById('authModal').classList.remove('active'); }
-
-// ── Render auth modal (3 modes: login / register / forgot) ──
-var _authMode = 'login';
-
-function renderAuthModal() {
-  if (_authMode === 'login') renderLogin();
-  else if (_authMode === 'register') renderRegister();
-  else if (_authMode === 'forgot') renderForgot();
-  else if (_authMode === 'reset') renderReset();
-}
-
-function renderLogin() {
-  var html = [
-    '<h2>' + t('loginTitle') + '</h2>',
-    '<div class="hint">' + t('loginHint') + '</div>',
-    '<div class="fg"><label>' + t('emailLabel') + '</label><input type="email" id="authEmail" placeholder="your@email.com" autocomplete="email"></div>',
-    '<div class="fg"><label>' + t('passwordLabel') + '</label><input type="password" id="authPassword" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key===\'Enter\')submitLogin()"></div>',
-    '<div class="err" id="authErr"></div>',
-    '<div class="btn-row"><button class="primary" onclick="submitLogin()">' + t('login') + '</button></div>',
-    '<span class="link-btn" onclick="_authMode=\'forgot\';renderAuthModal()">' + t('forgotPassword') + '</span>',
-    '<span class="link-btn" onclick="_authMode=\'register\';renderAuthModal()">' + t('noAccount') + '</span>',
-  ].join('\n');
-  document.getElementById('authModalContent').innerHTML = html;
-  setTimeout(function() {
-    var e = document.getElementById('authEmail');
-    if (e) e.focus();
-  }, 100);
-}
-
-function submitLogin() {
-  var email = document.getElementById('authEmail').value.trim();
-  var pw = document.getElementById('authPassword').value;
-  var errEl = document.getElementById('authErr');
-  if (!email || !pw) { errEl.textContent = t('errRequired'); return; }
-  errEl.textContent = t('requesting');
-  fetch(API_BASE + '/v1/auth/login', {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({email: email, password: pw})
-  }).then(function(r) { return r.json(); }).then(function(d) {
-    if (d.api_key) {
-      saveSession(d.api_key, d.email || email, d.plan || '');
-      closeAuth();
-    } else {
-      errEl.textContent = d.detail || t('login') + ' failed';
-    }
-  }).catch(function() { errEl.textContent = 'Network error'; });
-}
-
-function renderRegister() {
-  var html = [
-    '<h2>' + t('registerTitle') + '</h2>',
-    '<div class="hint">' + t('registerHint') + '</div>',
-    '<div class="fg"><label>' + t('emailLabel') + '</label><input type="email" id="regEmail" placeholder="your@email.com" autocomplete="email"></div>',
-    '<div class="fg"><label>' + t('passwordLabel') + '</label><input type="password" id="regPassword" placeholder="At least 6 characters" autocomplete="new-password"></div>',
-    '<div class="fg"><label>' + t('confirmLabel') + '</label><input type="password" id="regConfirm" placeholder="Repeat password" onkeydown="if(event.key===\'Enter\')submitRegister()"></div>',
-    '<div class="err" id="authErr"></div>',
-    '<div class="btn-row"><button class="primary" onclick="submitRegister()">' + t('signup') + '</button></div>',
-    '<span class="link-btn" onclick="_authMode=\'login\';renderAuthModal()">' + t('hasAccount') + '</span>',
-  ].join('\n');
-  document.getElementById('authModalContent').innerHTML = html;
-  setTimeout(function() {
-    var e = document.getElementById('regEmail');
-    if (e) e.focus();
-  }, 100);
-}
-
-function submitRegister() {
-  var email = document.getElementById('regEmail').value.trim();
-  var pw = document.getElementById('regPassword').value;
-  var confirm = document.getElementById('regConfirm').value;
-  var errEl = document.getElementById('authErr');
-  if (!email || !pw) { errEl.textContent = t('errRequired'); return; }
-  if (pw.length < 6) { errEl.textContent = t('errPwShort'); return; }
-  if (pw !== confirm) { errEl.textContent = t('errPwMismatch'); return; }
-  errEl.textContent = t('requesting');
-  fetch(API_BASE + '/v1/auth/register', {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({email: email, password: pw, plan: 'community'})
-  }).then(function(r) { return r.json(); }).then(function(d) {
-    if (d.api_key) {
-      saveSession(d.api_key, d.email || email, d.plan || '');
-      closeAuth();
-    } else {
-      errEl.textContent = d.detail || 'Registration failed';
-    }
-  }).catch(function() { errEl.textContent = 'Network error'; });
-}
-
-function renderForgot() {
-  var html = [
-    '<h2>' + t('forgotTitle') + '</h2>',
-    '<div class="hint">' + t('forgotHint') + '</div>',
-    '<div class="fg"><label>' + t('emailLabel') + '</label><input type="email" id="forgotEmail" placeholder="your@email.com" autocomplete="email" onkeydown="if(event.key===\'Enter\')submitForgot()"></div>',
-    '<div class="success" id="authSuccess"></div>',
-    '<div class="err" id="authErr"></div>',
-    '<div class="btn-row"><button class="primary" onclick="submitForgot()">' + t('sendToken') + '</button></div>',
-    '<span class="back-link" onclick="_authMode=\'login\';renderAuthModal()">' + t('backToLogin') + '</span>',
-  ].join('\n');
-  document.getElementById('authModalContent').innerHTML = html;
-  setTimeout(function() {
-    var e = document.getElementById('forgotEmail');
-    if (e) e.focus();
-  }, 100);
-}
-
-var _resetToken = '';
-
-function submitForgot() {
-  var email = document.getElementById('forgotEmail').value.trim();
-  var errEl = document.getElementById('authErr');
-  var successEl = document.getElementById('authSuccess');
-  if (!email) { errEl.textContent = t('errEmailRequired'); return; }
-  errEl.textContent = '';
-  successEl.textContent = t('requesting');
-  fetch(API_BASE + '/v1/auth/forgot-password', {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({email: email})
-  }).then(function(r) { return r.json(); }).then(function(d) {
-    if (d.token) {
-      _resetToken = d.token;
-      _resetEmail = email;
-      successEl.textContent = t('tokenGenerated');
-      errEl.textContent = '';
-      _authMode = 'reset';
-      renderAuthModal();
-    } else {
-      successEl.textContent = d.message || 'If the email exists, a reset link has been sent';
-      errEl.textContent = '';
-    }
-  }).catch(function() { errEl.textContent = 'Network error'; });
-}
-
-var _resetEmail = '';
-
-function renderReset() {
-  var html = [
-    '<h2>' + t('resetTitle') + '</h2>',
-    '<div class="hint">' + t('resetHint') + ' <strong>' + escHtml(_resetEmail) + '</strong></div>',
-    '<div class="fg"><label>' + t('resetTokenLabel') + '</label><input type="text" id="resetToken" value="' + escHtml(_resetToken) + '" placeholder="Paste token here"></div>',
-    '<div class="fg"><label>' + t('newPasswordLabel') + '</label><input type="password" id="resetPassword" placeholder="At least 6 characters" autocomplete="new-password" onkeydown="if(event.key===\'Enter\')submitReset()"></div>',
-    '<div class="fg"><label>' + t('confirmLabel') + '</label><input type="password" id="resetConfirm" placeholder="Repeat password"></div>',
-    '<div class="err" id="authErr"></div>',
-    '<div class="success" id="authSuccess"></div>',
-    '<div class="btn-row"><button class="primary" onclick="submitReset()">' + t('resetBtn') + '</button></div>',
-    '<span class="back-link" onclick="_authMode=\'login\';renderAuthModal()">' + t('backToLogin') + '</span>',
-  ].join('\n');
-  document.getElementById('authModalContent').innerHTML = html;
-  setTimeout(function() {
-    var e = document.getElementById('resetPassword');
-    if (e) e.focus();
-  }, 100);
-}
-
-function submitReset() {
-  var token = document.getElementById('resetToken').value.trim();
-  var pw = document.getElementById('resetPassword').value;
-  var confirm = document.getElementById('resetConfirm').value;
-  var errEl = document.getElementById('authErr');
-  var successEl = document.getElementById('authSuccess');
-  if (!token || !pw) { errEl.textContent = t('errTokenRequired'); return; }
-  if (pw.length < 6) { errEl.textContent = t('errPwShort'); return; }
-  if (pw !== confirm) { errEl.textContent = t('errPwMismatch'); return; }
-  errEl.textContent = '';
-  successEl.textContent = t('resetting');
-  fetch(API_BASE + '/v1/auth/reset-password', {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({email: _resetEmail, token: token, new_password: pw})
-  }).then(function(r) { return r.json(); }).then(function(d) {
-    if (d.message && d.message.indexOf('successful') !== -1) {
-      successEl.textContent = t('resetSuccess');
-      errEl.textContent = '';
-      setTimeout(function() {
-        _authMode = 'login';
-        renderAuthModal();
-        var emailEl = document.getElementById('authEmail');
-        if (emailEl) emailEl.value = _resetEmail;
-      }, 1500);
-    } else {
-      errEl.textContent = d.detail || 'Reset failed';
-      successEl.textContent = '';
-    }
-  }).catch(function() { errEl.textContent = 'Network error'; });
-}
-
-// ── Session persistence ──
-function saveSession(apiKey, email, plan) {
-  _token = apiKey;
-  _email = email;
-  localStorage.setItem(STORAGE_KEY, apiKey);
-  localStorage.setItem(STORAGE_EMAIL, email);
-  if (plan) localStorage.setItem(STORAGE_PLAN, plan);
-  // Update UI
-  document.getElementById('loginBtn').style.display = 'none';
-  document.getElementById('logoutBtn').style.display = '';
-  document.getElementById('headerUser').textContent = _email || t('loggedIn');
-  appendTokenToLinks(apiKey);
-  // Sync to Chatael tenants (cross-entry compatibility)
-  syncToChatael(apiKey, email);
-}
-
-function doLogout() {
-  _token = '';
-  _email = '';
-  localStorage.removeItem(STORAGE_KEY);
-  localStorage.removeItem(STORAGE_EMAIL);
-  localStorage.removeItem(STORAGE_PLAN);
-  document.getElementById('loginBtn').style.display = '';
-  document.getElementById('logoutBtn').style.display = 'none';
-  document.getElementById('headerUser').textContent = '';
-  removeTokenFromLinks();
-}
-
-function appendTokenToLinks(token) {
-  document.querySelectorAll('.card').forEach(function(c) {
-    var href = c.getAttribute('href');
-    if (href) c.setAttribute('href', href.split('?')[0] + '?token=' + encodeURIComponent(token));
-  });
-}
-
-function removeTokenFromLinks() {
-  document.querySelectorAll('.card').forEach(function(c) {
-    var href = c.getAttribute('href');
-    if (href) c.setAttribute('href', href.split('?')[0]);
-  });
-}
-
-// ── Cross-entry sync: portal login -> Chatael tenant ──
-function syncToChatael(apiKey, email) {
-  try {
-    var raw = localStorage.getItem(CHATAEL_TENANTS_KEY);
-    var tenants = raw ? JSON.parse(raw) : [];
-    // Check if this email already exists as a tenant
-    var existing = false;
-    for (var i = 0; i < tenants.length; i++) {
-      if (tenants[i].email === email) {
-        tenants[i].apiKey = apiKey;
-        existing = true;
-        break;
-      }
-    }
-    if (!existing) {
-      tenants.push({
-        id: 'tenant:' + Date.now(),
-        name: email.split('@')[0],
-        email: email,
-        apiKey: apiKey,
-        apiUrl: 'http://127.0.0.1:9701',
-      });
-    }
-    localStorage.setItem(CHATAEL_TENANTS_KEY, JSON.stringify(tenants));
-    // Set as active tenant
-    var activeId = tenants.length > 0 ? tenants[tenants.length - 1].id : 'default';
-    // Prefer the existing one
-    if (existing) {
-      for (var j = 0; j < tenants.length; j++) {
-        if (tenants[j].email === email) { activeId = tenants[j].id; break; }
-      }
-    }
-    localStorage.setItem(CHATAEL_ACTIVE_KEY, activeId);
-  } catch(e) { /* silently fail — cross-entry sync is best-effort */ }
-}
-
-// ── Helpers ──
-function escHtml(s) {
-  if (!s) return '';
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+// ── Auth Modal ──
+function showAuth(){document.getElementById('authModal').classList.add('active');renderAuthModal()}
+function closeAuth(){document.getElementById('authModal').classList.remove('active')}
+var _authMode='login';
+function renderAuthModal(){if(_authMode==='login')renderLogin();else if(_authMode==='register')renderRegister();else if(_authMode==='forgot')renderForgot();else if(_authMode==='reset')renderReset()}
+function renderLogin(){var h='<div class="inline-switch"><button class="active" onclick="_authMode='login';renderAuthModal()">'+t('login')+'</button><button onclick="_authMode='register';renderAuthModal()">'+t('signup')+'</button></div><h2>'+t('loginTitle')+'</h2><div class="hint">'+t('loginHint')+'</div><div class="fg"><label>'+t('emailLabel')+'</label><input type="email" id="authEmail" placeholder="your@email.com" autocomplete="email" onkeydown="if(event.key==='Enter')submitLogin()"></div><div class="fg"><label>'+t('passwordLabel')+'</label><input type="password" id="authPassword" placeholder="••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')submitLogin()"></div><div class="err" id="authErr"></div><div class="btn-row"><button class="primary" onclick="submitLogin()">'+t('login')+'</button></div><div class="link-btn" onclick="_authMode='forgot';renderAuthModal()">'+t('forgotPassword')+'</div>';document.getElementById('authModalContent').innerHTML=h;setTimeout(function(){var e=document.getElementById('authEmail');if(e)e.focus()},100)}
+function renderRegister(){var h='<div class="inline-switch"><button onclick="_authMode='login';renderAuthModal()">'+t('login')+'</button><button class="active" onclick="_authMode='register';renderAuthModal()">'+t('signup')+'</button></div><h2>'+t('registerTitle')+'</h2><div class="hint">'+t('registerHint')+'</div><div class="fg"><label>'+t('emailLabel')+'</label><input type="email" id="authEmail" placeholder="your@email.com" autocomplete="email"></div><div class="fg"><label>'+t('passwordLabel')+'</label><input type="password" id="authPassword" placeholder="At least 6 characters" autocomplete="new-password"></div><div class="fg"><label>'+t('confirmLabel')+'</label><input type="password" id="authConfirm" placeholder="Repeat password"></div><div class="err" id="authErr"></div><div class="btn-row"><button class="primary" onclick="submitRegister()">'+t('signup')+'</button></div><a class="link-btn" onclick="_authMode='login';renderAuthModal()">'+t('hasAccount')+'</a>';document.getElementById('authModalContent').innerHTML=h;setTimeout(function(){var e=document.getElementById('authEmail');if(e)e.focus()},100)}
+function submitLogin(){var email=document.getElementById('authEmail').value.trim();var pw=document.getElementById('authPassword').value;var errEl=document.getElementById('authErr');if(!email||!pw){errEl.textContent=t('errRequired');return}errEl.textContent=t('requesting');fetch(''+'/v1/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email,password:pw})}).then(function(r){return r.json()}).then(function(d){if(d.api_key){saveSession(d.api_key,d.email||email,d.plan||'');closeAuth()}else{errEl.textContent=d.detail||'Login failed'}}).catch(function(){errEl.textContent='Network error'})}
+function submitRegister(){var email=document.getElementById('authEmail').value.trim();var pw=document.getElementById('authPassword').value;var confirm=document.getElementById('authConfirm').value;var errEl=document.getElementById('authErr');if(!email||!pw){errEl.textContent=t('errRequired');return}if(pw.length<6){errEl.textContent=t('errPwShort');return}if(pw!==confirm){errEl.textContent=t('errPwMismatch');return}errEl.textContent=t('requesting');fetch(''+'/v1/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email,password:pw,plan:'community'})}).then(function(r){return r.json()}).then(function(d){if(d.api_key){saveSession(d.api_key,d.email||email,d.plan||'');closeAuth()}else{errEl.textContent=d.detail||'Registration failed'}}).catch(function(){errEl.textContent='Network error'})}
+function renderForgot(){var h='<h2>'+t('forgotTitle')+'</h2><div class="hint">'+t('forgotHint')+'</div><div class="fg"><label>'+t('emailLabel')+'</label><input type="email" id="forgotEmail" placeholder="your@email.com" autocomplete="email" onkeydown="if(event.key==='Enter')submitForgot()"></div><div class="success" id="authSuccess"></div><div class="err" id="authErr"></div><div class="btn-row"><button class="primary" onclick="submitForgot()">'+t('sendToken')+'</button></div><span class="back-link" onclick="_authMode='login';renderAuthModal()">'+t('backToLogin')+'</span>';document.getElementById('authModalContent').innerHTML=h;setTimeout(function(){var e=document.getElementById('forgotEmail');if(e)e.focus()},100)}
+var _resetToken='';
+function submitForgot(){var email=document.getElementById('forgotEmail').value.trim();var errEl=document.getElementById('authErr');var successEl=document.getElementById('authSuccess');if(!email){errEl.textContent=t('errEmailRequired');return}errEl.textContent='';successEl.textContent=t('requesting');fetch(''+'/v1/auth/forgot-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email})}).then(function(r){return r.json()}).then(function(d){if(d.token){_resetToken=d.token;_resetEmail=email;successEl.textContent=t('tokenGenerated');errEl.textContent='';_authMode='reset';renderAuthModal()}else{successEl.textContent=d.message||'If the email exists, a reset link has been sent';errEl.textContent=''}}).catch(function(){errEl.textContent='Network error'})}
+var _resetEmail='';
+function renderReset(){var h='<h2>'+t('resetTitle')+'</h2><div class="hint">'+t('resetHint')+' <strong>'+escHtml(_resetEmail)+'</strong></div><div class="fg"><label>'+t('resetTokenLabel')+'</label><input type="text" id="resetToken" value="'+escHtml(_resetToken)+'" placeholder="Paste token here"></div><div class="fg"><label>'+t('newPasswordLabel')+'</label><input type="password" id="resetPassword" placeholder="At least 6 characters" autocomplete="new-password" onkeydown="if(event.key==='Enter')submitReset()"></div><div class="fg"><label>'+t('confirmLabel')+'</label><input type="password" id="resetConfirm" placeholder="Repeat password"></div><div class="err" id="authErr"></div><div class="success" id="authSuccess"></div><div class="btn-row"><button class="primary" onclick="submitReset()">'+t('resetBtn')+'</button></div><span class="back-link" onclick="_authMode='login';renderAuthModal()">'+t('backToLogin')+'</span>';document.getElementById('authModalContent').innerHTML=h;setTimeout(function(){var e=document.getElementById('resetPassword');if(e)e.focus()},100)}
+function submitReset(){var token=document.getElementById('resetToken').value.trim();var pw=document.getElementById('resetPassword').value;var confirm=document.getElementById('resetConfirm').value;var errEl=document.getElementById('authErr');var successEl=document.getElementById('authSuccess');if(!token||!pw){errEl.textContent=t('errTokenRequired');return}if(pw.length<6){errEl.textContent=t('errPwShort');return}if(pw!==confirm){errEl.textContent=t('errPwMismatch');return}errEl.textContent='';successEl.textContent=t('resetting');fetch(''+'/v1/auth/reset-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:_resetEmail,token:token,new_password:pw})}).then(function(r){return r.json()}).then(function(d){if(d.message&&d.message.indexOf('successful')!==-1){successEl.textContent=t('resetSuccess');errEl.textContent='';setTimeout(function(){_authMode='login';renderAuthModal();var emailEl=document.getElementById('authEmail');if(emailEl)emailEl.value=_resetEmail},1500)}else{errEl.textContent=d.detail||'Reset failed';successEl.textContent=''}}).catch(function(){errEl.textContent='Network error'})}
+function saveSession(apiKey,email,plan){_token=apiKey;_email=email;localStorage.setItem('ael_token',apiKey);localStorage.setItem('ael_email',email);if(plan)localStorage.setItem('ael_plan',plan);document.getElementById('loginBtn').style.display='none';document.getElementById('logoutBtn').style.display='';document.getElementById('headerUser').textContent=_email||t('loggedIn');appendTokenToLinks(apiKey);syncToChatael(apiKey,email)}
+function doLogout(){_token='';_email='';localStorage.removeItem('ael_token');localStorage.removeItem('ael_email');localStorage.removeItem('ael_plan');document.getElementById('loginBtn').style.display='';document.getElementById('logoutBtn').style.display='none';document.getElementById('headerUser').textContent='';removeTokenFromLinks()}
+function appendTokenToLinks(token){document.querySelectorAll('.card').forEach(function(c){var href=c.getAttribute('href');if(href)c.setAttribute('href',href.split('?')[0]+'?token='+encodeURIComponent(token))})}
+function removeTokenFromLinks(){document.querySelectorAll('.card').forEach(function(c){var href=c.getAttribute('href');if(href)c.setAttribute('href',href.split('?')[0])})}
+function syncToChatael(apiKey,email){try{var raw=localStorage.getItem('chatael_tenants');var tenants=raw?JSON.parse(raw):[];var existing=false;for(var i=0;i<tenants.length;i++){if(tenants[i].email===email){tenants[i].apiKey=apiKey;existing=true;break}}if(!existing){tenants.push({id:'tenant:'+Date.now(),name:email.split('@')[0],email:email,apiKey:apiKey,apiUrl:'http://127.0.0.1:9701'})}localStorage.setItem('chatael_tenants',JSON.stringify(tenants));var activeId=tenants.length>0?tenants[tenants.length-1].id:'default';if(existing){for(var j=0;j<tenants.length;j++){if(tenants[j].email===email){activeId=tenants[j].id;break}}}localStorage.setItem('chatael_active_id',activeId)}catch(e){}}
+function escHtml(s){if(!s)return'';return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 </script>
 </body>
 </html>
