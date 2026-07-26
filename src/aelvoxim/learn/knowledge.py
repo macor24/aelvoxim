@@ -465,6 +465,28 @@ def _vector_search(query: str, limit: int = 10) -> list:
     return scored[:limit]
 
 
+# ── Event-triggered cleanup ──
+
+_MAX_ENTRIES_PER_TOPIC = 60
+
+
+def _event_trigger_cleanup(topic: str) -> None:
+    """Post-write hook: if topic has too many pending entries, trim oldest."""
+    pending_data = _read_pending()
+    topic_entries = [e for e in pending_data["pending"] if e.get("topic") == topic]
+    if len(topic_entries) <= _MAX_ENTRIES_PER_TOPIC:
+        return
+    topic_entries.sort(key=lambda e: e.get("created_at", ""))
+    to_remove = len(topic_entries) - _MAX_ENTRIES_PER_TOPIC
+    removed_keys = {e["id"] for e in topic_entries[:to_remove]}
+    pending_data["pending"] = [
+        e for e in pending_data["pending"] if e["id"] not in removed_keys
+    ]
+    _write_pending(pending_data)
+    _log.info("  🧹 [EventCleanup] %s: removed %d stale pending entries (cap=%d)",
+              topic, to_remove, _MAX_ENTRIES_PER_TOPIC)
+
+
 class KnowledgeBase:
     """Knowledge base engine (three-stage pipeline anti-contamination v2).
 
@@ -961,29 +983,6 @@ class KnowledgeBase:
             "by_topic": by_topic,
             "threshold": _VALIDATION_THRESHOLD,
         }
-
-# ── Event-triggered cleanup ──
-
-_MAX_ENTRIES_PER_TOPIC = 60  # soft cap: stale old entries once topic exceeds this
-
-
-def _event_trigger_cleanup(topic: str) -> None:
-    """Post-write hook: if topic has too many pending entries, trim oldest."""
-    from datetime import datetime as _dt
-    pending_data = _read_pending()
-    topic_entries = [e for e in pending_data["pending"] if e.get("topic") == topic]
-    if len(topic_entries) <= _MAX_ENTRIES_PER_TOPIC:
-        return
-    # Sort by created_at, keep newest MAX, archive oldest
-    topic_entries.sort(key=lambda e: e.get("created_at", ""))
-    to_remove = len(topic_entries) - _MAX_ENTRIES_PER_TOPIC
-    removed_keys = {e["id"] for e in topic_entries[:to_remove]}
-    pending_data["pending"] = [
-        e for e in pending_data["pending"] if e["id"] not in removed_keys
-    ]
-    _write_pending(pending_data)
-    _log.info("  🧹 [EventCleanup] %s: removed %d stale pending entries (cap=%d)",
-              topic, to_remove, _MAX_ENTRIES_PER_TOPIC)
 
 
     @staticmethod
