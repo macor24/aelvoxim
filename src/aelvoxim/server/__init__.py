@@ -51,6 +51,17 @@ def create_app() -> FastAPI:
         description="Self-evolving AI Agent — Standard Public API",
     )
 
+    # Global exception handler: prevent information leakage through exceptions
+    @app.exception_handler(Exception)
+    async def _global_exc_handler(request, exc):
+        import logging
+        logging.getLogger("aelvoxim.server").exception("Unhandled exception: %s", exc)
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal server error"},
+        )
+
     # CORS: allow specific origins via env var, default to all origins for flexibility
     _cors_origins = os.environ.get("AELVOXIM_CORS_ORIGINS", "*")
     _origins_list = [o.strip() for o in _cors_origins.split(",") if o.strip()]
@@ -253,7 +264,7 @@ def create_app() -> FastAPI:
         except Exception as e:
             from fastapi.responses import JSONResponse
             _log.exception("admin cognitive error")
-            return JSONResponse({"error": str(e)}, status_code=500)
+            return JSONResponse({"detail": "Internal server error"}, status_code=500)
 
     @app.get("/v1/admin/panel")
     async def admin_panel():

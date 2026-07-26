@@ -48,8 +48,8 @@ async def llm_chat(
     skip_experts = bool(request.get("_orchestrator", {}).get("experts_ran", False))
     skip_memory = bool(request.get("_orchestrator", {}).get("skip_memory", False))
 
-    result = chat_pipeline(call_fn, mc, messages, user, temperature, max_tokens,
-                           skip_experts=skip_experts, skip_memory=skip_memory, mode=mode)
+    result = _safe_chat_handler(call_fn, mc, messages, user, temperature, max_tokens,
+                                 skip_experts=skip_experts, skip_memory=skip_memory, mode=mode)
 
     if result.get("blocked"):
         _reason = result.get("reason", "Blocked by safety rules")
@@ -61,6 +61,19 @@ async def llm_chat(
         "content": result.get("text") or "",
         "model": model.name if hasattr(model, 'name') else "deepseek-v4-flash",
     }
+
+
+def _safe_chat_handler(call_fn, mc, messages, user, temperature, max_tokens,
+                       skip_experts=False, skip_memory=False, mode="simple"):
+    """Wrap chat_pipeline with safe exception handling to prevent information leakage."""
+    try:
+        return chat_pipeline(call_fn, mc, messages, user, temperature, max_tokens,
+                             skip_experts=skip_experts, skip_memory=skip_memory, mode=mode)
+    except HTTPException:
+        raise
+    except Exception as e:
+        _log.exception("chat_pipeline failed")
+        return {"blocked": True, "reason": "Internal processing error"}
 
 
 
