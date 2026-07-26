@@ -55,7 +55,7 @@ DEFAULT_CALIBRATION: Dict[str, Any] = {
         "memory_backup_max_count": 20,           # backup files >20 -> Warning
         "memory_health_min_score": 0.30,         # memory health score >0.3 triggers
         # Snapshot trend
-        "snapshot_trend_trigger": 2,             # consecutive decline >=2 -> Trigger
+        "snapshot_trend_trigger": 0.2,            # score >0.2 -> Trigger
         "snapshot_trend_moderate": 3,            # >=3 -> MODERATE
         "snapshot_trend_critical": 5,            # >=5 -> CRITICAL
         "snapshot_trend_score_rate": 3.0,        # score = min(1, streak / N)

@@ -74,10 +74,10 @@ def run_scan(log_fn: Optional[callable] = None) -> Dict[str, Any]:
             _dst = str(_md / "memory.db.rollback")
             shutil.copy2(_src, _dst)
         except Exception:
-            _log.exception("active_scan error")
-        from ..memory import cleanup_all as _cl
-        from ..memory import _fusion as _fus
-        _cl({"working": _fus.working, "episodic": _fus.episodic, "semantic": _fus.semantic})
+            import logging
+            logging.getLogger("aelvoxim.active_scan").exception("active_scan error")
+
+        # Memory cleanup — skip if cleanup_all not available
         memory_stats = {"cleaned": 0}
         # Time-based decay: re-score entities from DB
         try:
@@ -130,9 +130,11 @@ def run_scan(log_fn: Optional[callable] = None) -> Dict[str, Any]:
             memory_stats["cleaned"] = _cleaned
             memory_stats["pending_forget"] = _pending_forget
         except Exception:
-            _log.exception("active_scan error")
+            import logging
+            logging.getLogger("aelvoxim.active_scan").exception("memory decay error")
     except Exception:
-        _log.exception("active_scan error")
+        import logging
+        logging.getLogger("aelvoxim.active_scan").exception("memory cleanup error")
     report["memory"] = memory_stats or {"cleaned": 0}
 
     # ── 2. Knowledge base health ──
@@ -193,7 +195,8 @@ def run_scan(log_fn: Optional[callable] = None) -> Dict[str, Any]:
         with open(str(log_path), "a") as f:
             f.write(json.dumps(report, ensure_ascii=False) + "\n")
     except Exception:
-        _log.exception("active_scan error")
+        import logging
+        logging.getLogger("aelvoxim.active_scan").exception("health log write error")
 
     _mark_scanned()
     return report
@@ -224,5 +227,6 @@ def get_trend(days: int = 7) -> List[Dict]:
                 if line:
                     results.append(json.loads(line))
         except Exception:
-            _log.exception("active_scan error")
+            import logging
+            logging.getLogger("aelvoxim.active_scan").exception("health log read error")
     return results

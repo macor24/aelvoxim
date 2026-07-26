@@ -1,7 +1,5 @@
 # 知境 (Aelvoxim)
 
-## Biomimetic Autonomous Cognitive AI Brain
-
 > A self-learning, hallucination-resistant AI cognitive engine that never forgets — fully self-hosted on CPU.
 
 ---
@@ -322,7 +320,8 @@ MIT License — see [LICENSE](LICENSE) for details.
 - **GitHub:** https://github.com/macor24/aelvoxim
 - **Pages:** https://macor24.github.io/aelvoxim
 - **Issues:** https://github.com/macor24/aelvoxim/issues
-- **Docs:** https://github.com/macor24/aelvoxim/tree/master/docs
+- **Docs:** [docs/](docs/) — entry: [docs/README.md](docs/README.md)
+- **System Prompt:** [`knowledge_base.md`](knowledge_base.md) — AI agent instruction file (not user documentation)
 
 ---
 

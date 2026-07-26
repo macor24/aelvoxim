@@ -130,12 +130,12 @@ def batch_decay(fusion: MemoryFusion, db_path: str = "") -> Dict[str, Any]:
             _db = sqlite3.connect(db_path)
             for _key in to_dormant:
                 _db.execute(
-                    "UPDATE entities SET attributes = json_set(COALESCE(attributes,'{}'), '$_status', ?, '$_strength', ?) WHERE id = ?",
+                    "UPDATE entities SET attributes = json_set(COALESCE(attributes,'{}'), '$.status', ?, '$.strength', ?) WHERE id = ?",
                     ("dormant", 0.19, _key)
                 )
             for _key in to_archive:
                 _db.execute(
-                    "UPDATE entities SET attributes = json_set(COALESCE(attributes,'{}'), '$_status', ?, '$_strength', ?) WHERE id = ?",
+                    "UPDATE entities SET attributes = json_set(COALESCE(attributes,'{}'), '$.status', ?, '$.strength', ?) WHERE id = ?",
                     ("archived", 0.04, _key)
                 )
             _db.commit()
@@ -154,7 +154,51 @@ def batch_decay(fusion: MemoryFusion, db_path: str = "") -> Dict[str, Any]:
         except Exception:
             _log.exception("decay error")
 
+    # ── Layer promotion scan ──
+    try:
+        _promoted = _check_promote(fusion)
+        if _promoted:
+            stats["promoted"] = _promoted
+    except Exception:
+        _log.exception("decay error")
+
     return stats
+
+
+# ── Layer promotion scan ──
+
+
+def _check_promote(fusion: "MemoryFusion") -> int:
+    """Scan working + episodic layers, promote entries that qualify for higher layers.
+
+    Uses _determine_layer() to re-evaluate each entry's target layer.
+    Entries with dormant/archived conflict_status are skipped.
+    Returns count of promoted entries.
+    """
+    from ..memory import _determine_layer, _store_to_fusion, LAYER_WORKING, LAYER_EPISODIC, LAYER_SEMANTIC, LAYER_PROCEDURAL
+
+    _LAYER_ORDER = {LAYER_WORKING: 0, LAYER_EPISODIC: 1, LAYER_SEMANTIC: 2, LAYER_PROCEDURAL: 3}
+    promoted = 0
+    sources = [fusion.working, fusion.episodic]
+
+    for layer in sources:
+        for key, entry in list(layer._entries.items()):
+            if entry.conflict_status not in ("active", "pending"):
+                continue
+            target = _determine_layer(entry)
+            current_rank = _LAYER_ORDER.get(entry.layer, 0)
+            target_rank = _LAYER_ORDER.get(target, 0)
+            if target_rank > current_rank:
+                layer._entries.pop(key, None)
+                _store_to_fusion(entry)
+                promoted += 1
+                _log.info("  ⬆️ [Promote] %s: %s → %s (access=%d, importance=%.2f)",
+                          key[:40], entry.layer, target, entry.access_count, entry.importance)
+
+    if promoted:
+        fusion.rebuild_index()
+        _log.info("  ⬆️ [Promote] Promoted %d entries", promoted)
+    return promoted
 
 
 # ── Fusion-level integration ──
@@ -188,4 +232,5 @@ __all__ = [
     "DORMANT_THRESHOLD", "ARCHIVE_THRESHOLD", "WAKE_BOOST",
     "LAYER_DECAY_RATES",
     "apply_decay", "wake_up", "batch_decay", "install_decay_cleanup",
+    "_check_promote",
 ]

@@ -1,6 +1,9 @@
 ```markdown
 # Aelvoxim — Core Architecture Knowledge Base
 
+> ⚠️ **System Prompt** — This file defines the AI agent's behavior rules, security layers, and response format.
+> For user documentation, see [docs/README.md](docs/README.md).
+
 ## 1. System Identity
 
 **Name**: 知境 (Aelvoxim)

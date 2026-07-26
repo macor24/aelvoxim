@@ -263,7 +263,7 @@ def _subsystem_health() -> list[dict[str, Any]]:
 
         eo = ExpertOrchestrator()
         # expert count
-        n = len(getattr(eo, "experts", []))
+        n = len(getattr(eo, "_expert_classes", []))
         checks.append({"name": "Expert Orchestrator", "status": "online", "detail": f"{n} experts registered"})
     except Exception:
         checks.append({"name": "Expert Orchestrator", "status": "offline", "detail": "Not available"})

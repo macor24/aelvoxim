@@ -962,6 +962,30 @@ class KnowledgeBase:
             "threshold": _VALIDATION_THRESHOLD,
         }
 
+# ── Event-triggered cleanup ──
+
+_MAX_ENTRIES_PER_TOPIC = 60  # soft cap: stale old entries once topic exceeds this
+
+
+def _event_trigger_cleanup(topic: str) -> None:
+    """Post-write hook: if topic has too many pending entries, trim oldest."""
+    from datetime import datetime as _dt
+    pending_data = _read_pending()
+    topic_entries = [e for e in pending_data["pending"] if e.get("topic") == topic]
+    if len(topic_entries) <= _MAX_ENTRIES_PER_TOPIC:
+        return
+    # Sort by created_at, keep newest MAX, archive oldest
+    topic_entries.sort(key=lambda e: e.get("created_at", ""))
+    to_remove = len(topic_entries) - _MAX_ENTRIES_PER_TOPIC
+    removed_keys = {e["id"] for e in topic_entries[:to_remove]}
+    pending_data["pending"] = [
+        e for e in pending_data["pending"] if e["id"] not in removed_keys
+    ]
+    _write_pending(pending_data)
+    _log.info("  🧹 [EventCleanup] %s: removed %d stale pending entries (cap=%d)",
+              topic, to_remove, _MAX_ENTRIES_PER_TOPIC)
+
+
     @staticmethod
     def store_pending(
         topic: str,
@@ -1025,6 +1049,12 @@ class KnowledgeBase:
         }
         pending_data["pending"].append(entry)
         _write_pending(pending_data)
+
+        # Event-triggered cleanup: if topic exceeds threshold, clean stale pending entries
+        try:
+            _event_trigger_cleanup(topic)
+        except Exception:
+            pass  # non-critical cleanup
 
         # Auto-approve: high-confidence fact/correction entries skip pending queue
         if entry.get("confidence", 0) >= 0.7 and len(title) >= 5:

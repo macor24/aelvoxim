@@ -343,7 +343,7 @@ class Learner:
             # Record tracking outcome
             try:
                 from ..hooks.tracker import list_active as _la
-                for _at in _la:
+                for _at in _la():
                     from ..hooks.tracker import record_outcome as _ro
                     _ro(_at["id"], True)
             except Exception:
@@ -557,7 +557,7 @@ class Learner:
             try:
                 from ..patches.learner_cache import get_selfmodel as _cached_sm
             except (ImportError, ModuleNotFoundError):
-                _log.exception("loop error")
+                pass  # optional: enterprise only
 
             sm = _cached_sm() if _cached_sm else SelfModel()
             mon = MetaCogMonitor()

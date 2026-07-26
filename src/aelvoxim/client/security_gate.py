@@ -475,6 +475,15 @@ def _check_with_feedback(
 # ── Helper: build SentriKit HTTP call ──
 
 
+def _get_api_key() -> str:
+    """Get SentriKit API key from sentrikit module."""
+    try:
+        from .sentrikit import _get_available_key
+        return _get_available_key() or ""
+    except Exception:
+        return ""
+
+
 def _call_safety(
     action: str,
     target: str,
