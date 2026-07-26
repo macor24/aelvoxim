@@ -2,6 +2,7 @@
   <img src="./docs/Aelvoxim%20LOGO%E4%BB%A3%E7%A0%81.svg" alt="Aelvoxim 知境" width="400">
   <br>
   <h1>知境 (Aelvoxim)</h1>
+  <h3><em>Biomimetic Autonomous Cognitive AI Brain</em></h3>
   <p><em>A self-learning, hallucination-resistant AI cognitive engine that never forgets — fully self-hosted on CPU.</em></p>
 </div>
 
