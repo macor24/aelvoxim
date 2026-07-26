@@ -162,7 +162,7 @@ async def public_test_llm(body: dict, _user: dict = Depends(_verify_key)):
     if not api_key:
         raise HTTPException(400, detail="api_key is required")
     data = json.dumps({
-        "model": "deepseek-chat",
+        "model": "deepseek-v4-flash",
         "messages": [{"role": "user", "content": "Say OK"}],
         "max_tokens": 10,
     }).encode()

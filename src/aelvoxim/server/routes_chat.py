@@ -59,7 +59,7 @@ async def llm_chat(
 
     return {
         "content": result.get("text") or "",
-        "model": model.name if hasattr(model, 'name') else "deepseek-chat",
+        "model": model.name if hasattr(model, 'name') else "deepseek-v4-flash",
     }
 
 
@@ -89,7 +89,7 @@ async def test_llm(body: dict, user: dict = Depends(_verify_key)):
     if not api_key:
         raise HTTPException(400, detail="No LLM configured and no api_key provided")
     data = json.dumps({
-        "model": "deepseek-chat",
+        "model": "deepseek-v4-flash",
         "messages": [{"role": "user", "content": "Say OK"}],
         "max_tokens": 10,
     }).encode()
@@ -159,7 +159,7 @@ async def _handle_orchestrate(request: dict) -> dict:
     text = result.get("text") or ""
     return {
         "content": text,
-        "model": model.name if hasattr(model, 'name') else "deepseek-chat",
+        "model": model.name if hasattr(model, 'name') else "deepseek-v4-flash",
     }
 
 

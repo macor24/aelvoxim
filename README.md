@@ -1,8 +1,32 @@
-# Aelvoxim
+# 知境 (Aelvoxim)
 
 ## Biomimetic Autonomous Cognitive AI Brain
 
-> A self-learning, hallucination-resistant AI cognitive entity that never forgets and can control your desktop — fully self-hosted.
+> A self-learning, hallucination-resistant AI cognitive engine that never forgets — fully self-hosted on CPU.
+
+---
+
+## Does your AI feel like it has amnesia?
+
+Every conversation with an LLM starts from zero. No memory of who you are, no progress from past mistakes, no way to get better over time.
+
+**知境 changes that.**
+
+It is not an LLM. It is the **operating system for LLMs** — a cognitive engine that plugs into any model and gives it:
+
+- **Persistent memory** — remembers you across sessions, days, and months
+- **Self-learning** — gets better autonomously, in the background, 24/7
+- **Metacognition** — watches its own output, detects problems, and self-corrects
+- **Expert orchestration** — 7 specialized modules vote and collaborate on every decision
+- **Safety guardrails** — 6 ethically-gated protection layers (L1–L6)
+
+| Your pain | How others handle it | How 知境 solves it |
+|-----------|---------------------|-------------------|
+| AI forgets you between sessions | Stateless per chat — no persistent memory | 4-tier memory (Working → Episodic → Semantic → Procedural) + knowledge graph |
+| AI never improves with use | No background learning mechanism | 24/7 Learner Loop: curiosity discovery, spaced repetition, auto-tuning |
+| AI sometimes says nonsense with no self-check | No runtime self-monitoring | 6-signal metacognition trigger — detects degradation and auto-calibrates |
+| AI safety is an afterthought | Third-party guardrails, easily bypassed | 6 ethics gates (L1–L6) + SentriKit + circuit breaker |
+| Swapping LLM providers means starting over | Locked to one vendor | Framework-level abstraction — swap GPT, Claude, DeepSeek, or local models freely |
 
 ---
 
@@ -25,51 +49,39 @@
 └─────────────────────────────────────────────────────┘
 ```
 
-What you see, in order:
-
-1. **Aelvoxim** — the project
-2. **Biomimetic Autonomous Cognitive AI Brain** — what it is
-3. **A self-learning, hallucination-resistant AI that never forgets and can control your desktop** — what it does
-4. **Four-layer architecture** — how it's built
-
 ---
 
-## How Aelvoxim Compares
+## How 知境 Compares
 
-A realistic comparison of Aelvoxim against major AI platforms — written from current capability, not roadmap.
+A realistic comparison against the actual competitive landscape — agent/cognitive frameworks, not LLMs.
 
-| Dimension | Aelvoxim | DeepSeek | ChatGPT | Claude | Llama |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Nature** | Cognitive engine framework (plugs into any LLM) | LLM | LLM + platform | LLM | Open-source LLM |
-| **Persistent memory** | ✅ 4-tier memory, cross-session knowledge graph | ❌ No built-in memory | ⚠️ Limited (ChatGPT Memory) | ❌ No built-in memory | ❌ No built-in memory |
-| **Metacognition** | ✅ MetaCogMonitor + 6 ethics gates (L1-L6) | ❌ | ❌ | ⚠️ Constitutional AI (different approach) | ❌ |
-| **Self-learning** | ✅ Learner loop + background knowledge extraction | ❌ | ❌ | ❌ | ❌ |
-| **Expert orchestration** | ✅ 8 expert modules + orchestrator voting | ❌ | ❌ | ❌ | ❌ |
-| **Code generation** | ⚠️ Depends on backend LLM (can use DeepSeek, etc.) | ✅ Excellent | ✅ Strong | ✅ Strong | ⚠️ Fine-tuned variants |
-| **Reasoning depth** | ⚠️ Depends on backend LLM | ✅ Strong chain-of-thought | ✅ Strong | ✅ Strong, safety-aligned | ⚠️ Varies by size |
-| **Local deployment** | ✅ CPU-only, Python 3.11+, optional PostgreSQL | ✅ Needs GPU | ❌ API-only | ❌ API-only | ✅ Needs GPU |
-| **Open source** | ✅ MIT | ✅ Weights open | ❌ Closed | ❌ Closed | ✅ Weights open |
-| **Multimodal** | ⚠️ Via tool integration | ❌ Text-only | ✅ GPT-4o multimodal | ✅ Multimodal | ⚠️ Partial |
-| **Tool calling** | ✅ Unified orchestrator | ⚠️ Function Call | ⚠️ Function Call | ⚠️ Tool Use | ⚠️ Self-wrapped |
-| **Security** | ✅ 6 ethics gates (L1-L6) + community edition gating | ⚠️ Basic content filter | ⚠️ Policy filter | ✅ Constitutional AI | ❌ None built-in |
-| **Business model** | Open-source + self-hosted | Open weights + API | Closed API | Closed API | Open weights + ecosystem |
+| Dimension | 知境 (Aelvoxim) | OpenWorker | OpenClaw | OpenAI Presence | openJiuwen |
+|---|---|---|---|---|---|
+| **Nature** | Cognitive engine framework | Desktop AI colleague | Open-source agent platform | Enterprise agent ops | Multi-agent swarm platform |
+| **Persistent memory** | ✅ 4-tier + knowledge graph | ❌ Session-only | ❌ Session-only | ❌ External storage-depend | ❌ Session-only |
+| **Metacognition** | ✅ 6-signal runtime self-check + auto-calibration | ❌ | ❌ | ❌ | ❌ |
+| **Self-learning** | ✅ Learner Loop (direction/growth/curiosity/spaced-repetition) | ❌ | ❌ | ❌ | ⚠️ Swarm-level evolution |
+| **Expert orchestration** | ✅ 7 expert modules with dynamic voting | ❌ | ⚠️ Skill marketplace | ❌ | ❌ |
+| **Security / Ethics** | ✅ 6 gates (L1–L6) + SentriKit + circuit breaker | ⚠️ Basic action confirmation | ⚠️ Skill review | ✅ Enterprise audit | ❌ |
+| **Desktop control** | ✅ Windows-MCP (mouse, keyboard, file, browser) | ✅ macOS (Windows in progress) | ✅ Cross-platform | ❌ API-only | ❌ |
+| **Local deployment** | ✅ CPU-only, Python 3.11+, optional PostgreSQL | ⚠️ Requires Python env | ✅ Lightweight (npm) | ❌ API-only | ⚠️ Huawei-ecosystem |
+| **Open source** | ✅ MIT | ✅ Open source | ✅ Foundation-governed | ❌ Closed | ✅ Open source |
+| **Plugin ecosystem** | ❌ None (built-in 7 experts) | ⚠️ aisuite framework | ✅ 12,000+ plugins | ❌ No public plugins | ⚠️ Huawei ecosystem |
 
 **Key takeaways:**
 
-1. **Memory & continuous learning** — Aelvoxim's core moat. Every competitor is stateless per session. ChatGPT Memory exists but is a simple snippet store — no forgetting curve, no confidence scoring, no 4-tier architecture.
-2. **Metacognition & self-learning** — No competitor has runtime self-monitoring, degradation detection, or hypothesis generation. Aelvoxim's MetaCogMonitor + 6 ethics gates are unique. Other models' "reflection" is prompt-induced text generation, not system-level self-check.
-3. **Code & reasoning** — Aelvoxim's advantage is **flexibility**: it doesn't lock you into one model. Plug in DeepSeek for code, Claude for safety, or run multiple models and let the orchestrator vote.
-4. **Deployment** — Aelvoxim runs on CPU, no GPU required. DeepSeek and Llama need GPU for local inference.
-
-**Bottom line:** Aelvoxim is not competing with LLMs — it's the **operating system for LLMs**: managing memory, monitoring health, orchestrating tools, and learning continuously. You choose the brain (model), Aelvoxim gives it a body that remembers and improves.
+1. **Memory + metacognition + self-learning** — No competitor has all three in one framework. This is 知境's core moat.
+2. **Not a competitor to LLMs** — 知境 makes any LLM better. Plug in DeepSeek for code, Claude for safety, or run local models — the cognitive layer stays the same.
+3. **Security-first by design** — The 6 ethics gates (L1–L6) + SentriKit + circuit breaker form a safety stack that most agent frameworks lack.
+4. **CPU-only deployment** — 知境 runs without GPU. This matters for enterprise on-premise scenarios where GPU is expensive or unavailable.
 
 | Product | One-liner |
-| :--- | :--- |
-| **Aelvoxim** | Gives any LLM persistent memory, metacognition, and self-learning |
-| **DeepSeek** | Open-source code king, cost-effective reasoning |
-| **ChatGPT** | Closed-source all-rounder, multimodal + plugin ecosystem |
-| **Claude** | Safest closed-source model, long-document reasoning |
-| **Llama** | Open-source LLM standard — powerful but needs engineering to productize |
+|---|---|
+| **知境 (Aelvoxim)** | Gives any LLM persistent memory, metacognition, and self-learning |
+| **OpenWorker** | Desktop AI colleague that delivers finished work |
+| **OpenClaw** | Open-source agent platform with 12,000+ plugins |
+| **OpenAI Presence** | Enterprise agent deployment & operations |
+| **openJiuwen** | Multi-agent swarm with human-in-the-loop (HITS) |
 
 ---
 
@@ -77,40 +89,59 @@ A realistic comparison of Aelvoxim against major AI platforms — written from c
 
 ### 1. Cross-Session Memory
 
-Every conversation updates an evolving memory system. Start a new session — the AI picks up exactly where you left off. No lost context, no repeating yourself.
+Every conversation updates an evolving memory system. Start a new session — the AI picks up exactly where you left off.
 
 - Concepts, relationships, and user preferences are structured into a persistent knowledge graph
-- Memory is queryable, exportable, and resettable
-- Four-tier retention: working (session) → episodic (7 days) → semantic (90 days) → procedural (permanent)
+- Four-tier retention with confidence scoring: working (session) → episodic (7 days) → semantic (90 days) → procedural (permanent)
+- Forgetting curve (exponential decay ×0.95) prevents bloat
+- Cross-layer promotion: frequently accessed episodic entries graduate to semantic memory
+- Bayesian belief engine (`core/belief.py`) tracks knowledge certainty via Beta distribution
 
 ### 2. Self-Learning & Evolution
 
-The system doesn't just answer questions — it learns from them.
+The system doesn't just answer questions — it proactively learns in the background.
 
-- Proactively initiates learning plans ("learn Rust", "study PostgreSQL indexing")
-- Curiosity engine detects unfamiliar topics during conversation and schedules background learning
-- Learning progress is trackable; acquired knowledge can be recalled and explained back to you
+- **Learner Loop** — background 24/7 cognition cycle (multi-threaded with watchdog + health daemon)
+- **Direction management** — add/remove/pause learning topics (e.g., "learn Rust", "study PostgreSQL indexing")
+- **Curiosity engine** — detects unfamiliar topics during conversation and schedules automatic background learning
+- **Active goal system** — searches for knowledge gaps and sets learning objectives
+- **Spaced repetition** — reviews and reinforces learned knowledge on an optimal schedule
+- **Auto-tuning** — dynamically adjusts parameters based on performance metrics
+- **Validation loop** — 3-phase: execute → validate → verify repair
 
-### 3. Reasoning & Planning
+### 3. Metacognition
 
-- Multi-step logical reasoning, causal analysis, and contradiction detection
-- Complex tasks are decomposed into plans and executed step by step
-- Tool-calling for code execution, API integration, and data analysis
-- Metacognition layer checks output quality (factual consistency, topic drift, safety, clarity)
+The system watches itself. It's not just "reflection" — it's systematic self-monitoring.
 
-### 4. Desktop Control (via Windows-MCP)
+- **6 trigger signals**: success rate drop, stagnation, repeated failures, external signals, introspection, memory health
+- **SelfModel** (`core/selfmodel.py`) — Beta-distribution capability scoring across 5+ dimensions with trend analysis
+- **MetaCogMonitor** — overload detection + L5 rate limit + L6 circuit breaker (3 consecutive low-confidence → trip)
+- **Auto-calibration** — hit rate < 50% triggers automatic parameter tuning
+- **8-step self-correction loop**: detect → analyze → hypothesize → verify → repair → confirm → record → track
+
+### 4. Expert Orchestration (7 Experts)
+
+Every decision is voted on by specialized expert modules with dynamic weighting:
+
+| Expert | Weight | Role |
+|--------|--------|------|
+| Memory | 0.20 | Factual consistency, knowledge retrieval |
+| Logic | 0.20 | Reasoning quality, contradiction detection |
+| Ethics | 0.15 | 15 safety rules (privacy, violence, fraud, child protection...) |
+| Safety | 0.20 | Prompt injection guard, SentriKit integration |
+| Creative | 0.15 | Alternative perspectives, lateral thinking |
+| Emotion | 0.10 | Sentiment tracking, empathy mode |
+| Introspection | *meta* | S/A/B/C/D grade, issue detection and reporting |
+
+Confidence gap > 0.3 or ethics block → LLM arbitration with weighted-vote fallback.
+
+### 5. Desktop Control (via Windows-MCP)
 
 Control your Windows desktop through the AI — mouse, keyboard, file system, browser.
 
-- **Requires Windows-MCP** running on the Windows host (see [Windows-MCP/install_and_run.bat](Windows-MCP/install_and_run.bat))
+- **Requires Windows-MCP** running on the Windows host
 - PowerShell execution, screenshots, app launching, file operations
 - Suitable for test automation, data harvesting, daily office tasks
-
-### 5. Security
-
-- All requests filtered through SentriKit (optional security gate)
-- Tool permissions are tiered — sensitive operations require confirmation
-- No prompt injection, no unauthorized system modification
 
 ---
 
@@ -125,8 +156,12 @@ See [SECURITY.md](SECURITY.md) for the full security policy.
 | Prompt injection guard | ✅ Built-in, enabled via `AELVOXIM_CONTENT_FILTER=1` |
 | API Key authentication | ✅ Required for all endpoints |
 | Rate limiting | ✅ Built into MetaCogMonitor (L5) |
+| Ethics gates (L1–L6) | ✅ Independently toggleable — see `core/metacog_monitor.py` |
+| Circuit breaker | ✅ 3 consecutive low-confidence → auto trip |
 | Data encryption at rest | ⚠️ JSON file storage — encrypt at filesystem level |
 | PostgreSQL connection | ✅ Uses password auth, localhost-only by default |
+
+---
 
 ## CI & Code Quality
 
@@ -241,6 +276,7 @@ A full OpenAPI spec is available at `http://localhost:9701/docs`.
 | `LLM_PROVIDER` | `deepseek` | LLM provider name |
 | `DEEPSEEK_API_KEY` | — | API key for DeepSeek |
 | `OPENAI_API_KEY` | — | API key for OpenAI |
+| `AELVOXIM_EDITION` | `community` | Edition: community / pro / enterprise |
 | `AELVOXIM_DATABASE_URL` | (none) | PostgreSQL DSN — leave unset for JSON file storage |
 | `AELVOXIM_CONTENT_FILTER` | `0` | Enable prompt injection guard |
 | `AELVOXIM_LLM_CHECK` | `0` | Enable LLM-based fact contradiction check |
@@ -257,7 +293,7 @@ aelvoxim/
 │       ├── cortex/        # Intent routing, expert orchestration
 │       ├── chimera/       # Emotion engine, intent classification
 │       ├── control/       # Metacognition, generation quality checks
-│       ├── learn/         # Autonomous learning, knowledge acquisition
+│       ├── learn/         # Autonomous learning (35+ modules)
 │       ├── memory/        # Cross-session memory, entity extraction
 │       ├── proactive/     # Background proactive engine
 │       ├── storage/       # Database layer (PostgreSQL + JSON fallback)
@@ -276,6 +312,8 @@ aelvoxim/
 
 MIT License — see [LICENSE](LICENSE) for details.
 
+> **Note on editions:** 知境 is released under MIT (open core model). The Community edition includes the full cognitive engine. Pro/Enterprise editions unlock auto-learning, curiosity-driven discovery, and meta-learner features. See `src/aelvoxim/server/edition.py` or our [docs](docs/) for details.
+
 ---
 
 ## Links
@@ -288,4 +326,4 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 ---
 
-*Built with no GPU required.*
+*Built with no GPU required. 知境 — give your AI a memory.*

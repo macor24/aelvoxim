@@ -102,7 +102,7 @@ def default_models() -> List[ModelConfig]:
                     os.environ.get("LLM_API_KEY") or "")
     if deepseek_key:
         models.append(ModelConfig(
-            name="deepseek-chat",
+            name="deepseek-v4-flash",
             provider="deepseek",
             api_key=deepseek_key,
             base_url=os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"),
@@ -155,7 +155,7 @@ def default_models() -> List[ModelConfig]:
                 _key = _m.get("api_key", "") or ""
                 if _key and not any(m.api_key == _key for m in models):
                     models.append(ModelConfig(
-                        name=_m.get("name", "deepseek-chat"),
+                        name=_m.get("name", "deepseek-v4-flash"),
                         provider=_m.get("provider", "deepseek"),
                         api_key=_key,
                         base_url=_m.get("base_url", "https://api.deepseek.com/v1"),
@@ -169,7 +169,7 @@ def default_models() -> List[ModelConfig]:
             saved_provider = saved.get("provider", "deepseek")
             if saved_key and not any(m.api_key == saved_key for m in models):
                 models.append(ModelConfig(
-                    name=saved.get("model_name", "deepseek-chat"),
+                    name=saved.get("model_name", "deepseek-v4-flash"),
                     provider=saved_provider,
                     api_key=saved_key,
                     base_url=saved.get("base_url", "https://api.deepseek.com/v1"),

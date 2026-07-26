@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "aelvoxim"
 version = "1.2.0"
-description = "Lightweight AI Cognitive Engine Framework — give your AI a memory"
+description = "知境 (Aelvoxim) — Lightweight AI Cognitive Engine Framework — give your AI a memory, metacognition, and self-learning"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [

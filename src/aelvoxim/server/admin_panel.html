@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -171,7 +171,8 @@
   <button onclick="switchTab('sentrikit')">⚙️ 配置</button>
   <button onclick="switchTab('plans')">📋 学习计划</button>
   <button onclick="switchTab('dashboard')">📊 仪表盘</button>
-  <button onclick="switchTab('skill')">🧠 技能成长</button>
+  <button onclick="switchTab('skill')">
+  <button onclick="switchTab('cognitive')">🧠 Cognitive Engine</button>🧠 技能成长</button>
   <button onclick="switchTab('learn')">📚 知识库学习</button>
 </div>
 
@@ -323,6 +324,49 @@
   </div>
 </div>
 
+</div>
+
+<!-- Cognitive Engine -->
+<div id="tab-cognitive" class="tab-content">
+  <div class="container">
+    <div style="margin-bottom:16px">
+      <h2 style="font-size:16px;font-weight:700;color:var(--text-primary)">Cognitive Engine Dashboard</h2>
+      <p style="font-size:12px;color:var(--text-secondary);margin-top:4px">Live status: learner loop, metacognition, self-model, and expert system</p>
+    </div>
+    <div id="cognitiveEdition" style="display:flex;gap:10px;margin-bottom:16px;align-items:center"></div>
+    <div style="font-size:13px;font-weight:600;margin-bottom:8px;color:var(--text-primary)">Learner Loop</div>
+    <div class="stats-row" id="learnerStatsRow">
+      <div class="stat-card blue"><div class="num" id="cogLearnerRunning">-</div><div class="label">Status</div></div>
+      <div class="stat-card green"><div class="num" id="cogActive">-</div><div class="label">Active Directions</div></div>
+      <div class="stat-card orange"><div class="num" id="cogCycles">-</div><div class="label">Total Cycles</div></div>
+      <div class="stat-card purple"><div class="num" id="cogEntries">-</div><div class="label">Knowledge Entries</div></div>
+    </div>
+    <div id="cognitiveDirections" class="llm-card" style="margin-bottom:16px">
+      <h3>Learning Directions</h3>
+      <div id="cogDirList" style="margin-top:8px;font-size:12px;color:var(--text-secondary)">Loading...</div>
+    </div>
+    <div class="llm-card" style="margin-bottom:16px">
+      <h3>SelfModel -- Capability Scores <span id="cogOverallGrade" style="font-size:11px;color:var(--text-secondary)"></span></h3>
+      <div id="cogSelfmodelBody" style="margin-top:8px">
+        <p style="font-size:12px;color:var(--text-secondary)">Loading...</p>
+      </div>
+    </div>
+    <div class="llm-card" style="margin-bottom:16px">
+      <h3>MetaCognition -- Recent Triggers <span id="cogMetaCount" style="font-size:11px;color:var(--text-secondary)"></span></h3>
+      <div id="cogMetaBody" style="margin-top:8px;max-height:300px;overflow-y:auto">
+        <p style="font-size:12px;color:var(--text-secondary)">Loading...</p>
+      </div>
+    </div>
+    <div class="llm-card" style="margin-bottom:16px">
+      <h3>Subsystem Health</h3>
+      <div id="cogHealthBody" class="health-grid" style="margin-top:8px"></div>
+    </div>
+    <div style="margin-top:10px">
+      <button class="action-btn" onclick="loadCognitiveStatus()" style="background:var(--brand-500);color:#fff;padding:6px 14px;border-radius:6px">Refresh</button>
+      <span style="font-size:11px;color:var(--text-secondary);margin-left:8px" id="cogLastUpdated"></span>
+    </div>
+  </div>
+</div>
 <!-- 📚 知识库学习 -->
 <div id="tab-learn" class="tab-content">
   <div class="container" style="max-width:600px">
@@ -465,6 +509,7 @@ function switchTab(name) {
     loadDashboard();
   }
   if (name === 'skill' && _apiKey) loadSkillTimeline();
+  if (name === 'cognitive' && _apiKey) loadCognitiveStatus();
 }
 
 function loadDataAll() {
@@ -1043,6 +1088,128 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 
 // ── 📚 知识库学习 ──
+
+// 🧠 Cognitive Engine
+function loadCognitiveStatus() {
+  document.getElementById('cogDirList').textContent = 'Loading...';
+  document.getElementById('cogSelfmodelBody').innerHTML = '<p style="font-size:12px;color:var(--text-secondary)">Loading...</p>';
+  document.getElementById('cogMetaBody').innerHTML = '<p style="font-size:12px;color:var(--text-secondary)">Loading...</p>';
+  document.getElementById('cogLastUpdated').textContent = '';
+
+  fetch('/v1/admin/cognitive', {headers: {'Authorization': 'Bearer ' + _apiKey}})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      document.getElementById('cogLastUpdated').textContent = 'Last updated: ' + new Date().toLocaleTimeString();
+
+      // Edition
+      var ed = document.getElementById('cognitiveEdition');
+      ed.innerHTML = '<span class="stat-card" style="padding:6px 14px;display:inline-flex;align-items:center;gap:6px">'
+        + '<span style="font-size:11px;color:var(--text-secondary)">Edition</span>'
+        + '<span style="font-weight:600;color:var(--brand-500)">' + esc(d.edition||'community') + '</span></span>';
+
+      // Learner stats
+      var l = d.learner || {};
+      document.getElementById('cogLearnerRunning').textContent = l.running ? '🟢 Running' : '🔴 Stopped';
+      document.getElementById('cogLearnerRunning').style.color = l.running ? '#10b981' : '#ef4444';
+      document.getElementById('cogActive').textContent = l.active_directions || 0;
+      document.getElementById('cogCycles').textContent = l.total_cycles || 0;
+      document.getElementById('cogEntries').textContent = l.total_entries || 0;
+
+      // Directions
+      var dirs = l.directions || [];
+      if (dirs.length === 0) {
+        document.getElementById('cogDirList').innerHTML = '<p style="font-size:12px;color:var(--text-secondary)">No learning directions configured. The system creates them automatically as you interact.</p>';
+      } else {
+        var html = '';
+        dirs.forEach(function(d){
+          var pct = d.saturation ? Math.round(d.saturation * 100) : 0;
+          var statusColor = d.status==='active' ? '#3b82f6' : (d.status==='completed'||d.status==='mastery' ? '#10b981' : '#f59e0b');
+          html += '<div style="padding:10px 0;border-bottom:1px solid #f3f4f6">'
+            + '<div style="display:flex;justify-content:space-between;margin-bottom:4px">'
+            + '<strong style="font-size:13px">' + esc(d.topic) + '</strong>'
+            + '<span style="font-size:11px;color:'+statusColor+';font-weight:600">' + esc(d.status) + '</span>'
+            + '</div>'
+            + '<div style="height:5px;background:#e5e7eb;border-radius:3px;margin-bottom:4px;overflow:hidden">'
+            + '<div style="height:100%;width:'+pct+'%;background:'+statusColor+';border-radius:3px;transition:width 0.3s"></div></div>'
+            + '<div style="font-size:11px;color:var(--text-secondary);display:flex;gap:12px">'
+            + '<span>Entries: '+(d.entries||0)+'</span>'
+            + '<span>Cycles: '+(d.cycles||0)+'</span>'
+            + '<span>Saturation: '+(d.saturation ? d.saturation.toFixed(2) : '0')+'</span>'
+            + (d.confidence ? '<span>Confidence: '+(d.confidence.toFixed(2))+'</span>' : '')
+            + '</div></div>';
+        });
+        document.getElementById('cogDirList').innerHTML = html;
+      }
+
+      // SelfModel
+      var sm = d.selfmodel || {};
+      var smBody = document.getElementById('cogSelfmodelBody');
+      if (sm.available && sm.capabilities && sm.capabilities.length > 0) {
+        document.getElementById('cogOverallGrade').textContent = 'Grade: ' + (sm.overall_grade||'N/A') + ' | Improvement: ' + (sm.improvement_index||0);
+        var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">';
+        sm.capabilities.forEach(function(c){
+          var barColor = c.score >= 80 ? '#10b981' : (c.score >= 60 ? '#f59e0b' : '#ef4444');
+          var trendIcon = c.trend === '+' || c.trend === 'up' ? '🔼' : (c.trend === '-' || c.trend === 'down' ? '🔽' : '➡️');
+          html += '<div style="background:var(--bg-surface);border-radius:8px;padding:10px">'
+            + '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">'
+            + '<strong>'+esc(c.domain)+'</strong>'
+            + '<span>'+trendIcon+' <span style="font-weight:600;color:'+barColor+'">'+c.score+'%</span> ('+c.grade+')</span>'
+            + '</div>'
+            + '<div style="height:5px;background:#e5e7eb;border-radius:3px;overflow:hidden">'
+            + '<div style="height:100%;width:'+c.score+'%;background:'+barColor+';border-radius:3px;transition:width 0.3s"></div></div>'
+            + '<div style="font-size:10px;color:var(--text-secondary);margin-top:2px">Confidence: '+(c.confidence||'?')+'%</div>'
+            + '</div>';
+        });
+        html += '</div>';
+        smBody.innerHTML = html;
+      } else {
+        smBody.innerHTML = '<p style="font-size:12px;color:var(--text-secondary)">SelfModel data not available yet. Scores accumulate as the system learns.</p>';
+      }
+
+      // MetaCognition
+      var mc = d.metacog || {};
+      var metaBody = document.getElementById('cogMetaBody');
+      document.getElementById('cogMetaCount').textContent = 'Total: ' + (mc.total_trigger_count||0) + ' triggers';
+      if (mc.available && mc.recent_triggers && mc.recent_triggers.length > 0) {
+        var html = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">';
+        for (var ttype in (mc.triggers_by_type||{})) {
+          html += '<span style="background:#e5e7eb;border-radius:4px;padding:2px 8px;font-size:11px">'+esc(ttype)+': <strong>'+mc.triggers_by_type[ttype]+'</strong></span>';
+        }
+        html += '</div><div style="font-size:11px">';
+        mc.recent_triggers.slice(0, 10).forEach(function(t){
+          var ts = t.timestamp ? t.timestamp.slice(0, 16) : '--';
+          html += '<div style="padding:5px 8px;border-bottom:1px solid #f3f4f6;display:flex;gap:8px">'
+            + '<span style="color:var(--text-secondary);white-space:nowrap">'+esc(ts)+'</span>'
+            + '<span style="font-weight:500">'+esc(t.type)+'</span>'
+            + '<span style="color:var(--text-secondary)">'+esc((t.reason||'').slice(0, 80))+'</span>'
+            + '</div>';
+        });
+        html += '</div>';
+        metaBody.innerHTML = html;
+      } else {
+        metaBody.innerHTML = '<p style="font-size:12px;color:var(--text-secondary)">No metacognition triggers recorded yet.</p>';
+      }
+
+      // Subsystem health
+      var health = d.health || [];
+      var hBody = document.getElementById('cogHealthBody');
+      if (health.length > 0) {
+        var html = '';
+        health.forEach(function(h){
+          var dotColor = h.status === 'online' ? 'green' : (h.status === 'offline' ? 'red' : 'yellow');
+          html += '<div class="health-card"><div class="dot '+dotColor+'"></div><div class="info"><div class="name">'+esc(h.name)+'</div><div class="desc">'+esc(h.detail||'')+'</div></div></div>';
+        });
+        hBody.innerHTML = html;
+      } else {
+        hBody.innerHTML = '<p style="font-size:12px;color:var(--text-secondary)">Health data unavailable</p>';
+      }
+    })
+    .catch(function(e){
+      document.getElementById('cogDirList').textContent = 'Error: ' + (e.message||'Failed to load');
+      document.getElementById('cogSelfmodelBody').innerHTML = '<p style="color:#dc2626;font-size:12px">Failed to load: ' + esc(e.message||'') + '</p>';
+      document.getElementById('cogMetaBody').innerHTML = '<p style="color:#dc2626;font-size:12px">Failed to load</p>';
+    });
+}
 function loadLearnStatus() {
   fetch('/v1/admin/learn-directory/status', {headers: {'Authorization': 'Bearer ' + _apiKey}})
     .then(function(r){return r.json();})

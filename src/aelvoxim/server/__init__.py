@@ -244,6 +244,17 @@ def create_app() -> FastAPI:
         from fastapi.responses import HTMLResponse
         return HTMLResponse(inject_theme(html, title="Aelvoxim API"))
 
+    @app.get("/v1/admin/cognitive")
+    async def admin_cognitive():
+        """Return live cognitive dashboard data (learner, selfmodel, metacog)."""
+        try:
+            from .admin_panel import get_cognitive_status
+            return get_cognitive_status()
+        except Exception as e:
+            from fastapi.responses import JSONResponse
+            _log.exception("admin cognitive error")
+            return JSONResponse({"error": str(e)}, status_code=500)
+
     @app.get("/v1/admin/panel")
     async def admin_panel():
         from pathlib import Path
