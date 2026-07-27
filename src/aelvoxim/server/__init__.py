@@ -261,7 +261,7 @@ def create_app() -> FastAPI:
         try:
             from .admin_panel import get_cognitive_status
             return get_cognitive_status()
-        except Exception as e:
+        except Exception:
             from fastapi.responses import JSONResponse
             _log.exception("admin cognitive error")
             return JSONResponse({"detail": "Internal server error"}, status_code=500)
