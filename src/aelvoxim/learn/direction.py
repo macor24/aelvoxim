@@ -51,6 +51,7 @@ class LearningDirection:
     fail_by_reason: str = ""      # JSON dict: {"timeout": 2, "quality": 1, "search_empty": 0, "validation": 1}
     weak_pass_streak: int = 0     # consecutive weak pass count, for quality backpressure
     consecutive_zero_produce: int = 0  # cycles with 0 entries produced
+    disable_auto_resume: bool = False  # manually paused, skip auto-resume
     review_history: str = ""
     last_verified: str = ""
     added_from: str = ""
@@ -247,7 +248,6 @@ class DirectionManager:
                 d.completed_at = _now
         data = {t: asdict(d) for t, d in self._directions.items()}
         save_config_to_file(data)
-
     def load(self) -> None:
         """Load direction config from persistent storage."""
         data = load_config_from_file()

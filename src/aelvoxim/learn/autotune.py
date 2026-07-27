@@ -176,8 +176,7 @@ def _decide_adjustments(metrics: List[Dict], learner,
     if paused_count >= 3 and active_count < 3:
         # Skip directions with disable_auto_resume flag
         _skip_resume = {t for t, d in learner._directions.items()
-                        if hasattr(d, 'config') and isinstance(d.config, dict)
-                        and d.config.get('disable_auto_resume')}
+                        if getattr(d, 'disable_auto_resume', False)}
         # Try to resume a paused direction with most entries (most promising)
         paused = sorted(
             [(t, d) for t, d in learner._directions.items() if d.status == "paused" and t not in _skip_resume],
