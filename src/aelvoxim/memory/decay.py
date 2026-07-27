@@ -136,7 +136,12 @@ def batch_decay(fusion: MemoryFusion, db_path: str = "") -> Dict[str, Any]:
             for _key in to_archive:
                 _db.execute(
                     "UPDATE entities SET attributes = json_set(COALESCE(attributes,'{}'), '$.status', ?, '$.strength', ?) WHERE id = ?",
-                    ("archived", 0.04, _key)
+                    ("archived", 0.1, _key)
+                )
+            for _key in to_decay:
+                _db.execute(
+                    "UPDATE entities SET attributes = json_set(COALESCE(attributes,'{}'), '$.strength', ?) WHERE id = ?",
+                    (_strength * 0.5, _key)
                 )
             _db.commit()
             _db.close()
