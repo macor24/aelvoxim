@@ -149,7 +149,9 @@ def execute_and_validate(
     _has_metric = bool(re.search(
         r'\b\d+\.?\d*%\b|\b(speedup|latency|accuracy|throughput|F1|BLEU|ROUGE'
         r'|scaling law|compute budget|FLOPs|parameter count|training loss'
-        r'|compute optimal|chinchilla|kaplan|model size|dataset size)\b',
+        r'|compute optimal|chinchilla|kaplan|model size|dataset size'
+        r'|reward function|convergence rate|average reward|episode'
+        r'|agent interaction|simulation.*step|training step)\b',
         content, re.I))
 
     # Force code retrieval for LLM architectures direction

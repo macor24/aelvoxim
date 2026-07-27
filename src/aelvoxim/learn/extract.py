@@ -208,6 +208,16 @@ def llm_distill(query: str, phase_name: str) -> Optional[str]:
             "If you don't know this topic, respond with 'UNKNOWN_TOPIC'.\n\n"
             f"Write comprehensively — at least 300 words. Short responses will be rejected."
         )
+        # Custom prompt for multi-agent: force simulation code + reward metrics
+        if "multi-agent" in query.lower() or "multiagent" in query.lower():
+            prompt += (
+                "REQUIRED: Include a concrete multi-agent simulation code snippet "
+                "(using gym, PettingZoo, or a custom environment) with agent "
+                "interaction logic. Also include quantitative reward function metrics "
+                "(convergence rate, average reward per episode, training steps to "
+                "convergence). Do NOT output generic conceptual descriptions — focus "
+                "on runnable code and measurable results."
+            )
         text = call_fn(
             model=model,
             system_prompt="",
