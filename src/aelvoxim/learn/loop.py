@@ -574,7 +574,11 @@ class Learner:
                 pass  # optional: enterprise only
 
             sm = _cached_sm() if _cached_sm else SelfModel()
-            mon = MetaCogMonitor()
+            # Persistent MetaCogMonitor: keeps tick history across cognition cycles
+            mon = getattr(self, '_mon', None)
+            if mon is None:
+                mon = MetaCogMonitor()
+                self._mon = mon
             learner_stats = {
                 "total_cycles": sum(d.cycles_completed for d in self._directions.values()),
                 "active_directions": sum(1 for d in self._directions.values() if d.status == "active"),
