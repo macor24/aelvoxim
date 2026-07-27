@@ -69,6 +69,16 @@ def execute_and_validate(
     title = f"{topic} - {task}"
     _rejection_reason = ""
 
+    # Review backlog backpressure: block new entries if pending queue is full
+    try:
+        from .knowledge import KnowledgeBase
+        _pstats = KnowledgeBase.get_pending_stats()
+        if _pstats.get("pending", 0) > 100:
+            log(f"  ⏸️ [{topic}] Pending queue full ({_pstats['pending']}>100), blocking new entry: {task}")
+            return True
+    except Exception:
+        pass
+
     # Check if already exists
     if KnowledgeBase.get_by_title(title):
         log(f"  ⏭️ [{topic}] Task already exists: {task}")
