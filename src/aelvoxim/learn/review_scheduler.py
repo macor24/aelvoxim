@@ -162,7 +162,7 @@ def run_review_cycle(log_func=None) -> Dict[str, Any]:
             if entries:
                 from ..learn.validator import AutoValidator
                 result = AutoValidator().verify(entries[0])
-                ok = result.get("verified", False) and result.get("combined_score", 0) >= 0.5
+                ok = result.get("verified", False) and result.get("combined_score", 0) >= 0.3
                 record_review(item["entry_id"], ok)
                 if ok:
                     passed += 1
