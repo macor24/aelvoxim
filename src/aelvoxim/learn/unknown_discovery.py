@@ -56,11 +56,33 @@ _CN_STOP: Set[str] = {
 
 _MAX_PENDING = 20
 _SCAN_INTERVAL = 300  # seconds between scans
+_DEDUP_WINDOW = 1200  # 20-min dedup for re-queued candidates
+
+# Core AI domains (boosted priority)
+_CORE_AI_PATTERNS = [
+    r'\blarge language model', r'\bLLM\b', r'\btransformer',
+    r'\bRAG\b', r'\bretrieval aug',
+    r'\bRLHF\b', r'\breinforcement learn',
+    r'\bmulti.agent', r'\bmultiagent',
+    r'\bBayesian', r'\bbayes',
+    r'\battention\b', r'\bself.attention',
+    r'\bprompt\b', r'\bfew.shot', r'\bchain.of.thought',
+    r'\bfine.tun', r'\blora\b', r'\bqlora\b',
+    r'\bembedding\b', r'\bsemantic search',
+]
+
+# Cold/low-priority domains (penalized)
+_COLD_DOMAIN_PATTERNS = [
+    r'\bquantum\b',
+    r'\bcrypto\b', r'\bblockchain\b',
+    r'\binstallation\b', r'\bsetup\b', r'\bprerequisites\b',
+]
 
 # ── Module-level state ──
 
 _pending_unknowns: List[str] = []
 _last_scan_ts: float = 0.0
+_recently_queued: Dict[str, float] = {}  # term_lower → timestamp, 20-min dedup
 
 
 # ══════════════════════════════════════════════
@@ -138,6 +160,11 @@ def _score(term: str) -> float:
     # Shallow term penalty: reduce by 70%
     if term.lower() in _SHALLOW_TERMS:
         score *= 0.3
+    # Domain weighting: boost core AI, penalize cold domains
+    if any(re.search(p, term, re.I) for p in _CORE_AI_PATTERNS):
+        score = min(1.0, score + 0.2)
+    elif any(re.search(p, term, re.I) for p in _COLD_DOMAIN_PATTERNS):
+        score *= 0.3
     return min(1.0, score)
 
 
@@ -197,14 +224,19 @@ def scan_unknowns(directions: Dict[str, object], log_func: Callable) -> bool:
     if not candidates:
         return False
 
-    # 3. Score, filter, deduplicate against known + pending
+    # 3. Score, filter, deduplicate against known + pending + recently queued
     fresh: list = []
     seen: Set[str] = set()
     pending_lower = {t.lower() for t in _pending_unknowns}
+    # Clean stale dedup entries (>20 min)
+    _dedup_cutoff = now - _DEDUP_WINDOW
+    stale_dedup = [t for t, ts in _recently_queued.items() if ts < _dedup_cutoff]
+    for t in stale_dedup:
+        _recently_queued.pop(t, None)
 
     for term in candidates:
         low = term.lower()
-        if low in seen or low in pending_lower:
+        if low in seen or low in _recently_queued or low in pending_lower:
             continue
         seen.add(low)
         if _is_known(term):
@@ -221,6 +253,9 @@ def scan_unknowns(directions: Dict[str, object], log_func: Callable) -> bool:
     top = [t for t, _ in fresh[:2]]
 
     _pending_unknowns.extend(top)
+    # Record in 20-min dedup cache
+    for t in top:
+        _recently_queued[t.lower()] = now
     if len(_pending_unknowns) > _MAX_PENDING:
         _pending_unknowns = _pending_unknowns[-_MAX_PENDING:]
 
