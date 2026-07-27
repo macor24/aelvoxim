@@ -240,6 +240,7 @@ def create_user(user_or_email, password="", username="", plan="community"):
             "role": d.get("role", "user"),
             "verified": d.get("verified", False),
             "api_keys": d.get("api_keys", [api_key]),
+            "trial_expires_at": d.get("trial_expires_at", ""),
             "created_at": now,
             "updated_at": now,
             "monthly_usage": {"month": _current_month(), "tasks": 0, "searches": 0, "queries": 0},
@@ -256,6 +257,7 @@ def create_user(user_or_email, password="", username="", plan="community"):
             "role": "user",
             "verified": False,
             "api_keys": [api_key],
+            "trial_expires_at": "",
             "created_at": now,
             "updated_at": now,
             "monthly_usage": {"month": _current_month(), "tasks": 0, "searches": 0, "queries": 0},
@@ -264,12 +266,13 @@ def create_user(user_or_email, password="", username="", plan="community"):
         try:
             execute("""
                 INSERT INTO users (email, username, password_hash, plan, role,
-                                   verified, api_keys, monthly_usage)
-                VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb)
+                                   verified, api_keys, monthly_usage, trial_expires_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s)
             """, (
                 user["email"], user["username"], user["password_hash"],
                 user["plan"], user["role"], user["verified"],
                 json.dumps(user["api_keys"]), json.dumps(user["monthly_usage"]),
+                user["trial_expires_at"],
             ))
             # Also write JSON fallback so find_user works if pool later fails
             path = _user_path(api_key)

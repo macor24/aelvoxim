@@ -164,19 +164,21 @@ async def register(body: dict):
         "api_keys": [api_key],
         "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
-    if create_user(user):
+    try:
+        created = create_user(user)
+    except Exception as e:
         from .audit import log as _audit_log
-        _audit_log("user.register", user=email, status="success")
-        return {
-            "api_key": api_key,
-            "plan": "trial",
-            "email": email,
-            "trial_expires_at": trial_expires,
-            "trial_days": TRIAL_DAYS,
-        }
+        _audit_log("user.register", user=email, status="failure", detail={"reason": str(e)})
+        raise HTTPException(500, detail="user creation failed")
     from .audit import log as _audit_log
-    _audit_log("user.register", user=email, status="failure", detail={"reason": "creation failed"})
-    raise HTTPException(500, detail="user creation failed")
+    _audit_log("user.register", user=email, status="success")
+    return {
+        "api_key": api_key,
+        "plan": "trial",
+        "email": email,
+        "trial_expires_at": trial_expires,
+        "trial_days": TRIAL_DAYS,
+    }
 
 
 @router.post("/auth/send-verification")
