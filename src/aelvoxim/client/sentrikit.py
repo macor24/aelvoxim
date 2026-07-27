@@ -52,8 +52,15 @@ _SSL_CTX.verify_mode = ssl.CERT_NONE
 
 
 def _log_err(msg: str) -> None:
-    import logging
+    """Rate-limited error logging: at most once per 60s per unique message."""
+    import logging, time as _t
+    _now = _t.time()
+    _key = msg[:60]
+    if _now - _log_err._last.get(_key, 0) < 60:
+        return
+    _log_err._last[_key] = _now
     logging.getLogger("aelvoxim.client.sentrikit").warning(msg)
+_log_err._last = {}
 
 def _load_config() -> dict:
     try:

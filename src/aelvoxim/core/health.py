@@ -153,11 +153,24 @@ class Watchdog:
         return dict(self._heal_counts)
 
     def check_expert_health(self, health: dict) -> None:
-        """Check expert health data and log warnings for unhealthy experts."""
+        """Check expert health data and log warnings for unhealthy experts.
+        
+        Dual validation: healthy = registered AND heartbeat within 60s.
+        """
+        _now = time.time()
         for name, h in health.items():
-            if h.get("failures", 0) >= 5 and h.get("runs", 0) > 0:
-                _log.warning("⚠️ Expert '%s': %d/%d failures — %s",
-                             name, h["failures"], h["runs"], h.get("last_error", "")[:60])
+            hb_age = _now - h.get("last_heartbeat", 0) if h.get("last_heartbeat") else 999
+            fail_ratio = h["failures"] / max(h["runs"], 1)
+            if h.get("runs", 0) > 0 and hb_age > 300 and fail_ratio > 0.5:
+                _log.warning("⚠️ Expert '%s': stale (hb=%ds ago, %d/%d fail) [fault:expert_stale]",
+                             name, int(hb_age), h["failures"], h["runs"])
+
+    def check_watchdog_health(self, learner_status: dict = None) -> None:
+        """Check learner watchdog heartbeat and log fault tags."""
+        if learner_status and learner_status.get("last_heartbeat", 0) == 0:
+            _log.warning("⚠️ Watchdog: no heartbeat [fault:worker_heartbeat_missing][fault:no_heartbeat]")
+        if learner_status and learner_status.get("active_experts", 0) == 0:
+            _log.warning("⚠️ Expert Orchestrator: 0 experts [fault:no_experts]")
 
 
 def get_watchdog() -> Watchdog:

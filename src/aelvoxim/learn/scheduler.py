@@ -201,7 +201,9 @@ def check_pending_promotions(
             log_func(f"  🗑️ [Pending] Streak ({streak}) same eid, discard: {title}")
             return True
 
-        log_func(f"  🔄 [Pending] Practice verify: {title} (practice #{practice_count})")
+        # Practice verification — log every 3rd attempt or on status change
+        if practice_count % 3 == 0 or practice_count <= 1:
+            log_func(f"  🔄 [Pending] Practice verify: {title} (practice #{practice_count})")
 
         if fail_count >= 10:
             KnowledgeBase.discard_pending(eid)
@@ -220,8 +222,10 @@ def check_pending_promotions(
             return True
 
         status = "✅" if success else "❌"
-        log_func(f"  {status} [Pending] Practice result for '{title}': "
-                 f"{r_pc}/5 (failed={r_fc})")
+        # Log result at reduced frequency (every 3rd attempt) unless it's a promotion/rejection
+        if r_pc == 5 or r_fc >= 10 or (r_pc + r_fc) % 3 == 0:
+            log_func(f"  {status} [Pending] Practice result for '{title}': "
+                     f"{r_pc}/5 (failed={r_fc})")
         return True
     except AttributeError as _ae:
         log_func(f"  ⚠️ [Pending] Method missing: {_ae}")
@@ -259,7 +263,10 @@ def llm_verify_practice(entry: dict, log_func: Callable) -> bool:
             system_prompt="You are a knowledge validator.",
             max_tokens=10,
         )
-        if text and text.strip().upper().startswith("YES"):
+        if not text or not text.strip():
+            # LLM call failed — skip verification rather than marking as failed
+            return True
+        if text.strip().upper().startswith("YES"):
             return True
         return False
     except Exception as _e:

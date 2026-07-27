@@ -59,7 +59,8 @@ class MetaReviewer:
     def _get_resource_metrics(self) -> Dict:
         """Gather resource utilization stats for review."""
         metrics = {"directions_active": 0, "directions_total": 0,
-                    "kb_entry_count": 0, "learner_cycles": 0}
+                    "kb_entry_count": 0, "learner_cycles": 0,
+                    "execution_health": {}}
         try:
             from ..learn.knowledge import KnowledgeBase
             metrics["kb_entry_count"] = len(list(KnowledgeBase.get_all_active_cached()))
@@ -80,6 +81,21 @@ class MetaReviewer:
             metrics["directions_active"] = sum(
                 1 for d in directions if d.get("status") == "active"
             )
+        except Exception:
+            pass
+        # Execution health
+        try:
+            from aelvoxim.experts.orchestrator import ExpertOrchestrator
+            eo = ExpertOrchestrator()
+            health = getattr(eo, "_expert_health", {})
+            total = len(health)
+            failures = sum(1 for h in health.values()
+                           if h.get("failures", 0) >= 5 and h.get("runs", 0) > 0)
+            metrics["execution_health"] = {
+                "expert_count": total,
+                "experts_failing": failures,
+                "no_heartbeat": False,
+            }
         except Exception:
             pass
         return metrics
@@ -116,55 +132,41 @@ class MetaReviewer:
 
             suggestions = []
             resource_metrics = self._get_resource_metrics()
+            exec_health = resource_metrics.pop("execution_health", {})
 
-            # ── Check 1: Sustained low score ──
+            # Compute avg score unconditionally (used in review line even when exec has issues)
             avg_score = sum(r.get("overall_score", 0.5) for r in reports) / len(reports)
-            if avg_score < 0.3:
-                suggestions.append({
-                    "type": "parameter_tune",
-                    "target": "metacog.evolve_threshold",
-                    "value": 0.05,
-                    "reason": f"avg metacog score {avg_score:.2f} < 0.3, lower evolve threshold to 0.05",
-                })
-
-            # ── Check 2: Stagnation persistence ──
             stagnation_count = 0
-            for r in reports:
-                for t in r.get("triggers", []):
-                    if t.get("signal_name") == "stagnation" and t.get("triggered"):
-                        stagnation_count += 1
-                        break
-            stagnation_ratio = stagnation_count / len(reports)
-            if stagnation_ratio > 0.7:
-                suggestions.append({
-                    "type": "strategy_shift",
-                    "target": "stagnation",
-                    "value": "rephrase_topics",
-                    "reason": f"stagnation in {stagnation_ratio:.0%} of recent cycles",
-                })
-
-            # ── Check 3: Repair failure pattern ──
             repair_fail_count = 0
-            for r in reports:
-                actions = r.get("suggested_actions", [])
-                if "reduce_learning_speed" in actions or "pause_direction" in actions:
-                    continue
-                if r.get("should_evolve") and r.get("overall_score", 0) > 0.3:
-                    repair_fail_count += 1
 
-            if repair_fail_count >= 3 and len(reports) >= 5:
+            # ── Check 1 (PRIORITY): Execution layer health ──
+            exec_issues = []
+            if exec_health.get("experts_failing", 0) > 0:
+                exec_issues.append(f"{exec_health['experts_failing']} experts failing")
+            if exec_health.get("no_heartbeat", False):
+                exec_issues.append("watchdog heartbeat missing")
+            if exec_health.get("expert_count", 0) == 0:
+                exec_issues.append("0 experts registered")
+            if exec_issues:
+                suggestions.append({
+                    "type": "execution_fault",
+                    "target": "execution_layer",
+                    "value": "check_expert_workers",
+                    "reason": "; ".join(exec_issues),
+                })
+                # High-priority: execution issue detected, skip downstream analysis
                 suggestions.append({
                     "type": "circuit_breaker",
-                    "target": "repair_loop",
-                    "value": "reduce_learning_speed",
-                    "reason": f"{repair_fail_count} consecutive should_evolve without improvement",
+                    "target": "learner_loop",
+                    "value": "pause_new_tasks",
+                    "reason": "Execution layer fault — pausing new tasks until resolved",
                 })
 
-            # ── Check 4: Resource utilization ──
+            # ── Check 2: Resource utilization ──
             kb_count = resource_metrics.get("kb_entry_count", 0)
             active_dirs = resource_metrics.get("directions_active", 0)
             total_dirs = resource_metrics.get("directions_total", 0)
-            if active_dirs == 0 and total_dirs > 0:
+            if active_dirs == 0 and total_dirs > 0 and not exec_issues:
                 suggestions.append({
                     "type": "resource_idle",
                     "target": "learner",
@@ -179,11 +181,60 @@ class MetaReviewer:
                     "reason": f"KB has {kb_count} entries — nearing capacity, suggest archiving",
                 })
 
+            # ── Check 3: Sustained low score (only if execution layer is healthy) ──
+            if not exec_issues:
+                avg_score = sum(r.get("overall_score", 0.5) for r in reports) / len(reports)
+                if avg_score < 0.3:
+                    suggestions.append({
+                        "type": "parameter_tune",
+                        "target": "metacog.evolve_threshold",
+                        "value": 0.05,
+                        "reason": f"avg metacog score {avg_score:.2f} < 0.3, lower evolve threshold to 0.05",
+                    })
+
+            # ── Check 4: Stagnation persistence (only if execution layer is healthy) ──
+            if not exec_issues:
+                stagnation_count = 0
+                for r in reports:
+                    for t in r.get("triggers", []):
+                        if t.get("signal_name") == "stagnation" and t.get("triggered"):
+                            stagnation_count += 1
+                            break
+                stagnation_ratio = stagnation_count / len(reports)
+                if stagnation_ratio > 0.7:
+                    suggestions.append({
+                        "type": "strategy_shift",
+                        "target": "stagnation",
+                        "value": "rephrase_topics",
+                        "reason": f"stagnation in {stagnation_ratio:.0%} of recent cycles",
+                    })
+
+            # ── Check 5: Repair failure pattern (only if execution layer is healthy) ──
+            if not exec_issues:
+                repair_fail_count = 0
+                for r in reports:
+                    actions = r.get("suggested_actions", [])
+                    if "reduce_learning_speed" in actions or "pause_direction" in actions:
+                        continue
+                    if r.get("should_evolve") and r.get("overall_score", 0) > 0.3:
+                        repair_fail_count += 1
+                if repair_fail_count >= 3 and len(reports) >= 5:
+                    suggestions.append({
+                        "type": "circuit_breaker",
+                        "target": "repair_loop",
+                        "value": "reduce_learning_speed",
+                        "reason": f"{repair_fail_count} consecutive should_evolve without improvement",
+                    })
+
             # ── Build review entry for log ──
+            exec_detail = ""
+            if exec_issues:
+                exec_detail = f" exec_fault={' '.join(exec_issues[:2])}"
             review_line = (
                 f"score_avg={avg_score:.2f} stagnation={stagnation_count}/{len(reports)} "
                 f"repair_fail={repair_fail_count} "
-                f"dirs={active_dirs}/{total_dirs} kb={kb_count} "
+                f"dirs={active_dirs}/{total_dirs} kb={kb_count}"
+                f"{exec_detail} "
                 f"suggestions={len(suggestions)}"
             )
 

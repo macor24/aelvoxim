@@ -1007,6 +1007,14 @@ class KnowledgeBase:
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         content_hash = hashlib.sha256((content or "").encode("utf-8")).hexdigest() if content else ""
 
+        # Pending queue backpressure: reject if queue is full
+        pending_data = _read_pending()
+        if len(pending_data.get("pending", [])) >= 100:
+            _log.warning("  🚫 [Backpressure] Pending queue full (%d), rejecting: %s",
+                         len(pending_data["pending"]), title)
+            return {"id": "", "_status": "rejected_backpressure",
+                    "title": title, "topic": topic, "created_at": now}
+
         # Sanity check
         sanity_check = _check_content_sanity(topic, summary or content)
         if sanity_check is not None:
@@ -1501,41 +1509,32 @@ def auto_review() -> dict:
     }
 
 def cleanup_low_value_knowledge(max_age_days: int = 7, min_access: int = 1) -> int:
-    """Clean up low-value knowledge entries: mark entries older than max_age_days with access_count < min_access as low_value.
-    
-    Returns number of entries processed.
-    """
-    from datetime import datetime, timedelta
-    cutoff = datetime.now() - timedelta(days=max_age_days)
-    count = 0
-    index = _read_index()
-    for eid in list(index["entries"]):
-        entry = _read_entry(eid)
-        if not entry:
-            continue
-        if entry.get("_status", "active") != "active":
-            continue
-        try:
-            created = datetime.strptime(entry.get("created_at", ""), "%Y-%m-%d %H:%M:%S")
-            access = entry.get("access_count", 0)
-            if created < cutoff and access < min_access:
-                entry["_status"] = "low_value"
-                entry["_cleanup_reason"] = f"created={entry.get('created_at','')}, access_count={access}"
-                _write_entry(entry)
-                count += 1
-        except Exception:
-            pass  # non-critical, continue
-    return count
+    """Remove stale pending entries with 0 confidence that were never validated."""
+    removed = 0
+    try:
+        pending_data = _read_pending()
+        before = len(pending_data["pending"])
+        pending_data["pending"] = [
+            e for e in pending_data["pending"]
+            if not (e.get("confidence", 0) == 0 and not e.get("validated") and
+                    e.get("_practice_count", 0) == 0 and e.get("_failed_count", 0) == 0)
+        ]
+        after = len(pending_data["pending"])
+        if before > after:
+            _write_pending(pending_data)
+            removed = before - after
+            _log.info("  🧹 Cleaned %d zero-score stale pending entries", removed)
+    except Exception:
+        _log.exception("knowledge error")
+    return removed
 
 
 # ── Periodic review verification ─────────────────────────
 
-_REVIEW_FIXED_DAYS = 30          # Fixed period: 30 days
-_REVIEW_SCORE_DROP_THRESHOLD = 0.3  # Score drop > 0.3 marks review_needed
+_REVIEW_FIXED_DAYS = 30
+_REVIEW_SCORE_DROP_THRESHOLD = 0.3
 _REVIEW_LOCK_FILE = KNOWLEDGE_DIR / ".periodic_review.lock"
-_REVIEW_COOLDOWN_SECONDS = 1800  # 30 min cooldown
-
-# Max consecutive low-score auto-downgrade count
+_REVIEW_COOLDOWN_SECONDS = 1800
 _REVIEW_MAX_LOW_STREAK = 2
 
 

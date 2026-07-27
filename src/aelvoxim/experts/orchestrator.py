@@ -329,6 +329,7 @@ class ExpertOrchestrator:
             name = cls.__name__.lower().replace("expert", "")
             self._expert_health[name] = {
                 "last_ok": 0.0, "last_error": "", "runs": 0, "failures": 0,
+                "last_heartbeat": 0.0,
             }
 
     def _get_router(self):
@@ -436,6 +437,7 @@ class ExpertOrchestrator:
             if name in self._expert_health:
                 h = self._expert_health[name]
                 h["runs"] += 1
+                h["last_heartbeat"] = _now
                 if r.error:
                     h["failures"] += 1
                     h["last_error"] = str(r.error)[:120]

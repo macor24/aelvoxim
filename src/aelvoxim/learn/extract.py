@@ -112,12 +112,26 @@ def content_has_real_value(content: str) -> bool:
     - Contains code-like syntax
     - Contains verifiable external info
     - Not generic template output
+    - Not beginner-level tutorial content
     """
     if not content or len(content) < 40:
         return False
 
     # Reject generic template output
     if is_generic_template_output(content):
+        return False
+
+    # Reject beginner-level tutorial indicators
+    _BEGINNER_PATTERNS = [
+        r'\bin this (beginner|introductory|basic)\b',
+        r'\blearn (how to|the basics|the fundamentals)\b',
+        r'\b(step[- ]by[- ]step|for beginners|easy to follow)\b',
+        r'\b(this tutorial|this guide|this course)',
+        r'\b(getting started|quick start|hello world)\b',
+        r'\b(what is \w+\?|introduction to|overview of)\b',
+    ]
+    beginner_hits = sum(1 for p in _BEGINNER_PATTERNS if re.search(p, content, re.I))
+    if beginner_hits >= 2:
         return False
 
     signals = 0
@@ -189,7 +203,9 @@ def llm_distill(query: str, phase_name: str) -> Optional[str]:
             f"Phase: {phase_name}\n\n"
             "Include specific technical details, concrete examples, "
             "code snippets, and actionable knowledge. Mention real tools, frameworks, "
-            "and patterns. If you don't know this topic, respond with 'UNKNOWN_TOPIC'.\n\n"
+            "and patterns. Include at least one code example, pseudocode, or metric "
+            "comparison to demonstrate the concept in practice. "
+            "If you don't know this topic, respond with 'UNKNOWN_TOPIC'.\n\n"
             f"Write comprehensively — at least 300 words. Short responses will be rejected."
         )
         text = call_fn(

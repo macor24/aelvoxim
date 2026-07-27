@@ -106,18 +106,29 @@ def _extract(text: str) -> List[str]:
 
 
 def _score(term: str) -> float:
-    """Priority score 0.0-1.0 — higher = more likely worth learning."""
+    """Priority score 0.0-1.0 — higher = more likely worth learning.
+    Shallow/basic concepts are penalized.
+    """
+    _SHALLOW_TERMS = {
+        "installation", "prerequisites", "understanding", "conversations",
+        "introduction", "getting started", "overview", "basics", "fundamentals",
+        "quick start", "setup", "configuration", "tutorial", "guide",
+        "welcome", "hello world", "example", "demo", "syntax",
+    }
     score = 0.5
     if len(term) >= 8:
         score += 0.15
     if len(term) >= 12:
         score += 0.1
-    if re.match(r'^[A-Z]', term):                       # Title Case → named concept
+    if re.match(r'^[A-Z]', term):
         score += 0.15
-    if re.search(r'[\u4e00-\u9fff]', term) and re.search(r'[a-zA-Z]', term):  # mixed script
+    if re.search(r'[\u4e00-\u9fff]', term) and re.search(r'[a-zA-Z]', term):
         score += 0.1
-    if re.search(r'\d', term):                           # version / protocol
+    if re.search(r'\d', term):
         score += 0.05
+    # Shallow term penalty: reduce by 70%
+    if term.lower() in _SHALLOW_TERMS:
+        score *= 0.3
     return min(1.0, score)
 
 
@@ -196,9 +207,9 @@ def scan_unknowns(directions: Dict[str, object], log_func: Callable) -> bool:
     if not fresh:
         return False
 
-    # 4. Take top 3 by score
+    # 4. Take top 2 by score (capped to prevent queue flooding)
     fresh.sort(key=lambda x: x[1], reverse=True)
-    top = [t for t, _ in fresh[:3]]
+    top = [t for t, _ in fresh[:2]]
 
     _pending_unknowns.extend(top)
     if len(_pending_unknowns) > _MAX_PENDING:

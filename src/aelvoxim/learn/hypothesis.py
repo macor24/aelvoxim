@@ -164,18 +164,6 @@ class HypothesisGenerator:
                 created_at=now,
             ))
 
-        elif cause == "belief_degradation":
-            # H1: stale entries polluting the knowledge base
-            hypotheses.append(Hypothesis(
-                id=_new_id(),
-                triggered_by="belief_degradation",
-                cause="Stale or low-confidence entries may be degrading belief health",
-                prediction="Cleaning stale entries will improve belief health within 7 days",
-                test_method="cleanup_kb",
-                status="pending",
-                created_at=now,
-            ))
-
         return hypotheses
 
 

@@ -133,6 +133,15 @@ class Learner:
         return DirectionManager.is_valid_direction(topic)
 
     def add_direction(self, topic: str) -> bool:
+        # Pending queue backpressure: block new topics if queue is full
+        try:
+            from ..learn.knowledge import _read_pending
+            _pending = _read_pending()
+            if len(_pending.get("pending", [])) >= 100:
+                self._log(f"  🚫 [Backpressure] Pending queue full ({len(_pending['pending'])}), blocking new topic: {topic}")
+                return False
+        except Exception:
+            pass
         import os
         _ed = os.environ.get("AELVOXIM_EDITION", "community")
         _plan_map = {"enterprise": "enterprise", "pro": "pro", "trial": "enterprise"}
@@ -395,19 +404,24 @@ class Learner:
             direction.current_task = ""
             self._dir_mgr.save()
 
-            # ── Adaptive threshold based on task complexity ──
-            _complexity = max(1, len(json.loads(direction.task_queue or "[]"))) + max(1, len(json.loads(direction.completed_tasks or "[]")))
-            _threshold = 5 if _complexity > 8 else (3 if _complexity > 4 else 2)
+            # ── Hard retry limit: max 3 per topic, then 60-min cooldown ──
+            _threshold = 3
 
             if _fail_streak >= _threshold:
                 direction.status = "paused"
+                # 60-minute cooldown before allowing retry
+                direction.fail_cooldown_until = time.time() + 3600
                 self._dir_mgr.save()
                 # Log with reason breakdown
                 _reason_detail = "; ".join(f"{k}={v}" for k, v in sorted(_reasons.items()))
                 self._log(f"  🛑 [{topic}] {_fail_streak}x consecutive fails — pausing "
                           f"(reasons: {_reason_detail})")
+                # Fault classification tag
+                _fault_tag = ""
+                if _fail_streak >= _threshold:
+                    _fault_tag = "[fault:excessive_failures]"
                 self._log(f"  🧠 [{topic}] Reflection: "
-                          f"1) check approach 2) prerequisite knowledge 3) problem definition")
+                          f"1) check approach 2) prerequisite knowledge 3) problem definition {_fault_tag}")
                 # Record to metacog
                 try:
                     from ..core.metacog import MetaCogTrigger
@@ -422,7 +436,7 @@ class Learner:
                     _log.exception("loop error")
                 return True
 
-            self._log(f"  ⏭️ [{topic}] Skip ({_fail_streak}/3, {_reason_cat}): {task}")
+            self._log(f"  ⏭️ [{topic}] Skip ({_fail_streak}/{_threshold}, {_reason_cat}): {task}")
 
             try:
                 from ..hooks.analyzer import analyze
@@ -950,10 +964,23 @@ class Learner:
                 self._detect_llm_status()
 
                 any_active = False
-                for topic, direction in list(self._directions.items()):
+                # Cold-first ordering: directions with fewer entries get priority
+                _sorted = sorted(
+                    self._directions.items(),
+                    key=lambda x: (x[1].entries_created, getattr(x[1], "weak_pass_streak", 0))
+                )
+                for topic, direction in _sorted:
                     if not self._running:
                         break
                     if direction.status != "active":
+                        continue
+                    # Cooldown check: skip if within 30-min failure cooldown
+                    _cooldown = getattr(direction, "fail_cooldown_until", 0)
+                    if _cooldown > time.time():
+                        continue
+                    # Weak pass backpressure: ≥3 consecutive → skip 2 rounds
+                    _wps = getattr(direction, "weak_pass_streak", 0)
+                    if _wps >= 3 and _wps % 2 != 0:
                         continue
                     any_active = True
 
@@ -983,9 +1010,16 @@ class Learner:
                 except Exception:
                     _log.exception("loop error")
 
+                # ── Periodic zero-score cleanup (every 30 min) ──
+                if self._loop_count % 60 == 0:
+                    try:
+                        from ..learn.knowledge import cleanup_low_value_knowledge
+                        cleanup_low_value_knowledge()
+                    except Exception:
+                        pass
+
                 # Check reviews
                 if check_reviews(self._directions, self._dir_mgr.save, self._log):
-                    self._sleep(5)
                     continue
 
                 # Check pending promotions
@@ -996,7 +1030,6 @@ class Learner:
                 if check_pending_promotions(self._directions, self._dir_mgr.save, self._log, pmt_state):
                     setattr(self, '_pending_streak', pmt_state.get('_pending_streak', 0))
                     setattr(self, '_last_pending_eid', pmt_state.get('_last_pending_eid', ""))
-                    self._sleep(5)
                     continue
 
                 # No active directions — review mode, curiosity, or auto-discover
@@ -1213,8 +1246,8 @@ class Learner:
                 time.sleep(30)
                 if not self._running:
                     break
-                if time.time() - self._last_heartbeat > 120:
-                    self._log("⚠️ Watchdog: no heartbeat for 120s")
+                if time.time() - self._last_heartbeat > 300:
+                    self._log("⚠️ Watchdog: no heartbeat for 300s")
                     self._last_heartbeat = time.time()
         t = threading.Thread(target=_watch, daemon=True)
         t.start()

@@ -30,14 +30,15 @@ class TriggerLevel(Enum):
 
 # Default weights (used when calibration fails to load)
 FALLBACK_WEIGHTS = {
-    "success_rate": 0.20,
-    "stagnation": 0.15,
-    "repeat_failure": 0.15,
+    "success_rate": 0.15,
+    "stagnation": 0.10,
+    "repeat_failure": 0.10,
     "external_signal": 0.05,
     "introspection": 0.05,
-    "memory_health": 0.15,
+    "memory_health": 0.10,
     "snapshot_trend": 0.10,
-    "belief_health": 0.15,
+    "belief_health": 0.10,
+    "execution_health": 0.25,  # highest weight: execution layer resources
 }
 
 
@@ -136,6 +137,7 @@ class MetaCogTrigger:
             self._check_memory_health(memory_system),
             self._check_snapshot_trend(),
             self._check_belief_health(belief_health),
+            self._check_execution_health(),
         ]
 
         weights = self._cw("trigger_weights", default=FALLBACK_WEIGHTS)
@@ -147,6 +149,13 @@ class MetaCogTrigger:
         ).value if levels else TriggerLevel.MILD.value
 
         evolve_threshold = self._cw("evolve_threshold", default=0.10)
+        # Skip recording if overall score is too low (filters noise)
+        if overall < evolve_threshold:
+            return MetaCogReport(
+                timestamp=now, should_evolve=False,
+                max_level=TriggerLevel.MILD.value, overall_score=overall,
+            )
+
         # Build suggested actions based on triggered signals
         actions: List[str] = []
         for t in triggers:
@@ -482,6 +491,38 @@ class MetaCogTrigger:
             signal_name="belief_health", level=level,
             triggered=True, score=score, reason=reason,
             details={"unhealthy": unhealthy, "critical": critical_unhealthy},
+        )
+
+    # ── Signal 9: Execution health (expert workers, heartbeat) ──
+
+    def _check_execution_health(self) -> TriggerResult:
+        """Check expert worker health and system heartbeat status."""
+        score, level, reasons = 0.0, TriggerLevel.MILD, []
+        try:
+            from aelvoxim.experts.orchestrator import ExpertOrchestrator
+            eo = ExpertOrchestrator()
+            health = getattr(eo, "_expert_health", {})
+            if health:
+                total = len(health)
+                failures = sum(1 for h in health.values()
+                               if h.get("failures", 0) >= 5 and h.get("runs", 0) > 0)
+                if failures > 0:
+                    fail_ratio = failures / total
+                    score = min(1.0, fail_ratio * 3)
+                    if fail_ratio > 0.5:
+                        level = TriggerLevel.CRITICAL
+                    elif fail_ratio > 0.3:
+                        level = TriggerLevel.MODERATE
+                    reasons.append(f"{failures}/{total} experts failing")
+        except Exception:
+            pass
+        if not reasons:
+            reasons.append("execution layer ok")
+        trigger = self._cw("execution_health_trigger", default=0.20)
+        return TriggerResult(
+            signal_name="execution_health",
+            level=level, triggered=score > trigger, score=score,
+            reason="; ".join(reasons),
         )
 
     def get_history(self, limit: int = 10) -> List[Dict]:

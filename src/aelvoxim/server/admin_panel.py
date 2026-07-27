@@ -241,6 +241,15 @@ def _subsystem_health() -> list[dict[str, Any]]:
     except Exception:
         checks.append({"name": "MetaCognition", "status": "offline", "detail": "Not available"})
 
+    # PostgreSQL health
+    try:
+        from aelvoxim.core.health import get_pg_status
+        pg = get_pg_status()
+        checks.append({"name": "PostgreSQL", "status": "online" if pg.get("up") else "offline",
+                        "detail": pg.get("version", pg.get("error", "Unknown"))})
+    except Exception:
+        checks.append({"name": "PostgreSQL", "status": "offline", "detail": "Check failed"})
+
     # SelfModel health
     try:
         from aelvoxim.core.selfmodel import SelfModel

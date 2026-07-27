@@ -67,6 +67,7 @@ def execute_and_validate(
     log = log_func or (lambda msg: None)
 
     title = f"{topic} - {task}"
+    _rejection_reason = ""
 
     # Check if already exists
     if KnowledgeBase.get_by_title(title):
@@ -133,27 +134,40 @@ def execute_and_validate(
             except Exception:
                 combined_score = 0.5
 
-    if combined_score < 0.4:
+    if combined_score < 0.3:
         log(f"  🚫 [{topic}] AutoValidator failed ({combined_score:.2f}): {task}")
         return False
 
     if combined_score < 0.6:
-        confidence = round(confidence * 0.5, 2)
-        log(f"  ⚠️ [{topic}] AutoValidator weak pass ({combined_score:.2f}), conf→{confidence}: {task}")
+        # Not halved — still store as base line (conf≥0.3 basis)
+        _log_weak_pass(topic, f"  ⚠️ [{topic}] AutoValidator weak pass ({combined_score:.2f}), conf→{confidence}: {task}")
+        # Mark for selfmodel (base line, not high-quality)
+        _rejection_reason = "validation_weak_pass"
 
-    # Step 4: Quality checks
+    # Code/metric detection: boost confidence if content has executable elements
+    _has_code = bool(re.search(r'```|\b(def |class |function |import |from \w+ import|print\(|return )', content))
+    _has_metric = bool(re.search(r'\b\d+\.?\d*%\b|\b(speedup|latency|accuracy|throughput|F1|BLEU|ROUGE)\b', content, re.I))
+    if _has_code or _has_metric:
+        confidence = max(confidence, 0.6)
+        _rejection_reason = "high_quality_code_or_metric"
+        log(f"  ⭐ [{topic}] Code/metric detected, conf boosted to {confidence:.2f}: {task}")
+
+    # Step 4: Quality checks — baseline store for borderline content
     if source_type == "learner_task":
         if not is_valid_content(topic, task[:8], content):
             log(f"  ⏭️ [{topic}] Quality check failed: {task}")
             return False
         if not content_has_real_value(content):
-            log(f"  ⏭️ [{topic}] Content too generic: {task}")
-            return False
+            # Baseline: store generic content at conf≥0.3 to fill SelfModel
+            if on_store:
+                on_store(topic, title, max(confidence * 0.6, 0.3))
+            log(f"  ⏭️ [{topic}] [over_generic_content][baseline] Content too generic, stored at conf={max(confidence * 0.6, 0.3):.2f}: {task}")
+            return True
         if len(content.strip()) < 150:
             log(f"  ⏭️ [{topic}] Content too short ({len(content.strip())} < 300): {task}")
             return False
         if not _has_technical_keywords(content, min_count=1):
-            log(f"  🚫 [{topic}] No technical keywords found: {task}")
+            log(f"  🚫 [{topic}] [missing_domain_keyword] No technical keywords found: {task}")
             return False
     else:
         # Execution results also pass quality check
@@ -218,7 +232,19 @@ def execute_and_validate(
     return True
 
 
-# ── LLM-based execution content evaluation ────
+# ── Weak pass log dedup cache (5-min cooldown per topic) ──
+_RECENT_WEAK_PASS: Dict[str, float] = {}
+
+
+def _log_weak_pass(topic: str, msg: str) -> None:
+    """Log weak pass at most once per 5 minutes per topic."""
+    import time as _t
+    now = _t.time()
+    last = _RECENT_WEAK_PASS.get(topic, 0)
+    if now - last < 300:
+        return
+    _RECENT_WEAK_PASS[topic] = now
+    _log.info(msg)
 
 # ── Technical keyword detection ────────────────
 

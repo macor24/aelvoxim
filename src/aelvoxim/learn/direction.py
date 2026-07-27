@@ -49,6 +49,8 @@ class LearningDirection:
     reflect_no_produce: int = 0
     fail_streak: int = 0          # consecutive failures (total, for quick threshold check)
     fail_by_reason: str = ""      # JSON dict: {"timeout": 2, "quality": 1, "search_empty": 0, "validation": 1}
+    weak_pass_streak: int = 0     # consecutive weak pass count, for quality backpressure
+    consecutive_zero_produce: int = 0  # cycles with 0 entries produced
     review_history: str = ""
     last_verified: str = ""
     added_from: str = ""
