@@ -218,6 +218,17 @@ def llm_distill(query: str, phase_name: str) -> Optional[str]:
                 "convergence). Do NOT output generic conceptual descriptions — focus "
                 "on runnable code and measurable results."
             )
+        # Custom prompt for RLHF: force PPO code + human preference reward metrics
+        if "reinforcement learning from human feedback" in query.lower() or "rlhf" in query.lower():
+            prompt += (
+                "REQUIRED: Include a concrete PPO training loop code snippet "
+                "(using trl, transformers, or stable-baselines3) with reward model "
+                "training and KL divergence penalty. Also include quantitative reward "
+                "model metrics (reward accuracy, preference score distribution, KL "
+                "divergence over training steps, reward vs rejection ratio). Do NOT "
+                "output generic conceptual descriptions — focus on runnable PPO code "
+                "and measurable reward modeling results."
+            )
         text = call_fn(
             model=model,
             system_prompt="",

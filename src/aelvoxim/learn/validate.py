@@ -161,7 +161,9 @@ def execute_and_validate(
         r'|scaling law|compute budget|FLOPs|parameter count|training loss'
         r'|compute optimal|chinchilla|kaplan|model size|dataset size'
         r'|reward function|convergence rate|average reward|episode'
-        r'|agent interaction|simulation.*step|training step)\b',
+        r'|agent interaction|simulation.*step|training step'
+        r'|PPO|proximal policy|reward model|KL divergence'
+        r'|preference score|reward accuracy|rejection ratio)\b',
         content, re.I))
 
     # Force code retrieval for LLM architectures direction
