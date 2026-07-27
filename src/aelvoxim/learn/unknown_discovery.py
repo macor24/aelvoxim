@@ -143,6 +143,8 @@ def _score(term: str) -> float:
         "attributeerror", "importerror", "modulenotfounderror", "runtimeerror",
         "characteristics", "concrete example", "tabular", "overview of",
         "introduction to", "what is", "guide to",
+        "pgpassword", "aelvoxim", "localhost", "password",
+        "username", "api_key", "apikey", "secret", "token",
     }
     if term.lower() in _BLACKLIST:
         return 0.0
