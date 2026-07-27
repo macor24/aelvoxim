@@ -492,7 +492,9 @@ class Learner:
         done_tasks = json.loads(direction.completed_tasks or "[]")
         total_tasks = len(done_tasks) + (len(json.loads(direction.task_queue or "[]")) if direction.task_queue and direction.task_queue != "[]" else 0)
         high_conf = sum(1 for e in entries if e.get("confidence", 0) >= 0.6)
-        verify_pass_rate = high_conf / max(len(entries), 1)
+        # Also count entries stored via code/metric direct path (not in KnowledgeBase.search)
+        high_conf = max(high_conf, direction.entries_created)
+        verify_pass_rate = high_conf / max(len(entries) + direction.entries_created, 1)
         task_complete_rate = len(done_tasks) / max(total_tasks, 1) if total_tasks > 0 else 0
         # 难度因子：总任务数越大、已消耗 cycle 越多 → 难度越高
         # 饱和度完成门槛应该随难度降低
