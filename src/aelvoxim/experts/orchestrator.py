@@ -323,6 +323,13 @@ class ExpertOrchestrator:
         }
         self._router = None  # lazy init
         self._weight_manager = WeightManager()
+        # ── Expert health tracking ──
+        self._expert_health: Dict[str, Dict] = {}
+        for cls in self._expert_classes:
+            name = cls.__name__.lower().replace("expert", "")
+            self._expert_health[name] = {
+                "last_ok": 0.0, "last_error": "", "runs": 0, "failures": 0,
+            }
 
     def _get_router(self):
         if self._router is None:
@@ -389,6 +396,7 @@ class ExpertOrchestrator:
         start = time.time()
         results: List[ExpertOutput] = []
         errors: List[str] = []
+        _now = time.time()
 
         # Select which experts to run based on query
         selected_classes = self._select_experts(inp.query)
@@ -421,6 +429,19 @@ class ExpertOrchestrator:
                         error=str(e),
                     ))
                     errors.append(f"{cls.__name__}: {e}")
+
+        # ── Update expert health ──
+        for r in results:
+            name = r.expert_name
+            if name in self._expert_health:
+                h = self._expert_health[name]
+                h["runs"] += 1
+                if r.error:
+                    h["failures"] += 1
+                    h["last_error"] = str(r.error)[:120]
+                else:
+                    h["last_ok"] = _now
+                    h["last_error"] = ""
 
         # Phase 2: Detect divergence among experts
         _confidences = [r.confidence for r in results if r and not r.error]

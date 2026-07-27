@@ -109,6 +109,13 @@ class Watchdog:
             }
             if not up and cfg.get("auto_heal", False):
                 self._heal(name, cfg)
+        # Check expert health
+        try:
+            from aelvoxim.experts.orchestrator import ExpertOrchestrator
+            eo = ExpertOrchestrator()
+            self.check_expert_health(getattr(eo, "_expert_health", {}))
+        except Exception:
+            pass
 
     def _check(self, url: str) -> tuple[bool, int, str]:
         """Returns (up, latency_ms, error). Single attempt, 5s timeout."""
@@ -144,6 +151,13 @@ class Watchdog:
 
     def get_heal_counts(self) -> dict:
         return dict(self._heal_counts)
+
+    def check_expert_health(self, health: dict) -> None:
+        """Check expert health data and log warnings for unhealthy experts."""
+        for name, h in health.items():
+            if h.get("failures", 0) >= 5 and h.get("runs", 0) > 0:
+                _log.warning("⚠️ Expert '%s': %d/%d failures — %s",
+                             name, h["failures"], h["runs"], h.get("last_error", "")[:60])
 
 
 def get_watchdog() -> Watchdog:

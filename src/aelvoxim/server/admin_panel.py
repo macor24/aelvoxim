@@ -262,9 +262,13 @@ def _subsystem_health() -> list[dict[str, Any]]:
         from aelvoxim.experts.orchestrator import ExpertOrchestrator
 
         eo = ExpertOrchestrator()
-        # expert count
         n = len(getattr(eo, "_expert_classes", []))
-        checks.append({"name": "Expert Orchestrator", "status": "online", "detail": f"{n} experts registered"})
+        health = getattr(eo, "_expert_health", {})
+        ok_count = sum(1 for h in health.values()
+                       if h["runs"] == 0 or h["failures"] < h["runs"] * 0.5)
+        detail = f"{n} experts registered, {ok_count}/{len(health) or n} healthy"
+        checks.append({"name": "Expert Orchestrator", "status": "online", "detail": detail,
+                       "experts": {name: dict(h) for name, h in health.items()}})
     except Exception:
         checks.append({"name": "Expert Orchestrator", "status": "offline", "detail": "Not available"})
 
