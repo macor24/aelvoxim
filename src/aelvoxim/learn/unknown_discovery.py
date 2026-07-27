@@ -107,7 +107,7 @@ def _extract(text: str) -> List[str]:
 
 def _score(term: str) -> float:
     """Priority score 0.0-1.0 — higher = more likely worth learning.
-    Shallow/basic concepts are penalized.
+    Shallow/basic concepts and error keywords are penalized.
     """
     _SHALLOW_TERMS = {
         "installation", "prerequisites", "understanding", "conversations",
@@ -115,6 +115,15 @@ def _score(term: str) -> float:
         "quick start", "setup", "configuration", "tutorial", "guide",
         "welcome", "hello world", "example", "demo", "syntax",
     }
+    # Reject error-related and template terms outright
+    _BLACKLIST = {
+        "unboundlocalerror", "valueerror", "typeerror", "keyerror",
+        "attributeerror", "importerror", "modulenotfounderror", "runtimeerror",
+        "characteristics", "concrete example", "tabular", "overview of",
+        "introduction to", "what is", "guide to",
+    }
+    if term.lower() in _BLACKLIST:
+        return 0.0
     score = 0.5
     if len(term) >= 8:
         score += 0.15
