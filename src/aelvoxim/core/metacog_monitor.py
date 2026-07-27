@@ -143,6 +143,19 @@ class MetaCogMonitor:
             report["triggers"] = getattr(metacog_report, "triggers", [])
             actions = getattr(metacog_report, "suggested_actions", [])
             report["suggested_actions"].extend(actions)
+
+        # 3b. Heartbeat-alive positive trigger: fires when learner is running
+        if not report["triggers"] and (learner_stats or self._tick_times):
+            from aelvoxim.core.metacog import TriggerResult, TriggerLevel
+            _hb_age = time.time() - self._tick_times[-1] if self._tick_times else 999
+            _level = TriggerLevel.MILD
+            if _hb_age < 120:  # healthy heartbeat
+                report["triggers"].append(TriggerResult(
+                    signal_name="heartbeat_ok",
+                    level=_level, triggered=True, score=0.1,
+                    reason=f"Learner tick {_hb_age:.0f}s ago",
+                ))
+                report["score"] = max(report["score"], 0.1)
         elif learner_stats:
             # Fallback: score from learner cycle stats
             total = learner_stats.get("total_cycles", 1)
