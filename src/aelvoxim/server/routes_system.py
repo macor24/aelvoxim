@@ -373,7 +373,7 @@ async def health_check():
         result["dependencies"]["sqlite"] = {"status": "ok", "entities": ec}
         result["dependencies"]["memory_layers"] = get_layer_stats()
     except Exception as e:
-        result["dependencies"]["sqlite"] = {"status": "error", "detail": str(type(e).__name__)}
+        result["dependencies"]["sqlite"] = {"status": "error", "detail": "db_error"}
         result["status"] = "degraded"
     try:
         from ..client.sentrikit import is_available

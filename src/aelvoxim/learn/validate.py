@@ -146,7 +146,16 @@ def execute_and_validate(
 
     # Step 3b: Code/metric detection — HIGHEST PRIORITY: directly store if detected
     _has_code = bool(re.search(r'```|\b(def |class |function |import |from \w+ import|print\(|return )', content))
-    _has_metric = bool(re.search(r'\b\d+\.?\d*%\b|\b(speedup|latency|accuracy|throughput|F1|BLEU|ROUGE)\b', content, re.I))
+    _has_metric = bool(re.search(
+        r'\b\d+\.?\d*%\b|\b(speedup|latency|accuracy|throughput|F1|BLEU|ROUGE'
+        r'|scaling law|compute budget|FLOPs|parameter count|training loss'
+        r'|compute optimal|chinchilla|kaplan|model size|dataset size)\b',
+        content, re.I))
+
+    # Force code retrieval for LLM architectures direction
+    if 'large language model' in topic.lower() and not (_has_code or _has_metric):
+        log(f"  🚫 [{topic}] No code/metric — force retrieval active: {task}")
+        return False
     if _has_code or _has_metric:
         confidence = max(confidence, 0.6)
         _rejection_reason = "high_quality_code_or_metric"
