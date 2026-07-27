@@ -960,13 +960,16 @@ class Learner:
                     # LLM degraded AND search mock → teach mode
                     if self._llm_status != "available" and self._search_mock:
                         if self._teach_one_cycle(direction):
+                            self._last_heartbeat = time.time()
                             self._sleep(10)
                             continue
                     else:
                         if self._learn_one_cycle(direction):
+                            self._last_heartbeat = time.time()
                             self._sleep(15)
                             continue
                     self._sleep(8)
+                    self._last_heartbeat = time.time()
 
                 # ── Active health scan (every 30 min) ──
                 try:
@@ -976,6 +979,7 @@ class Learner:
                         if _report.get("knowledge", {}).get("total", 0) > 0:
                             _kb = _report["knowledge"]
                             self._log(f"  📊 Health: {_kb['total']} entries, avg conf {_kb.get('avg_confidence', 0):.2f}, {_report['directions'].get('active', 0)} active directions")
+                        self._last_heartbeat = time.time()
                 except Exception:
                     _log.exception("loop error")
 
