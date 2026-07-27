@@ -144,25 +144,26 @@ def execute_and_validate(
         # Mark for selfmodel (base line, not high-quality)
         _rejection_reason = "validation_weak_pass"
 
-    # Code/metric detection: boost confidence if content has executable elements
+    # Step 3b: Code/metric detection — HIGHEST PRIORITY: directly store if detected
     _has_code = bool(re.search(r'```|\b(def |class |function |import |from \w+ import|print\(|return )', content))
     _has_metric = bool(re.search(r'\b\d+\.?\d*%\b|\b(speedup|latency|accuracy|throughput|F1|BLEU|ROUGE)\b', content, re.I))
     if _has_code or _has_metric:
         confidence = max(confidence, 0.6)
         _rejection_reason = "high_quality_code_or_metric"
         log(f"  ⭐ [{topic}] Code/metric detected, conf boosted to {confidence:.2f}: {task}")
+        # Direct store: bypass quality checks — code/metric content IS high quality
+        if on_store:
+            on_store(topic, title, confidence)
+        return True
 
-    # Step 4: Quality checks — baseline store for borderline content
+    # Step 4: Quality checks — only for content WITHOUT code/metrics
     if source_type == "learner_task":
         if not is_valid_content(topic, task[:8], content):
             log(f"  ⏭️ [{topic}] Quality check failed: {task}")
             return False
         if not content_has_real_value(content):
-            # Baseline: store generic content at conf≥0.3 to fill SelfModel
-            if on_store:
-                on_store(topic, title, max(confidence * 0.6, 0.3))
-            log(f"  ⏭️ [{topic}] [over_generic_content][baseline] Content too generic, stored at conf={max(confidence * 0.6, 0.3):.2f}: {task}")
-            return True
+            log(f"  ⏭️ [{topic}] [over_generic_content] Content too generic: {task}")
+            return False
         if len(content.strip()) < 150:
             log(f"  ⏭️ [{topic}] Content too short ({len(content.strip())} < 300): {task}")
             return False
