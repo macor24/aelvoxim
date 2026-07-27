@@ -103,6 +103,7 @@ class MetaCogMonitor:
     def record_tick(self) -> None:
         """Record one cognition tick for overload tracking."""
         now = time.time()
+        self._tick_times.append(now)
         self._overload_ticks.append(now)
         cutoff = now - _OVERLOAD_WINDOW
         self._overload_ticks = [t for t in self._overload_ticks if t > cutoff]
@@ -145,9 +146,9 @@ class MetaCogMonitor:
             report["suggested_actions"].extend(actions)
 
         # 3b. Heartbeat-alive positive trigger: fires when learner is running
-        if not report["triggers"] and (learner_stats or self._tick_times):
+        if not report["triggers"] and (learner_stats or self._overload_ticks):
             from aelvoxim.core.metacog import TriggerResult, TriggerLevel
-            _hb_age = time.time() - self._tick_times[-1] if self._tick_times else 999
+            _hb_age = time.time() - self._overload_ticks[-1] if self._overload_ticks else 999
             _level = TriggerLevel.MILD
             if _hb_age < 120:  # healthy heartbeat
                 report["triggers"].append(TriggerResult(

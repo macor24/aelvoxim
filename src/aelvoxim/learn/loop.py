@@ -672,6 +672,12 @@ class Learner:
                     external_signal_strength=0.0,
                     belief_health=belief_stats,
                 )
+                # Debug: log trigger stats
+                _tr_all = len(getattr(_mc_report, 'triggers', []))
+                _tr_hit = sum(1 for t in getattr(_mc_report, 'triggers', []) if getattr(t, 'triggered', False))
+                if _tr_hit > 0:
+                    _names = [getattr(t, 'signal_name', '?') for t in getattr(_mc_report, 'triggers', []) if getattr(t, 'triggered', False)]
+                    self._log(f"  🔔 MetaCogTrigger: {_tr_hit}/{_tr_all} signals triggered — {_names}")
             except Exception:
                 _mc_report = None
             # ── Memory maintenance (every cognition tick) ──
