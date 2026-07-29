@@ -8,7 +8,8 @@ Runs inside _cognition_tick — background only, no user interaction.
 """
 
 from __future__ import annotations
-
+import hashlib
+import logging
 import re
 import time
 from typing import Callable, Dict, List, Set
@@ -56,7 +57,12 @@ _CN_STOP: Set[str] = {
 
 _MAX_PENDING = 20
 _SCAN_INTERVAL = 300  # seconds between scans
-_DEDUP_WINDOW = 1200  # 20-min dedup for re-queued candidates
+_DEDUP_WINDOW = 7200  # 2-hour dedup for re-queued candidates
+_SHORT_DEDUP = 1200   # 20-min short-term hash cache
+_SHORT_CACHE: Set[str] = set()  # hashes in current 20-min window
+_LAST_SHORT_CLEAN: float = 0.0
+_MAX_QUEUE_HISTORY = 5  # track how many times each term was queued
+_queue_count: Dict[str, int] = {}  # md5_hash → queue count, for exponential backoff
 
 # Core AI domains (boosted priority)
 _CORE_AI_PATTERNS = [
@@ -76,13 +82,77 @@ _COLD_DOMAIN_PATTERNS = [
     r'\bquantum\b',
     r'\bcrypto\b', r'\bblockchain\b',
     r'\binstallation\b', r'\bsetup\b', r'\bprerequisites\b',
+    # Backend/programming language topics (non-AI core)
+    r'\brust\b', r'\bnode\.?js\b', r'\bdjango\b', r'\bflask\b',
+    r'\bspring\b', r'\bjavascript\b', r'\btypescript\b',
+    r'\breact\b', r'\bvue\b', r'\bangular\b',
+    r'\bsql\b', r'\bpostgresql\b', r'\bmongodb\b', r'\bredis\b',
+    r'\bdocker\b', r'\bkubernetes\b', r'\bk8s\b',
+    r'\bgit\b', r'\bgithub\b', r'\bci/cd\b',
+    r'\bhtml\b', r'\bcss\b', r'\bfrontend\b', r'\bbackend\b',
+    r'\bapi\b', r'\brest\b', r'\bgraphql\b',
+    r'\bmultithread\b', r'\basync\b', r'\bconcurrency\b',
+    r'\b编译\b', r'\b部署\b', r'\b配置\b', r'\b安装\b',
 ]
 
 # ── Module-level state ──
 
 _pending_unknowns: List[str] = []
 _last_scan_ts: float = 0.0
-_recently_queued: Dict[str, float] = {}  # term_lower → timestamp, 20-min dedup
+_recently_queued: Dict[str, float] = {}  # md5_hash → timestamp, 20-min dedup
+_DEDUP_FILE = None  # lazy init
+
+def _dedup_path() -> str:
+    global _DEDUP_FILE
+    if _DEDUP_FILE is None:
+        try:
+            from pathlib import Path
+            from ..utils import DATA_DIR
+            _DEDUP_FILE = str(DATA_DIR / "unknown_dedup_cache.json")
+        except Exception:
+            _DEDUP_FILE = ""
+    return _DEDUP_FILE
+
+def _load_dedup() -> None:
+    global _recently_queued, _queue_count
+    fp = _dedup_path()
+    if not fp:
+        return
+    try:
+        import json
+        from pathlib import Path
+        p = Path(fp)
+        if p.exists():
+            data = json.loads(p.read_text())
+            now = time.time()
+            cutoff = now - _DEDUP_WINDOW
+            if isinstance(data, dict) and "queue" in data:
+                _recently_queued = {k: v for k, v in data["queue"].items() if v >= cutoff}
+                _queue_count = data.get("counts", {})
+            else:
+                # legacy format: dict of hash→timestamp
+                _recently_queued = {k: v for k, v in data.items() if isinstance(v, (int, float)) and v >= cutoff}
+                _queue_count = {}
+    except Exception:
+        _recently_queued = {}
+        _queue_count = {}
+
+def _save_dedup() -> None:
+    fp = _dedup_path()
+    if not fp or not _recently_queued:
+        return
+    try:
+        import json
+        from pathlib import Path
+        Path(fp).write_text(json.dumps({
+            "queue": _recently_queued,
+            "counts": dict(list(_queue_count.items())[-500:]),  # keep last 500
+        }))
+    except Exception:
+        pass
+
+def _md5(term: str) -> str:
+    return hashlib.md5(term.lower().encode('utf-8')).hexdigest()
 
 
 # ══════════════════════════════════════════════
@@ -201,7 +271,7 @@ def scan_unknowns(directions: Dict[str, object], log_func: Callable) -> bool:
     Called from _cognition_tick.  Rate-limited to once per _SCAN_INTERVAL.
     Returns True if at least one candidate was queued.
     """
-    global _pending_unknowns, _last_scan_ts
+    global _pending_unknowns, _last_scan_ts, _LAST_SHORT_CLEAN
 
     now = time.time()
     if now - _last_scan_ts < _SCAN_INTERVAL:
@@ -226,20 +296,37 @@ def scan_unknowns(directions: Dict[str, object], log_func: Callable) -> bool:
     if not candidates:
         return False
 
+    # Load persisted dedup cache (survives restarts)
+    _load_dedup()
+
     # 3. Score, filter, deduplicate against known + pending + recently queued
     fresh: list = []
     seen: Set[str] = set()
     pending_lower = {t.lower() for t in _pending_unknowns}
-    # Clean stale dedup entries (>20 min)
+    # Clean stale dedup entries (>2h)
     _dedup_cutoff = now - _DEDUP_WINDOW
-    stale_dedup = [t for t, ts in _recently_queued.items() if ts < _dedup_cutoff]
-    for t in stale_dedup:
-        _recently_queued.pop(t, None)
+    stale_dedup = [h for h, ts in _recently_queued.items() if ts < _dedup_cutoff]
+    for h in stale_dedup:
+        _recently_queued.pop(h, None)
+    # Clear 20-min short cache periodically
+    if now - _LAST_SHORT_CLEAN > _SHORT_DEDUP:
+        _SHORT_CACHE.clear()
+        _LAST_SHORT_CLEAN = now
 
     for term in candidates:
         low = term.lower()
-        if low in seen or low in _recently_queued or low in pending_lower:
+        h = _md5(term)
+        if low in seen or low in pending_lower:
             continue
+        # 20-min short-term cache check
+        if h in _SHORT_CACHE:
+            continue
+        # Check dedup with exponential backoff
+        if h in _recently_queued:
+            _queue_n = _queue_count.get(h, 0)
+            _effective_ttl = _DEDUP_WINDOW * (2 ** min(_queue_n, 5))  # 2h, 4h, 8h, 16h, 32h, 64h
+            if now - _recently_queued[h] < _effective_ttl:
+                continue
         seen.add(low)
         if _is_known(term):
             continue
@@ -255,9 +342,15 @@ def scan_unknowns(directions: Dict[str, object], log_func: Callable) -> bool:
     top = [t for t, _ in fresh[:2]]
 
     _pending_unknowns.extend(top)
-    # Record in 20-min dedup cache
+    # Record in 20-min short cache
     for t in top:
-        _recently_queued[t.lower()] = now
+        _SHORT_CACHE.add(_md5(t))
+    # Record in long-term dedup cache with exponential backoff (MD5 hash key)
+    for t in top:
+        h = _md5(t)
+        _recently_queued[h] = now
+        _queue_count[h] = _queue_count.get(h, 0) + 1
+    _save_dedup()
     if len(_pending_unknowns) > _MAX_PENDING:
         _pending_unknowns = _pending_unknowns[-_MAX_PENDING:]
 

@@ -57,6 +57,8 @@ def cleanup_knowledge_base(log_func) -> None:
             if conf < 0.3:
                 kb.delete(e.get("id", ""))
                 deleted += 1
+            elif conf >= 0.7:
+                continue  # high-confidence entries (≥0.7) are whitelisted
             elif conf < 0.5 and age_days > 30:
                 if hasattr(kb, 'flag_for_review'):
                     kb.flag_for_review(e.get("id", ""))

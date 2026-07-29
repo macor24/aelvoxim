@@ -264,10 +264,10 @@ def decompose_direction(topic: str, log_func=None, direction_meta: Optional[Dict
     if direction_meta:
         sat = direction_meta.get("saturation", 0.5)
         entries = direction_meta.get("entries_created", 0)
-        if sat >= 0.8 or entries >= 5:
-            default_count = 3  # Nearly saturated, fewer tasks needed
-            log(f"  🎯 [{topic}] Adaptive: saturation={sat:.2f}, reducing tasks to {default_count}")
-        elif sat < 0.3 and entries < 2:
+        if sat >= 0.8:
+            default_count = 6  # Maintain coverage even at high saturation
+            log(f"  🎯 [{topic}] Adaptive: saturation={sat:.2f}, sustained {default_count} tasks")
+        elif sat < 0.3 and entries < 3:
             default_count = 8  # Early stage, more exploration needed
             log(f"  🎯 [{topic}] Adaptive: saturation={sat:.2f} (early), increasing tasks to {default_count}")
         else:

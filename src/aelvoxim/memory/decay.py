@@ -103,10 +103,16 @@ def batch_decay(fusion: MemoryFusion, db_path: str = "") -> Dict[str, Any]:
     ]
     to_archive: List[str] = []
     to_dormant: List[str] = []
+    to_decay: List[tuple] = []  # (key, strength)
     for layer in layers:
         for entry in list(layer._entries.values()):
             stats["scanned"] += 1
             if entry.immutable:
+                continue
+            # High-importance or code/metric tagged entries skip decay
+            _is_code = any('code' in t.lower() or 'metric' in t.lower() or t == 'extracted' for t in entry.tags)
+            if entry.base_importance >= 0.5 or entry.importance >= 0.5 or _is_code:
+                stats["scanned"] -= 1  # don't count high-quality entries
                 continue
             if entry.ttl_seconds is not None and entry.is_expired():
                 layer._entries.pop(entry.key, None)
@@ -116,6 +122,7 @@ def batch_decay(fusion: MemoryFusion, db_path: str = "") -> Dict[str, Any]:
             active = apply_decay(entry)
             if active:
                 stats["decayed"] += 1
+                to_decay.append((entry.key, entry.strength))
             elif entry.conflict_status == "dormant":
                 stats["dormant"] += 1
                 to_dormant.append(entry.key)
@@ -138,7 +145,7 @@ def batch_decay(fusion: MemoryFusion, db_path: str = "") -> Dict[str, Any]:
                     "UPDATE entities SET attributes = json_set(COALESCE(attributes,'{}'), '$.status', ?, '$.strength', ?) WHERE id = ?",
                     ("archived", 0.1, _key)
                 )
-            for _key in to_decay:
+            for _key, _strength in to_decay:
                 _db.execute(
                     "UPDATE entities SET attributes = json_set(COALESCE(attributes,'{}'), '$.strength', ?) WHERE id = ?",
                     (_strength * 0.5, _key)

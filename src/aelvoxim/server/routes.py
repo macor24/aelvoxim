@@ -114,45 +114,6 @@ async def _require_admin(user: dict = Depends(_verify_key)):
 # ── Public endpoints (no auth required) ──
 
 
-@public_router.get("/public/sentrikit/status")
-async def public_sentrikit_status():
-    """Get SentriKit connection status (no auth required)."""
-    from ..client.sentrikit import get_configured_host, is_available
-    return {"host": get_configured_host(), "available": is_available()}
-
-
-@public_router.post("/public/sentrikit/config")
-async def public_set_sentrikit_config(body: dict, _user: dict = Depends(_verify_key)):
-    """Set SentriKit host URL (requires auth)."""
-    host = body.get("host", "").strip()
-    if not host:
-        raise HTTPException(400, detail="host is required")
-    from ..client.sentrikit import set_host, is_available
-    set_host(host)
-    return {"host": host, "available": is_available()}
-
-
-@public_router.post("/public/sentrikit/key")
-async def public_set_sentrikit_key(body: dict, _user: dict = Depends(_verify_key)):
-    """Set SentriKit API key (requires auth)."""
-    api_key = body.get("api_key", "").strip()
-    if not api_key:
-        raise HTTPException(400, detail="api_key is required")
-    from ..client.sentrikit import set_api_key
-    set_api_key(api_key)
-    return {"status": "ok", "message": "SentriKit API key saved"}
-
-
-@public_router.post("/public/sentrikit/test")
-async def public_test_sentrikit(body: dict, _user: dict = Depends(_verify_key)):
-    """Test SentriKit connection (requires auth)."""
-    from ..client.sentrikit import test_connection
-    result = test_connection(
-        host=body.get("host", ""),
-        api_key=body.get("api_key", ""),
-    )
-    return result
-
 
 @public_router.post("/public/llm/test")
 async def public_test_llm(body: dict, _user: dict = Depends(_verify_key)):

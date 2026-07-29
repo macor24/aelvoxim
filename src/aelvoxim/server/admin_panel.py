@@ -120,37 +120,47 @@ def _selfmodel_status() -> dict[str, Any]:
         "overall_grade": "N/A",
         "improvement_index": 0.0,
         "weekly_comparison": {},
+        "curiosity": {},  # curiosity diversity metrics
     }
 
     try:
         from aelvoxim.core.selfmodel import SelfModel
 
         sm = SelfModel()
-        scores = sm.scores() if hasattr(sm, "scores") else {}
-        if not scores:
+        caps = sm.capabilities() if hasattr(sm, "capabilities") else {}
+        if not caps:
             return out
 
         out["available"] = True
         cap_list = []
-        for domain, info in scores.items():
+        for domain, info in caps.items():
             cap_list.append(
                 {
                     "domain": domain,
-                    "score": round(info.get("score", 0) * 100, 1),
-                    "confidence": round(info.get("confidence", 0) * 100, 1),
-                    "grade": info.get("grade", "?"),
-                    "trend": info.get("trend", "→"),
+                    "score": round(info.get("success_rate", 0) * 100, 1),
+                    "confidence": round(info.get("success_rate", 0) * 100, 1),
+                    "grade": "A" if info.get("success_rate", 0) >= 0.9 else "B" if info.get("success_rate", 0) >= 0.7 else "C" if info.get("success_rate", 0) >= 0.5 else "D",
+                    "trend": "+" if info.get("beta", 2) <= 2 else "-" if info.get("beta", 0) / max(info.get("alpha", 1), 1) > 0.5 else "→",
                 }
             )
         out["capabilities"] = cap_list
 
-        grade = getattr(sm, "overall_grade", None)
-        if grade:
-            out["overall_grade"] = grade
+        # Load curiosity diversity metrics
+        try:
+            from aelvoxim.learn.curiosity import get_curiosity_stats
+            out["curiosity"] = get_curiosity_stats()
+        except Exception:
+            pass
 
-        imp_idx = getattr(sm, "improvement_index", None)
-        if imp_idx is not None:
-            out["improvement_index"] = round(imp_idx, 3)
+        try:
+            _grade = sm.overall_grade()
+            if isinstance(_grade, dict):
+                out["overall_grade"] = _grade.get("grade", "N/A")
+                out["improvement_index"] = _grade.get("score", 0)
+            else:
+                out["overall_grade"] = str(_grade)
+        except Exception:
+            pass
 
         weekly = getattr(sm, "weekly_comparison", None)
         if callable(weekly):

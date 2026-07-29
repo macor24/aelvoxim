@@ -15,7 +15,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from .search import search as _search
+from .search import search as _search, search_with_variants
 from ..utils import read_json, LLM_CONFIG_FILE
 
 
@@ -121,7 +121,7 @@ def content_has_real_value(content: str) -> bool:
     if is_generic_template_output(content):
         return False
 
-    # Reject beginner-level tutorial indicators
+    # Reject beginner-level tutorial indicators — only if content also lacks tech keywords
     _BEGINNER_PATTERNS = [
         r'\bin this (beginner|introductory|basic)\b',
         r'\blearn (how to|the basics|the fundamentals)\b',
@@ -132,7 +132,10 @@ def content_has_real_value(content: str) -> bool:
     ]
     beginner_hits = sum(1 for p in _BEGINNER_PATTERNS if re.search(p, content, re.I))
     if beginner_hits >= 2:
-        return False
+        # Only reject if no technical keywords present
+        from .validate import _has_technical_keywords
+        if not _has_technical_keywords(content, min_count=1):
+            return False
 
     signals = 0
     # Specific data/numbers
@@ -382,12 +385,20 @@ def _refine_to_qa(query: str, content: str) -> str:
     return f"Q: {q}\nA: {a}"
 
 
+def _enrich_query(query: str, phase_name: str = "") -> str:
+    """Append domain keywords to improve search recall."""
+    _DOMAIN_KW = " implementation tutorial example code algorithm architecture configuration API benchmark deployment pipeline framework best practice pattern"
+    if phase_name in ("practice", "implementation", "code"):
+        return query + _DOMAIN_KW
+    return query
+
+
 def extract_knowledge(query: str, phase_name: str) -> Optional[str]:
     """Multi-layer knowledge extraction with LLM-first hypothesis.
 
     New pipeline:
     1. LLM generates knowledge hypothesis about the topic
-    2. Search internet to verify the hypothesis
+    2. Search internet (with enriched query) to verify the hypothesis
     3. Compare hypothesis with search results
     4. Return verified knowledge (or None if unverifiable)
     """
@@ -399,9 +410,10 @@ def extract_knowledge(query: str, phase_name: str) -> Optional[str]:
         # unavailable e.g. in WSL/China networks).
         # Quality gates (300 chars + technical keywords + Judge) in validate.py
         # still apply in execute_and_validate().
-        # Try to enhance with search if available, but don't block on it.
+        # Try to enhance with enriched search if available, but don't block on it.
         try:
-            results = _search(query, max_results=5)
+            enriched_query = _enrich_query(query, phase_name)
+            results = search_with_variants(enriched_query, max_results=5)
             is_mock = False
             if results:
                 first_snippet = results[0].get("snippet", "")
@@ -422,9 +434,10 @@ def extract_knowledge(query: str, phase_name: str) -> Optional[str]:
 
 
 def _search_and_refine(query: str, phase_name: str) -> Optional[str]:
-    """Fallback: search internet then refine with LLM."""
+    """Fallback: search internet (with enriched query) then refine with LLM."""
     try:
-        results = _search(query, max_results=5)
+        enriched_query = _enrich_query(query, phase_name)
+        results = search_with_variants(enriched_query, max_results=5)
         is_mock = False
         if results:
             first_snippet = results[0].get("snippet", "")

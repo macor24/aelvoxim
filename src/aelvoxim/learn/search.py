@@ -28,6 +28,94 @@ from typing import Any, Dict, List, Optional
 import logging
 _log = logging.getLogger("aelvoxim.learn.search")
 
+# ── Query variant generation ──────────────────
+
+
+def generate_query_variants(original_query: str, n: int = 3) -> list[str]:
+    """Generate up to n semantic variants of the original query.
+
+    Strategies:
+      1. Synonym substitution (technical terms)
+      2. Domain suffix addition ("best practices", "examples", "guide")
+      3. Core noun extraction (remove stop words)
+
+    Returns deduplicated list, always including the original query first.
+    """
+    variants: list[str] = [original_query]
+
+    # Strategy 1: synonym substitution
+    synonym_map = {
+        "optimization": ["tuning", "performance improvement", "enhancement"],
+        "profiling": ["monitoring", "analysis", "benchmarking"],
+        "detection": ["finding", "identification", "diagnosis"],
+        "thread": ["multithreading", "concurrent", "parallel"],
+        "memory": ["RAM", "heap", "allocation"],
+        "network": ["TCP/IP", "latency", "bandwidth"],
+        "deploy": ["release", "rollout", "ship"],
+        "config": ["setup", "settings", "configuration"],
+        "debug": ["troubleshoot", "diagnose", "fix"],
+        "performance": ["speed", "throughput", "efficiency"],
+    }
+    words = original_query.split()
+    new_words: list[str] = []
+    for w in words:
+        w_lower = w.lower()
+        if w_lower in synonym_map:
+            new_words.append(random.choice(synonym_map[w_lower]))
+        else:
+            new_words.append(w)
+    joined = " ".join(new_words)
+    if joined != original_query:
+        variants.append(joined)
+
+    # Strategy 2: domain suffix
+    if len(variants) < n:
+        suffix = random.choice([" techniques", " best practices", " examples", " guide"])
+        variants.append(original_query + suffix)
+
+    # Strategy 3: core noun extraction (remove stop words)
+    if len(variants) < n:
+        stop_words = {"the", "a", "with", "using", "for", "and", "of", "in", "to", "an"}
+        core = [w for w in words if w.lower() not in stop_words]
+        if len(core) < len(words) and core:
+            variants.append(" ".join(core))
+
+    # Deduplicate (case-insensitive)
+    seen: set[str] = set()
+    unique: list[str] = []
+    for v in variants:
+        key = v.lower().strip()
+        if key not in seen:
+            seen.add(key)
+            unique.append(v)
+    return unique[:max(n, 1)]
+
+
+def _score_result(result: dict, query: str) -> float:
+    """Compute a simple relevance score (0.0–1.0) for a search result against the query."""
+    title = (result.get("title") or "").lower()
+    snippet = (result.get("snippet") or "").lower()
+    query_lower = query.lower()
+    query_terms = query_lower.split()
+
+    if not query_terms:
+        return 0.5
+
+    # Term overlap in title (weight 50%)
+    title_matches = sum(1 for t in query_terms if t in title)
+    title_score = title_matches / len(query_terms) if query_terms else 0.0
+
+    # Term overlap in snippet (weight 30%)
+    snippet_matches = sum(1 for t in query_terms if t in snippet)
+    snippet_score = snippet_matches / len(query_terms) if query_terms else 0.0
+
+    # Bonus: exact phrase match in title (weight 20%)
+    phrase_bonus = 1.0 if query_lower in title else 0.0
+
+    score = title_score * 0.50 + snippet_score * 0.30 + phrase_bonus * 0.20
+    return round(min(max(score, 0.0), 1.0), 4)
+
+
 # ── Engine config ───────────────────────────────
 
 BING_API_KEY = os.environ.get("AELVOXIM_BING_API_KEY", os.environ.get("METACORE_BING_API_KEY", ""))
@@ -390,16 +478,36 @@ def _mock_search(query: str, max_results: int = 5) -> List[Dict[str, str]]:
 # ── Unified entry ───────────────────────────────
 
 
+def _add_scores(results: list, query: str) -> list:
+    """Add a 'score' field (0.0–1.0) to each search result."""
+    out = []
+    for r in results:
+        r = dict(r)
+        r["score"] = _score_result(r, query)
+        out.append(r)
+    return out
+
+
 def search(query: str, max_results: int = 5,
            engine: str = "") -> List[Dict[str, str]]:
-    """Search the web. Returns [{title, snippet, url}].
+    """Search the web. Returns [{title, snippet, url, score}].
+
+    Each result carries a 'score' field (0.0–1.0) computed from
+    term-overlap relevance against the query.
 
     Degradation chain:
       1. Specified engine (bing/duckduckgo/bing_cn/media/mock)
       2. Env var AELVOXIM_SEARCH_ENGINE
       3. Auto degrade: Bing -> DuckDuckGo -> Bing CN -> Mock
     """
-    # Default: Bing API -> Mock (no HTML scrape unless explicitly enabled)
+    # Collect raw results from the selected engine
+    raw = _search_internal(query, max_results, engine)
+    return _add_scores(raw, query)
+
+
+def _search_internal(query: str, max_results: int = 5,
+                     engine: str = "") -> list:
+    """Internal: run search engine chain, return raw [{title,snippet,url}]."""
     if engine == "default":
         if _HTML_SCRAPE_ENABLED:
             for fn in [_bing_cn_search, _so_search, _duckduckgo_search, _bing_search]:
@@ -417,7 +525,6 @@ def search(query: str, max_results: int = 5,
     if engine == "mock":
         return _mock_search(query, max_results)
 
-    # Authoritative media search (whitelist domains only)
     if engine == "media":
         if not _HTML_SCRAPE_ENABLED:
             r = _bing_search(query, max_results)
@@ -433,7 +540,6 @@ def search(query: str, max_results: int = 5,
                 return r
         return _mock_search(query, max_results)
 
-    # Bing
     if engine == "bing":
         results = _bing_search(query, max_results)
         if results:
@@ -446,7 +552,6 @@ def search(query: str, max_results: int = 5,
                 return r
         return _mock_search(query, max_results)
 
-    # Bing China (direct access from China)
     if engine == "bing_cn":
         if not _HTML_SCRAPE_ENABLED:
             r = _bing_search(query, max_results)
@@ -462,7 +567,6 @@ def search(query: str, max_results: int = 5,
                 return r
         return _mock_search(query, max_results)
 
-    # DuckDuckGo
     if engine == "duckduckgo":
         if not _HTML_SCRAPE_ENABLED:
             r = _bing_search(query, max_results)
@@ -489,6 +593,37 @@ def search(query: str, max_results: int = 5,
         if r:
             return r
     return _mock_search(query, max_results)
+
+
+def search_with_variants(query: str, max_results: int = 5,
+                         engine: str = "", max_variants: int = 3) -> List[Dict[str, str]]:
+    """Search with query variant expansion. Returns deduplicated scored results.
+
+    Generates 2-3 semantic variants of the query, searches each,
+    deduplicates by URL (keeping highest score), and returns top results
+    sorted by score descending.
+    """
+    variants = generate_query_variants(query, n=max_variants)
+    _log.info("Search variants: %s", variants)
+
+    all_results: list[dict] = []
+    for q in variants:
+        try:
+            res = search(q, max_results=max_results, engine=engine)
+            all_results.extend(res)
+        except Exception:
+            _log.exception("search_with_variants error for variant: %s", q)
+
+    # Deduplicate by URL (keep highest score)
+    seen: dict[str, dict] = {}
+    for r in all_results:
+        key = r.get("url") or r.get("title", "")
+        if key not in seen or (r.get("score", 0) or 0) > (seen[key].get("score", 0) or 0):
+            seen[key] = r
+
+    final = sorted(seen.values(), key=lambda x: x.get("score", 0) or 0, reverse=True)
+    _log.info("Search variants best score: %.4f", final[0]["score"] if final else 0.0)
+    return final[:max_results]
 
 
 def get_available_engines() -> list:

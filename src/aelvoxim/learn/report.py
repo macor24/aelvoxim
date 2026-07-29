@@ -85,7 +85,7 @@ def update_daily_brain_report(cognition_report, direction_manager, learner_ref) 
             f"## Goal Tracking\n"
             f"{goal_lines or 'No active goals'}\n\n"
             f"## Security\n"
-            f"- SentriKit: offline (local mode active)\n\n"
+            f"- Security: local checks active\n\n"
             f"*Auto-generated at {datetime.now().strftime('%H:%M')}*\n"
         )
 

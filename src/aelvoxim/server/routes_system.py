@@ -375,11 +375,8 @@ async def health_check():
     except Exception as e:
         result["dependencies"]["sqlite"] = {"status": "error", "detail": "db_error"}
         result["status"] = "degraded"
-    try:
-        from ..client.sentrikit import is_available
-        result["dependencies"]["sentrikit"] = {"status": "ok" if is_available() else "unavailable"}
-    except Exception:
-        result["dependencies"]["sentrikit"] = {"status": "unavailable"}
+    # SentriKit removed — it is an independent project with its own API.
+    result["dependencies"]["sentrikit"] = {"status": "removed"}
     try:
         from ..learn.learner import get_learner
         l = get_learner()
@@ -459,10 +456,22 @@ async def get_selfmodel(user: dict = Depends(_verify_key)):
     try:
         from ..core.selfmodel import SelfModel
         sm = SelfModel()
+        grade = sm.overall_grade() if hasattr(sm, "overall_grade") else {"grade": "N/A", "score": 0}
         return {
-            "grade": sm.overall_grade() if hasattr(sm, "overall_grade") else "N/A",
+            "overall_grade": grade.get("grade", "N/A") if isinstance(grade, dict) else str(grade),
+            "improvement_index": grade.get("score", 0) if isinstance(grade, dict) else 0,
+            "available": len(sm._capabilities) > 0,
+            "capabilities": [
+                {
+                    "domain": k,
+                    "score": round(v.success_rate * 100),
+                    "grade": "A" if v.success_rate >= 0.9 else "B" if v.success_rate >= 0.7 else "C" if v.success_rate >= 0.5 else "D",
+                    "trend": "+" if v.beta <= 2 else "-" if v.beta / max(v.alpha, 1) > 0.5 else "→",
+                    "confidence": round((v.alpha / max(v.alpha + v.beta, 1)) * 100),
+                }
+                for k, v in sm._capabilities.items()
+            ] if sm._capabilities else [],
             "decisions": len(sm._decisions),
-            "capabilities": len(sm._capabilities),
             "snapshots": len(sm._snapshots),
         }
     except Exception:

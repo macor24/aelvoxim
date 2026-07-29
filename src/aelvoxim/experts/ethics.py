@@ -3,7 +3,7 @@ metacore.experts.ethics — Ethics Expert with 15-rule ethical screening.
 
 Evaluates ethical implications using a priority matrix and
 sensitive pattern detection across 15 categories.
-Pure rule-based — does NOT call SentriKit.
+Pure rule-based — local safety checks only.
 """
 
 from __future__ import annotations

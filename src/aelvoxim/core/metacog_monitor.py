@@ -157,11 +157,22 @@ class MetaCogMonitor:
                     reason=f"Learner tick {_hb_age:.0f}s ago",
                 ))
                 report["score"] = max(report["score"], 0.1)
-        elif learner_stats:
-            # Fallback: score from learner cycle stats
-            total = learner_stats.get("total_cycles", 1)
-            entries = learner_stats.get("total_entries", 0)
-            report["score"] = min(1.0, entries / max(total, 1))
+        # Score from SelfModel learning capability (reflects true success rate)
+        if learner_stats:
+            try:
+                from aelvoxim.core.selfmodel import SelfModel
+                _sm = SelfModel()
+                _lc = _sm._capabilities.get("learning")
+                if _lc and _lc.task_count > 0:
+                    report["score"] = min(1.0, _lc.success_rate)
+                else:
+                    total = learner_stats.get("total_cycles", 1)
+                    entries = learner_stats.get("total_entries", 0)
+                    report["score"] = min(1.0, entries / max(total, 1))
+            except Exception:
+                total = learner_stats.get("total_cycles", 1)
+                entries = learner_stats.get("total_entries", 0)
+                report["score"] = min(1.0, entries / max(total, 1))
 
         # 4. Low-confidence streak for L6 breaker
         if report["score"] < _get_low_confidence_threshold():

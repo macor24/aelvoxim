@@ -210,7 +210,7 @@ class FactCrossVerifier:
         "^TCP$", "^UDP$", "^OAuth", "^JWT$", "^CORS$",
         "^AI$", "^ML$", "^LLM$", "^NLP$",
         "^Linux", "^Windows", "^MacOS", "^Unix$",
-        "^Aelvoxim", "^MetaCore", "^SentriKit", "^CodeNova",
+        "^Aelvoxim", "^MetaCore", "^CodeNova",
         "^DeepSeek", "^ChatGPT", "^OpenAI",
         "^v\\d", "^V\\d",
     ]
@@ -501,13 +501,12 @@ class ConsistencyChecker:
 class SafetyComplianceFilter:
     """Re-scan stored knowledge for security compliance issues.
 
-    Checks: PII leaks, dangerous instructions, SentriKit re-verification,
+    Checks: PII leaks, dangerous instructions,
     memory poisoning, expired secrets.
     """
 
     def __init__(self, log_func=None):
         self._log = log_func or (lambda msg: None)
-        self._sentrikit_available: Optional[bool] = None
 
     @staticmethod
     def _scan_text(text: str, patterns: List[str]) -> List[str]:
@@ -600,14 +599,14 @@ class SafetyComplianceFilter:
             except Exception:
                 _log.exception("post_validation error")
 
-        # 5. SentriKit re-check (only for high-confidence entries)
+        # 5. Safety re-check (only for high-confidence entries)
         if entry.get("confidence", 0.5) >= 0.8:
-            sk_result = self._call_sentrikit(entry)
+            sk_result = self._recheck_entry(entry)
             if sk_result and not sk_result.get("allowed", True):
                 issues.append(AuditIssue(
                     entry_id=eid, entry_title=title,
-                    dimension="sentrikit_blocked", severity="P0",
-                    detail=f"SentriKit re-check blocked: {sk_result.get('reason', '')[:80]}",
+                    dimension="safety_blocked", severity="P0",
+                    detail=f"Safety re-check blocked: {sk_result.get('reason', '')[:80]}",
                     confidence_impact=-0.4,
                     suggestion="isolate",
                     matched_content=str(sk_result.get("reason", ""))[:80],
@@ -615,8 +614,8 @@ class SafetyComplianceFilter:
 
         return issues
 
-    def _call_sentrikit(self, entry: dict) -> Optional[dict]:
-        """Call SentriKit safety check for a stored entry."""
+    def _recheck_entry(self, entry: dict) -> Optional[dict]:
+        """Local safety re-check for a stored entry."""
         try:
             from ..client.security_gate import check_evolution as _sk_check
             text = f"{entry.get('title','')}: {entry.get('summary','')}"

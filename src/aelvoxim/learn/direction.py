@@ -7,6 +7,8 @@ Responsibility: LearningDirection dataclass, DirectionManager CRUD, config persi
 from __future__ import annotations
 
 import json
+import logging
+import time
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from pathlib import Path
@@ -21,7 +23,6 @@ _log = logging.getLogger("aelvoxim.learn.direction")
 # ── Data paths ──
 LEARNER_DIR = METACORE_DIR / "learner"
 CONFIG_FILE = LEARNER_DIR / "config.json"
-_SENTRIKIT_CHECKED = False
 
 
 def _ensure_learner_dir() -> None:
@@ -143,6 +144,7 @@ class DirectionManager:
         self._directions: Dict[str, LearningDirection] = {}
         self._log = log_func
         self._plan_getter = plan_getter  # optional callable → plan name
+        self._creation_lock: Dict[str, float] = {}  # topic_lower → timestamp, 20-min cooldown
 
     # ── Validation ──
 
@@ -166,11 +168,11 @@ class DirectionManager:
             return False
         return True
 
-    # ── SentriKit safety gate ──
+    # ── Safety gate ──
 
     @staticmethod
     def _safety_check(topic: str) -> bool:
-        """Run SentriKit safety check on a new direction (silent pass on failure)."""
+        """Run local safety check on a new direction (silent pass on failure)."""
         try:
             from ..client.security_gate import check_evolution as _sk_ev
             _sk_r = _sk_ev("add", topic)
@@ -188,7 +190,28 @@ class DirectionManager:
             self._log(f"  🚫 Rejected low-quality direction: {topic}")
             return False
         if topic in self._directions:
+            # Allow re-adding if the existing direction is archived (completed + archived)
+            existing = self._directions[topic]
+            if existing.status != 'archived':
+                return False
+            # Remove archived entry to make room for new one, but enforce 1h cooldown
+            del self._directions[topic]
+            _now = time.time()
+            _key = topic.lower()
+            if _key in self._creation_lock and _now - self._creation_lock[_key] < 3600:
+                self._log(f"  ⏳ [{topic}] Archived cooldown active (1h), blocking re-creation")
+                return False
+        # 20-min creation dedup lock: prevent rapid re-creation of the same topic
+        _key = topic.lower()
+        _now = time.time()
+        if _key in self._creation_lock and _now - self._creation_lock[_key] < 1200:
+            self._log(f"  ⏳ [{topic}] Creation lock active (20-min cooldown)")
             return False
+        self._creation_lock[_key] = _now
+        # Clean stale locks
+        _stale = [k for k, t in self._creation_lock.items() if _now - t > 1200]
+        for k in _stale:
+            self._creation_lock.pop(k, None)
         # Plan limit check
         try:
             from ..server.auth import PLANS
@@ -198,7 +221,7 @@ class DirectionManager:
                 return False
         except Exception:
             _log.exception("direction error")
-        # SentriKit safety check
+        # Safety check
         if not self._safety_check(topic):
             return False
         self._directions[topic] = LearningDirection(
@@ -210,6 +233,8 @@ class DirectionManager:
         if topic not in self._directions:
             return False
         del self._directions[topic]
+        # Record removal for dedup lock (prevent immediate re-creation)
+        self._creation_lock[topic.lower()] = time.time()
         self._log(f"🗑️ Removed learning direction: {topic}")
         return True
 

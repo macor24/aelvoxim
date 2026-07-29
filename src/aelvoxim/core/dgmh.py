@@ -6,7 +6,7 @@ Level 1-3 meta-cognition gates:
 - Level 3: Meta-change proposals (MetaEVOLVE, Judge>=S) requires user authorization
 
 SafetyShield M1-M6 safety barriers.
-Standalone version, no sentrikit dependency.
+Standalone version, no external dependencies.
 """
 
 from __future__ import annotations

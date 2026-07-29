@@ -21,7 +21,6 @@
     "knowledge": "~/.aelvoxim/knowledge/",
     "memory": "~/.aelvoxim/memory/",
     "llm_config": "~/.aelvoxim/llm-config.json",
-    "sentrikit_config": "~/.aelvoxim/sentrikit_config.json",
     "session_store": "frontend/chatael-v2/data/sessions/",
     "message_store": "frontend/chatael-v2/data/messages/"
   },

@@ -181,17 +181,6 @@ class MetaCogTrigger:
             triggers=triggers,
             suggested_actions=actions,
         )
-        # ── SentriKit integration (non-blocking) ──
-        try:
-            from ..client.sentrikit import is_available as _sk_ok, get_status as _sk_st
-            if _sk_ok():
-                _st = _sk_st()
-                if _st and _st.get("metacog", {}).get("should_evolve"):
-                    report.should_evolve = True
-                    report.suggested_actions.insert(0, "consult_sentrikit")
-                    report.suggested_actions.append("align_evolution_schedule")
-        except Exception:
-            _log.exception("metacog error")
         self._history.append(report)
         # ── Persist history to file ──
         try:

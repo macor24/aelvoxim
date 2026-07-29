@@ -327,7 +327,10 @@ class SpaHandler(SimpleHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.end_headers()
-        self.wfile.write(data)
+        try:
+            self.wfile.write(data)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            pass  # client disconnected, safe to ignore
 
     def _json(self, data, status=200):
         self._send(json.dumps(data, ensure_ascii=False).encode("utf-8"), status)

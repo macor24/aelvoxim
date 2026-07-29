@@ -245,30 +245,32 @@
 
 <!-- LLM 状态 & 配置 -->
 <div id="tab-llm" class="tab-content">
-  <div style="margin-bottom:16px;font-size:13px;color:var(--text-secondary)">LLM 服务状态与外部服务配置管理。</div>
-  <div id="llmContainer">
-    <p style="color:var(--text-secondary);font-size:13px">加载中...</p>
-  </div>
-  <div style="margin-top:16px">
-    <button class="action-btn" onclick="showLlmEdit()" style="background:var(--brand-500);color:#fff;padding:6px 14px;border-radius:6px">✏️ 编辑 LLM 配置</button>
-  </div>
-  <hr style="margin:20px 0;border:none;border-top:1px solid var(--border-color)">
+  <div class="container">
+    <div style="margin-bottom:16px;font-size:13px;color:var(--text-secondary)">LLM 服务状态与外部服务配置管理。</div>
+    <div id="llmContainer">
+      <p style="color:var(--text-secondary);font-size:13px">加载中...</p>
+    </div>
+    <div style="margin-top:16px">
+      <button class="action-btn" onclick="showLlmEdit()" style="background:var(--brand-500);color:#fff;padding:6px 14px;border-radius:6px">✏️ 编辑 LLM 配置</button>
+    </div>
+    <hr style="margin:20px 0;border:none;border-top:1px solid var(--border-color)">
 
-  <!-- LLM 模型区块 -->
-  <div class="llm-card">
-    <h3 style="font-size:14px;font-weight:600">🤖 LLM 模型</h3>
-    <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px">已配置的 LLM 模型列表。</div>
-    <div id="llmConfigList"></div>
-  </div>
-  <div class="llm-card" style="margin-top:12px">
-    <h3 style="font-size:14px;font-weight:600">🤖 默认模型 / 回退</h3>
-    <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px">当所有模型不可用时的回退选项。</div>
-    <div id="llmFallbackList">加载中...</div>
+    <!-- LLM 模型区块 -->
+    <div class="llm-card">
+      <h3 style="font-size:14px;font-weight:600">🤖 LLM 模型</h3>
+      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px">已配置的 LLM 模型列表。</div>
+      <div id="llmConfigList"></div>
+    </div>
+    <div class="llm-card" style="margin-top:12px">
+      <h3 style="font-size:14px;font-weight:600">🤖 默认模型 / 回退</h3>
+      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px">当所有模型不可用时的回退选项。</div>
+      <div id="llmFallbackList">加载中...</div>
+    </div>
   </div>
 </div>
-  </div>
 <!-- 学习计划 -->
 <div id="tab-plans" class="tab-content">
+  <div class="container">
     <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
       <button class="action-btn" onclick="loadPlans()" style="background:var(--brand-500);color:#fff;padding:6px 14px;border-radius:6px">🔄 刷新</button>
       <span style="font-size:12px;color:var(--text-secondary)">当前学习计划和进度</span>
@@ -318,16 +320,6 @@
       <div class="stat-card orange"><div class="num" id="cogCycles">-</div><div class="label">Total Cycles</div></div>
       <div class="stat-card purple"><div class="num" id="cogEntries">-</div><div class="label">Knowledge Entries</div></div>
     </div>
-    <div id="cognitiveDirections" class="llm-card" style="margin-bottom:16px">
-      <h3>Learning Directions</h3>
-      <div id="cogDirList" style="margin-top:8px;font-size:12px;color:var(--text-secondary)">Loading...</div>
-    </div>
-    <div class="llm-card" style="margin-bottom:16px">
-      <h3>SelfModel -- Capability Scores <span id="cogOverallGrade" style="font-size:11px;color:var(--text-secondary)"></span></h3>
-      <div id="cogSelfmodelBody" style="margin-top:8px">
-        <p style="font-size:12px;color:var(--text-secondary)">Loading...</p>
-      </div>
-    </div>
     <div class="llm-card" style="margin-bottom:16px">
       <h3>MetaCognition -- Recent Triggers <span id="cogMetaCount" style="font-size:11px;color:var(--text-secondary)"></span></h3>
       <div id="cogMetaBody" style="margin-top:8px;max-height:300px;overflow-y:auto">
@@ -337,6 +329,22 @@
     <div class="llm-card" style="margin-bottom:16px">
       <h3>Subsystem Health</h3>
       <div id="cogHealthBody" class="health-grid" style="margin-top:8px"></div>
+    </div>
+    <div class="llm-card" style="margin-bottom:16px">
+      <h3>SelfModel -- Capability Scores <span id="cogOverallGrade" style="font-size:11px;color:var(--text-secondary)"></span></h3>
+      <div id="cogSelfmodelBody" style="margin-top:8px">
+        <p style="font-size:12px;color:var(--text-secondary)">Loading...</p>
+      </div>
+    </div>
+    <div class="llm-card" style="margin-bottom:16px">
+      <h3>Curiosity -- Branch Diversity <span id="cogCuriosityCount" style="font-size:11px;color:var(--text-secondary)"></span></h3>
+      <div id="cogCuriosityBody" style="margin-top:8px">
+        <p style="font-size:12px;color:var(--text-secondary)">Loading...</p>
+      </div>
+    </div>
+    <div id="cognitiveDirections" class="llm-card" style="margin-bottom:16px">
+      <h3>Learning Directions</h3>
+      <div id="cogDirList" style="margin-top:8px;font-size:12px;color:var(--text-secondary)">Loading...</div>
     </div>
     <div style="margin-top:10px">
       <button class="action-btn" onclick="loadCognitiveStatus()" style="background:var(--brand-500);color:#fff;padding:6px 14px;border-radius:6px">Refresh</button>
@@ -480,7 +488,6 @@ function switchTab(name) {
   document.getElementById('tab-'+name).classList.add('active');
   if (name === 'logs' && _apiKey) loadLogs();
   if (name === 'llm' && _apiKey) loadLlmStatus();
-  if (name === 'sentrikit' && _apiKey) loadSentrikit();
   if (name === 'plans' && _apiKey) loadPlans();
   if (name === 'dashboard' && _apiKey) {
     loadDashboard();
@@ -703,6 +710,32 @@ function loadLlmStatus() {
     }).catch(function(e){
       document.getElementById('llmContainer').innerHTML = '<p style="color:#dc2626">加载失败: ' + (e.message||'未知错误') + '</p>';
     });
+  // 加载 LLM 模型列表
+  fetch('/v1/llm/config', {headers: {'Authorization': 'Bearer ' + _apiKey}})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      var models = d.models || d.config || d;
+      if (!Array.isArray(models)) models = [models];
+      var list = document.getElementById('llmConfigList');
+      if (models.length === 0) {
+        list.innerHTML = '<p style="color:var(--text-secondary);font-size:12px">未配置 LLM 模型</p>';
+        return;
+      }
+      var html = '';
+      models.forEach(function(m, i){
+        var name = m.name || m.model || 'Model '+(i+1);
+        var prov = m.provider || '-';
+        var base = m.base_url || '-';
+        var def = m.is_default ? ' ✅' : '';
+        html += '<div style="padding:8px 0;border-bottom:1px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center">'
+          + '<div><strong>' + esc(name) + '</strong>' + def + '<br><span style="font-size:11px;color:var(--text-secondary)">' + esc(prov) + ' · ' + esc(base) + ' · ' + (m.api_key?'✅ Key 已配置':'❌ 无 Key') + '</span></div>'
+          + '<button class="action-btn edit" onclick="showLlmEditByIndex('+i+')" style="font-size:11px">编辑</button>'
+          + '</div>';
+      });
+      list.innerHTML = html;
+    }).catch(function(){
+      document.getElementById('llmConfigList').innerHTML = '<p style="color:#dc2626;font-size:12px">加载失败</p>';
+    });
 }
 
 // ── LLM 编辑 ──
@@ -773,101 +806,11 @@ function saveLlmConfig() {
     if (d.message || d.success) {
       showToast('LLM 配置已更新', 'success');
       closeLlmEdit();
-      loadSentrikit();
     } else {
       document.getElementById('llmEditErr').textContent = d.detail || '保存失败';
     }
   }).catch(function(){
     document.getElementById('llmEditErr').textContent = '网络错误';
-  });
-}
-
-// ── ⚙️ 配置 ——
-var _skConfig = {};
-
-function loadSentrikit() {
-  document.getElementById('skResult').textContent = '加载中...';
-  // 加载 SentriKit 配置
-  fetch('/v1/sentrikit/config', {headers: {'Authorization': 'Bearer ' + _apiKey}})
-    .then(function(r){return r.json();})
-    .then(function(d){
-      if (d.host) document.getElementById('skHost').value = d.host;
-      document.getElementById('skResult').textContent = '已加载当前配置';
-    }).catch(function(){
-      document.getElementById('skResult').textContent = '加载失败，使用默认值';
-    });
-  // 加载 LLM 模型列表
-  fetch('/v1/llm/config', {headers: {'Authorization': 'Bearer ' + _apiKey}})
-    .then(function(r){return r.json();})
-    .then(function(d){
-      var models = d.models || d.config || d;
-      if (!Array.isArray(models)) models = [models];
-      var list = document.getElementById('llmConfigList');
-      if (models.length === 0) {
-        list.innerHTML = '<p style="color:var(--text-secondary);font-size:12px">未配置 LLM 模型</p>';
-        return;
-      }
-      var html = '';
-      models.forEach(function(m, i){
-        var name = m.name || m.model || 'Model '+(i+1);
-        var prov = m.provider || '-';
-        var base = m.base_url || '-';
-        var def = m.is_default ? ' ✅' : '';
-        html += '<div style="padding:8px 0;border-bottom:1px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center">'
-          + '<div><strong>' + esc(name) + '</strong>' + def + '<br><span style="font-size:11px;color:var(--text-secondary)">' + esc(prov) + ' · ' + esc(base) + ' · ' + (m.api_key?'✅ Key 已配置':'❌ 无 Key') + '</span></div>'
-          + '<button class="action-btn edit" onclick="showLlmEditByIndex('+i+')" style="font-size:11px">编辑</button>'
-          + '</div>';
-      });
-      list.innerHTML = html;
-    }).catch(function(){
-      document.getElementById('llmConfigList').innerHTML = '<p style="color:#dc2626;font-size:12px">加载失败</p>';
-    });
-}
-
-function saveSentrikit() {
-  var host = document.getElementById('skHost').value.trim();
-  var key = document.getElementById('skKey').value.trim();
-  if (!host) { document.getElementById('skResult').textContent = '服务器地址不能为空'; return; }
-  document.getElementById('skResult').textContent = '保存中...';
-  fetch('/v1/sentrikit/config', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json', 'Authorization': 'Bearer ' + _apiKey},
-    body: JSON.stringify({host:host, api_key:key || undefined})
-  }).then(function(r){return r.json();}).then(function(d){
-    if (d.message || d.success) {
-      document.getElementById('skResult').textContent = '✅ 配置已保存';
-      showToast('SentriKit 配置已更新', 'success');
-    } else {
-      document.getElementById('skResult').textContent = '保存失败: ' + (d.detail||'');
-    }
-  }).catch(function(){
-    document.getElementById('skResult').textContent = '网络错误';
-  });
-}
-
-function testSentrikit() {
-  var host = document.getElementById('skHost').value.trim();
-  var key = document.getElementById('skKey').value.trim();
-  document.getElementById('skResult').textContent = '测试中...';
-  // 先保存再测试
-  fetch('/v1/sentrikit/config', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json', 'Authorization': 'Bearer ' + _apiKey},
-    body: JSON.stringify({host:host, api_key:key || undefined})
-  }).then(function(){
-    return fetch('/v1/sentrikit/test', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json', 'Authorization': 'Bearer ' + _apiKey},
-      body: '{}'
-    });
-  }).then(function(r){return r.json();}).then(function(d){
-    if (d.status === 'ok' || d.message) {
-      document.getElementById('skResult').textContent = '✅ 连接成功！';
-    } else {
-      document.getElementById('skResult').textContent = '❌ ' + (d.detail||d.error||'连接失败');
-    }
-  }).catch(function(){
-    document.getElementById('skResult').textContent = '❌ 无法连接到 SentriKit 服务器';
   });
 }
 
@@ -923,7 +866,7 @@ function loadDashboard() {
       html += '<div style="font-size:13px;font-weight:600;margin-bottom:8px;color:var(--text-primary)">服务状态</div>';
       html += '<div class="health-grid" style="margin-bottom:16px">';
       var services = d.services || {};
-      var svcOrder = ['API 9701','ChatAEL 9702','9705 Gateway','8899 SentriKit','5432 PostgreSQL'];
+      var svcOrder = ['API 9701','ChatAEL 9702','9705 Gateway','5432 PostgreSQL'];
       svcOrder.forEach(function(name){
         var status = services[name] || 'offline';
         var dotColor = status === 'online' ? 'green' : (status === 'offline' ? 'red' : 'yellow');
@@ -1141,6 +1084,23 @@ function loadCognitiveStatus() {
         smBody.innerHTML = html;
       } else {
         smBody.innerHTML = '<p style="font-size:12px;color:var(--text-secondary)">SelfModel data not available yet. Scores accumulate as the system learns.</p>';
+      }
+
+      // Curiosity diversity
+      var cur = d.selfmodel.curiosity || {};
+      var curBody = document.getElementById('cogCuriosityBody');
+      document.getElementById('cogCuriosityCount').textContent = 'Total: ' + (cur.total_picks||0);
+      if (cur.total_picks > 0) {
+        var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px">'
+          + '<div style="background:var(--bg-surface);border-radius:6px;padding:8px"><span style="color:var(--text-secondary)">Total Picks</span><br><strong style="font-size:18px">'+esc(cur.total_picks||'0')+'</strong></div>'
+          + '<div style="background:var(--bg-surface);border-radius:6px;padding:8px"><span style="color:var(--text-secondary)">Seed → Derived → Branch</span><br><strong style="font-size:18px">'+esc(cur.seed_picks||'0')+' → '+esc(cur.derived_picks||'0')+' → '+esc(cur.branch_picks||'0')+'</strong></div>'
+          + '<div style="background:var(--bg-surface);border-radius:6px;padding:8px"><span style="color:var(--text-secondary)">Unique Topics</span><br><strong style="font-size:18px">'+esc(cur.unique_topics||'0')+'</strong></div>'
+          + '<div style="background:var(--bg-surface);border-radius:6px;padding:8px"><span style="color:var(--text-secondary)">Branch Depth</span><br><strong style="font-size:18px">'+esc(cur.branch_depth||'0')+'</strong></div>'
+          + '</div>'
+          + '<div style="font-size:10px;color:var(--text-secondary);margin-top:4px">Last topic: ' + esc(cur.last_topic||'--') + '</div>';
+        curBody.innerHTML = html;
+      } else {
+        curBody.innerHTML = '<p style="font-size:12px;color:var(--text-secondary)">No curiosity picks yet. Branches grow as completed directions are explored.</p>';
       }
 
       // MetaCognition

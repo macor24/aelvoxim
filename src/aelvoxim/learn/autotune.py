@@ -177,9 +177,17 @@ def _decide_adjustments(metrics: List[Dict], learner,
         # Skip directions with disable_auto_resume flag
         _skip_resume = {t for t, d in learner._directions.items()
                         if getattr(d, 'disable_auto_resume', False)}
+        # Skip directions in circuit breaker cooldown
+        _now_ts = time.time()
+        _in_cooldown = {t for t, d in learner._directions.items()
+                        if getattr(d, '_circuit_state', '') in ('OPEN', 'HALF_OPEN', 'FROZEN')
+                        or getattr(d, 'fail_cooldown_until', 0) > _now_ts}
         # Try to resume a paused direction with most entries (most promising)
         paused = sorted(
-            [(t, d) for t, d in learner._directions.items() if d.status == "paused" and t not in _skip_resume],
+            [(t, d) for t, d in learner._directions.items()
+             if d.status == "paused"
+             and t not in _skip_resume
+             and t not in _in_cooldown],
             key=lambda x: x[1].entries_created,
             reverse=True,
         )

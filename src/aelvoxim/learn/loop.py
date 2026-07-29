@@ -321,6 +321,18 @@ class Learner:
             q = json.loads(direction.task_queue)
             while q:
                 t = q.pop(0)
+                # Skip tasks in 10min cooldown (3x qskip)
+                _skip_until = json.loads(getattr(direction, '_task_skip_until', '{}'))
+                if t in _skip_until and time.time() < _skip_until[t]:
+                    continue
+                # Cooldown expired — enrich task with keyword supplement for retry
+                if t in _skip_until:
+                    _enriched = t + " (with implementation details, code examples, configuration, deployment guide, best practices, troubleshooting)"
+                    if _enriched not in json.loads(direction.completed_tasks or "[]"):
+                        t = _enriched
+                        # Clear cooldown record so retry is tracked as fresh
+                        del _skip_until[t]
+                        direction._task_skip_until = json.dumps(_skip_until)
                 if t not in json.loads(direction.completed_tasks or "[]"):
                     direction.current_task = t
                     direction.task_queue = json.dumps(q)
@@ -344,6 +356,9 @@ class Learner:
         def on_store(topic, title, score):
             direction.entries_created += 1
             direction.cycles_completed += 1
+            direction.fail_streak = 0  # reset fail streak on any success
+            direction._cooldown_count = 0  # reset cooldown backoff on success
+            direction._quality_skip_streak = 0  # reset quality skip counter on success
             done = json.loads(direction.completed_tasks or "[]")
             done.append(task)
             direction.completed_tasks = json.dumps(done)
@@ -389,6 +404,35 @@ class Learner:
                 _reason_cat = "quality"
             elif any(k in _task_lower for k in _search_kw):
                 _reason_cat = "search_empty"
+            # Quality and validation skips don't trigger circuit breaker, but cap consecutive attempts
+            _is_quality_skip = _reason_cat in ('quality', 'validation')
+            if _is_quality_skip:
+                direction.fail_streak = max(0, direction.fail_streak - 1)
+                # Per-task quality skip tracking: 3 skips for the same task → 10min cooldown
+                _task_qskip = json.loads(getattr(direction, '_task_quality_skip', '{}'))
+                _task_qskip[task] = _task_qskip.get(task, 0) + 1
+                direction._task_quality_skip = json.dumps(_task_qskip)
+                # Check if this task hit 3 qskips
+                if _task_qskip[task] >= 3:
+                    _task_skip_until = json.loads(getattr(direction, '_task_skip_until', '{}'))
+                    _task_skip_until[task] = time.time() + 600  # 10min cooldown for this task
+                    direction._task_skip_until = json.dumps(_task_skip_until)
+                    self._log(f"  🛑 [{topic}] Task '{task[:30]}' hit {_task_qskip[task]}x qskip — 10min cooldown")
+                else:
+                    self._log(f"  ⏭️ [{topic}] Skip ({direction.fail_streak}/3 task_qskip={_task_qskip[task]}, {_reason_cat}): {task}")
+                # Also track direction-level qskip for overall pause
+                _q_skip = getattr(direction, '_quality_skip_streak', 0) + 1
+                direction._quality_skip_streak = _q_skip
+                if _q_skip >= 5:
+                    direction.status = "paused"
+                    direction._circuit_state = "OPEN"
+                    _prev = getattr(direction, '_cooldown_count', 0)
+                    direction._cooldown_count = _prev + 1
+                    direction.fail_cooldown_until = time.time() + 600 * (2 ** min(_prev, 4))
+                    self._dir_mgr.save()
+                    self._log(f"  🛑 [{topic}] {_q_skip}x quality skips — pausing (cooldown={600 * (2 ** min(_prev, 4))}s)")
+                return result
+
             # Update fail_by_reason dict
             _reasons = {}
             if direction.fail_by_reason:
@@ -404,13 +448,32 @@ class Learner:
             direction.current_task = ""
             self._dir_mgr.save()
 
-            # ── Hard retry limit: max 3 per topic, then 60-min cooldown ──
+            # ── Circuit breaker: 3 fails → OPEN, 10-min cooldown; HALF_OPEN fail → permanent freeze ──
             _threshold = 3
 
             if _fail_streak >= _threshold:
                 direction.status = "paused"
-                # 60-minute cooldown before allowing retry
-                direction.fail_cooldown_until = time.time() + 3600
+                direction._circuit_state = getattr(direction, '_circuit_state', '')
+                # If already HALF_OPEN and still failing → permanent freeze
+                if direction._circuit_state == "HALF_OPEN":
+                    direction.disable_auto_resume = True
+                    direction._circuit_state = "FROZEN"
+                    self._dir_mgr.save()
+                    self._log(f'  🧊 [{topic}] HALF_OPEN failed — permanently frozen')
+                    return result
+                direction._circuit_state = "OPEN"
+                # Exponential backoff: 10min, 20min, 40min, 80min, 160min...
+                _prev_cooldowns = getattr(direction, '_cooldown_count', 0)
+                direction._cooldown_count = _prev_cooldowns + 1
+                _backoff = 600 * (2 ** min(_prev_cooldowns, 4))  # 10min × 2^n
+                direction.fail_cooldown_until = time.time() + _backoff
+                # Keyword supplementation: enrich search terms to reduce future rejections
+                if 'missing_domain_keyword' in str(_reasons):
+                    _existing = json.loads(getattr(direction, 'keywords', '[]') or '[]')
+                    _new_kw = ['algorithm', 'implementation', 'analysis',
+                               'architecture', 'performance', 'optimization',
+                               'method', 'framework', 'design pattern']
+                    direction.keywords = json.dumps(list(set(_existing + _new_kw)))
                 self._dir_mgr.save()
                 # Log with reason breakdown
                 _reason_detail = "; ".join(f"{k}={v}" for k, v in sorted(_reasons.items()))
@@ -509,6 +572,10 @@ class Learner:
             self._log(f"  ⚠️ [{topic}] Progress check: verify_rate={verify_pass_rate:.2f} < expected={expected_min:.2f} "
                       f"after {direction.cycles_completed} cycles — flagging for review")
             direction.status = "paused"
+            direction._circuit_state = "OPEN"
+            _prev_cooldowns = getattr(direction, '_cooldown_count', 0)
+            direction._cooldown_count = _prev_cooldowns + 1
+            direction.fail_cooldown_until = time.time() + 600 * (2 ** min(_prev_cooldowns, 4))
             self._dir_mgr.save()
             return True
         if direction.cycles_completed > 10 and direction.saturation < 0.3:
@@ -680,6 +747,13 @@ class Learner:
                 if _tr_hit > 0:
                     _names = [getattr(t, 'signal_name', '?') for t in getattr(_mc_report, 'triggers', []) if getattr(t, 'triggered', False)]
                     self._log(f"  🔔 MetaCogTrigger: {_tr_hit}/{_tr_all} signals triggered — {_names}")
+                # Sync SelfModel capabilities from actual BeliefPool data
+                try:
+                    sm.update_capabilities_from_history(
+                        [r.to_dict() for r in getattr(_trigger, '_history', [])]
+                    )
+                except Exception:
+                    _log.exception("loop error")
             except Exception:
                 _mc_report = None
             # ── Memory maintenance (every cognition tick) ──
@@ -741,12 +815,12 @@ class Learner:
             except Exception:
                 _log.exception("loop error")
 
-            # ── Bayesian belief update for each active direction ──
+            # ── Bayesian belief update for all directions with outcomes ──
             try:
                 from ..core.belief import BeliefPool
                 _bp = BeliefPool()
                 for _t, _d in getattr(self, '_directions', {}).items():
-                    if _d.status == "active" and _d.cycles_completed > 0:
+                    if _d.cycles_completed > 0:
                         _bp.record_learner_cycle(_t, _d.entries_created, _d.cycles_completed)
             except Exception:
                 _log.exception("loop error")
@@ -985,8 +1059,16 @@ class Learner:
                     if not self._running:
                         break
                     if direction.status != "active":
+                        # HALF_OPEN circuit breaker: test paused directions after cooldown
+                        if direction.status == "paused" and getattr(direction, '_circuit_state', '') == "OPEN":
+                            _cooldown = getattr(direction, "fail_cooldown_until", 0)
+                            if _cooldown <= time.time():
+                                direction._circuit_state = "HALF_OPEN"
+                                direction.status = "active"
+                                self._dir_mgr.save()
+                                self._log(f'  🔓 [{topic}] HALF_OPEN — testing with lightweight task')
                         continue
-                    # Cooldown check: skip if within 30-min failure cooldown
+                    # Cooldown check: skip if within cooldown
                     _cooldown = getattr(direction, "fail_cooldown_until", 0)
                     if _cooldown > time.time():
                         continue
@@ -1030,6 +1112,19 @@ class Learner:
                     except Exception:
                         pass
 
+                # ── Stale direction cleanup ──
+                if len(self._directions) >= 12:
+                    stale = [t for t, d in self._directions.items()
+                             if d.status in ('paused', 'pending') and
+                             getattr(d, 'cycles_completed', 0) == 0 and
+                             getattr(d, 'entries_created', 0) == 0]
+                    for t in stale[:max(0, len(self._directions) - 10)]:
+                        self._directions.pop(t, None)
+                        self._log(f'  🗑️ Removed stale direction (cap): {t}')
+                    if stale:
+                        self._dir_mgr.save()
+                        self._log(f'  💾 Direction config saved after cleanup')
+
                 # Check reviews
                 if check_reviews(self._directions, self._dir_mgr.save, self._log):
                     continue
@@ -1044,30 +1139,43 @@ class Learner:
                     setattr(self, '_last_pending_eid', pmt_state.get('_last_pending_eid', ""))
                     continue
 
+                # ── Stale direction cleanup ──
+                if len(self._directions) >= 12:
+                    stale = [t for t, d in self._directions.items()
+                             if d.status in ('paused', 'pending') and
+                             getattr(d, 'cycles_completed', 0) == 0 and
+                             getattr(d, 'entries_created', 0) == 0]
+                    # Paused directions stuck with cycles but zero entries
+                    stuck_paused = [t for t, d in self._directions.items()
+                                    if d.status == 'paused' and
+                                    getattr(d, 'cycles_completed', 0) >= 5 and
+                                    getattr(d, 'entries_created', 0) == 0]
+                    for t in stale[:max(0, len(self._directions) - 10)]:
+                        self._directions.pop(t, None)
+                        self._log(f'  🗑️ Removed stale direction (cap): {t}')
+                    for t in stuck_paused[:max(0, len(self._directions) - 10)]:
+                        self._directions.pop(t, None)
+                        self._log(f'  🗑️ Removed stuck paused direction: {t}')
+                    if stale or stuck_paused:
+                        self._dir_mgr.save()
+                        self._log(f'  💾 Direction config saved after cleanup')
+
+                # ── Archive high-saturation completed directions ──
+                if len(self._directions) >= 12:
+                    _high_sat = [(t, d) for t, d in self._directions.items()
+                                 if d.status == 'completed' and d.started_at and
+                                 d.saturation >= 0.75 and
+                                 getattr(d, 'current_task', '') == '']
+                    if _high_sat:
+                        _to_archive = _high_sat[:max(1, len(self._directions) - 10)]
+                        for t, d in _to_archive:
+                            d.status = 'archived'  # keep record, prevent re-creation
+                            self._dir_mgr._creation_lock[t.lower()] = time.time()  # 1h cooldown on re-creation
+                        self._dir_mgr.save()
+                        self._log(f'  🗂️ Archived {len(_to_archive)} high-sat completed directions')
+
                 # No active directions — review mode, curiosity, or auto-discover
                 if not any_active:
-
-                    # ── Archive old completed directions to free space ──
-                    try:
-                        from ..server.auth import PLANS
-                        _plan_name = getattr(self, '_current_plan', 'community')
-                        _max_dir = PLANS.get(_plan_name, PLANS['community']).get('max_directions', 100)
-                        _threshold = int(_max_dir * 0.8)
-                        if len(self._directions) >= _threshold:
-                            # Sort completed directions by started_at, archive oldest ones
-                            _completed = [(t, d) for t, d in self._directions.items()
-                                          if d.status == 'completed' and d.started_at]
-                            _n_to_free = len(self._directions) - _threshold + 10  # free ~10% headroom
-                            if _n_to_free > 0 and _completed:
-                                _completed.sort(key=lambda x: x[1].started_at)
-                                _archived = 0
-                                for t, d in _completed[:_n_to_free]:
-                                    self._dir_mgr.remove(t)
-                                    _archived += 1
-                                self._dir_mgr.save()
-                                self._log(f'  🗂️ Archived {_archived} old completed directions ({len(self._directions)} remaining)')
-                    except Exception:
-                        _log.exception("loop error")
 
                     # Curiosity engine: pick next topic from seeds or derive
                     try:
@@ -1085,9 +1193,7 @@ class Learner:
                     except Exception:
                         _log.exception("loop error")
 
-                    if len(self._directions) >= 20:
-                        self._log(f'  ℹ️ {len(self._directions)} directions exist, skipping self-heal')
-                    else:
+                    if len(self._directions) < 20:
                         try:
                             if self._monitor:
                                 fixes = self._monitor.tick()

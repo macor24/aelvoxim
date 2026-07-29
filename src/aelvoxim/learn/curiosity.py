@@ -41,9 +41,97 @@ _INTEREST_SEEDS: List[str] = [
 
 # Track which seeds have been picked — stored as a simple set of completed topic names
 _SEEDS_DONE: Set[str] = set()
+# Track derived topics to prevent self-loop
+_DERIVED_DONE: Set[str] = set()
+# 120-second short-term dedup: suppress redundant derived topic output
+_DERIVED_RECENT: Dict[str, float] = {}
+_DERIVED_DEDUP_TTL = 120
 # Cache: topics that failed to add (e.g. due to plan limit) — skip for a while
 _FAILED_TOPICS: Dict[str, float] = {}
 _FAILED_TTL = 300  # re-try after 5 minutes
+
+# ── Exploration circuit breaker ─────────────────────────
+# 20 consecutive rounds with no new derived topic → switch seed
+_EMPTY_ROUNDS: int = 0
+_EMPTY_LIMIT = 20
+_CUR_SEED_INDEX: int = 0  # current seed position for forced switch
+
+# ── Diversity metrics ───────────────────────────────────
+_CURIOSITY_STATS: Dict[str, float] = {
+    "total_picks": 0.0,
+    "seed_picks": 0.0,
+    "derived_picks": 0.0,
+    "branch_picks": 0.0,
+    "unique_topics": 0.0,
+    "empty_rounds": 0.0,
+    "last_topic": "",
+    "branch_depth": 0.0,
+}  # accessible via get_curiosity_stats()
+
+def get_curiosity_stats() -> Dict[str, float]:
+    """Return current curiosity diversity metrics for dashboard display."""
+    return dict(_CURIOSITY_STATS)
+
+# ── Domain branch expansion rules ──────────────────────────
+# Known root topics → realistic sub-topics for curiosity to explore
+_BRANCH_RULES: Dict[str, List[str]] = {
+    "python": [
+        "Python syntax and data structures",
+        "Python asynchronous programming",
+        "Python numerical computation and NumPy",
+        "Python machine learning and scikit-learn",
+        "Python deep learning and PyTorch",
+        "Python web development and FastAPI",
+        "Python testing and pytest",
+        "Python package management and pip",
+        "Python performance optimization and profiling",
+        "Python object-oriented programming",
+    ],
+    "large language model": [
+        "Transformer architecture and attention mechanisms",
+        "LLM fine-tuning and instruction tuning",
+        "LLM quantization and model compression",
+        "Prompt engineering and chain-of-thought",
+        "Retrieval augmented generation pipelines",
+        "LLM safety and alignment",
+        "Multi-modal LLMs and vision-language models",
+        "LLM evaluation and benchmarks",
+    ],
+    "reinforcement learning": [
+        "Q-learning and value-based methods",
+        "Policy gradient and actor-critic methods",
+        "Deep reinforcement learning with DQN",
+        "Proximal policy optimization algorithms",
+        "Multi-agent reinforcement learning",
+        "Inverse reinforcement learning",
+        "Reward model training and RLHF",
+    ],
+    "quantum": [
+        "Quantum circuit design and simulation",
+        "Quantum gate decomposition and transpilation",
+        "Variational quantum algorithms and VQE",
+        "Quantum error correction codes",
+        "Quantum machine learning models",
+        "Quantum optimization and QAOA",
+        "Quantum hardware and noise mitigation",
+    ],
+    "neural network": [
+        "Feedforward neural networks and backpropagation",
+        "Convolutional neural networks for vision",
+        "Recurrent neural networks and LSTMs",
+        "Attention mechanisms and transformers",
+        "Graph neural networks",
+        "Neural architecture search",
+        "Regularization and dropout techniques",
+    ],
+    "bayesian": [
+        "Bayesian inference and MCMC methods",
+        "Probabilistic programming with PyMC",
+        "Gaussian processes and Bayesian optimization",
+        "Hierarchical Bayesian models",
+        "Variational inference and VI",
+    ],
+}
 
 
 def pick_next_topic(
@@ -60,6 +148,23 @@ def pick_next_topic(
     Returns a topic string, or None.
     """
     existing_names = set(existing_directions.keys())
+    _now = time.time()
+
+    def _record_pick(topic: str, pick_type: str) -> str:
+        """Track diversity metrics for dashboard."""
+        global _EMPTY_ROUNDS
+        _EMPTY_ROUNDS = 0  # any successful pick resets empty counter
+        _CURIOSITY_STATS["total_picks"] += 1
+        _CURIOSITY_STATS[f"{pick_type}_picks"] = _CURIOSITY_STATS.get(f"{pick_type}_picks", 0.0) + 1.0
+        _CURIOSITY_STATS["last_topic"] = topic
+        if topic not in _DERIVED_DONE:
+            _CURIOSITY_STATS["unique_topics"] += 1.0
+        # Branch depth: count how many branch rules were consumed for this root
+        for root, branches in _BRANCH_RULES.items():
+            if root in topic.lower():
+                _consumed = sum(1 for b in branches if b in _DERIVED_DONE)
+                _CURIOSITY_STATS["branch_depth"] = max(_CURIOSITY_STATS["branch_depth"], float(_consumed))
+        return topic
 
     # 1. Check seeds
     for seed in _INTEREST_SEEDS:
@@ -72,20 +177,61 @@ def pick_next_topic(
         if not already_learning and seed not in _SEEDS_DONE:
             _SEEDS_DONE.add(seed)
             log_func(f"  🧠 [Curiosity] Picked seed: {seed}")
-            return seed
+            return _record_pick(seed, "seed")
 
     # 2. Derive from completed directions
     completed = [
         name for name, d in existing_directions.items()
         if getattr(d, 'status', '') in ('completed', 'mastery')
-    ]
+    ] + list(_SEEDS_DONE)
     if completed:
         # Pick the most recently completed one
         target = completed[-1]
         derived = derive_topics(target, existing_names)
         if derived:
-            log_func(f"  🧠 [Curiosity] Derived from '{target}': {derived[0]}")
-            return derived[0]
+            # Dedup: skip if already derived or within 120s window
+            for d in derived:
+                if d in _DERIVED_DONE:
+                    continue
+                if d in _DERIVED_RECENT and _now - _DERIVED_RECENT[d] < _DERIVED_DEDUP_TTL:
+                    continue
+                _DERIVED_RECENT[d] = _now
+                _DERIVED_DONE.add(d)
+                log_func(f"  🧠 [Curiosity] Derived from '{target}': {d}")
+                return _record_pick(d, "derived")
+            return None
+        # Fallback: branch rules for known root topics
+        for root, branches in _BRANCH_RULES.items():
+            if root in target.lower():
+                for b in branches:
+                    if b in _DERIVED_DONE:
+                        continue
+                    if b in _DERIVED_RECENT and _now - _DERIVED_RECENT[b] < _DERIVED_DEDUP_TTL:
+                        continue
+                    _DERIVED_RECENT[b] = _now
+                    _DERIVED_DONE.add(b)
+                    log_func(f"  🧠 [Curiosity] Branch from '{target}': {b}")
+                    return _record_pick(b, "branch")
+
+    # ── Exploration circuit breaker ──
+    global _EMPTY_ROUNDS, _CUR_SEED_INDEX
+    _EMPTY_ROUNDS += 1
+    # Also record emptiness metric
+    _CURIOSITY_STATS["empty_rounds"] = float(_EMPTY_ROUNDS)
+    if _EMPTY_ROUNDS >= _EMPTY_LIMIT:
+        _EMPTY_ROUNDS = 0
+        _CUR_SEED_INDEX += 1
+        # Try the next seed that hasn't been done
+        for i in range(5):  # try up to 5 ahead
+            idx = (_CUR_SEED_INDEX + i) % len(_INTEREST_SEEDS)
+            forced = _INTEREST_SEEDS[idx]
+            if forced not in _SEEDS_DONE:
+                already = any(s.lower() in forced.lower() or forced.lower() in s.lower() for s in existing_names)
+                if not already:
+                    _CUR_SEED_INDEX = idx
+                    _SEEDS_DONE.add(forced)
+                    log_func(f"  🔄 [Curiosity] Circuit breaker — forced switch to seed: {forced}")
+                    return _record_pick(forced, "seed")
 
     return None
 
@@ -96,6 +242,8 @@ def derive_topics(completed_topic: str, existing_names: Set[str]) -> List[str]:
     Scans knowledge entries whose topic matches `completed_topic`, extracts
     capitalized noun phrases (potential concept names), filters out already-learned
     topics, and returns the top 2 candidates.
+
+    Forbids returning the original root topic to prevent self-loop.
     """
     from .knowledge import KnowledgeBase
 
@@ -105,14 +253,15 @@ def derive_topics(completed_topic: str, existing_names: Set[str]) -> List[str]:
         return []
 
     candidates: Counter = Counter()
+    root_lower = completed_topic.lower()
     for e in entries:
         title = e.get("title", "") or ""
         content = (e.get("content") or e.get("summary") or "")[:500]
         text = f"{title} {content}"
 
-        # Extract capitalized noun phrases (2-5 words, first letter uppercase)
-        # e.g. "Tool Use", "Shor's Algorithm", "Gradient Descent"
-        phrases = re.findall(r'\b[A-Z][a-z]+(?:\s+(?:[A-Z][a-z]+|\d+[a-z]*)){0,3}', text)
+        # Extract capitalized noun phrases and lowercase sub-topic references
+        # e.g. "Tool Use", "Shor's Algorithm", "Gradient Descent", "async/await"
+        phrases = re.findall(r'\b[A-Z][a-z]+(?:\s+(?:[A-Z][a-z]+|\d+[a-z]*)){0,3}|\b[a-z]+\s+(?:implementation|patterns|algorithms|functions|techniques|optimization|programming)\b', text)
         for phrase in phrases:
             phrase = phrase.strip()
             if len(phrase) < 5 or len(phrase) > 60:
@@ -129,11 +278,64 @@ def derive_topics(completed_topic: str, existing_names: Set[str]) -> List[str]:
                 continue
             if phrase.lower() in existing_names:
                 continue
+            # Forbid self-loop: skip if phrase is same as or too similar to root topic
+            _pl = phrase.lower().strip()
+            _rl = root_lower.strip()
+            if _pl == _rl or _pl.startswith(_rl) and len(_pl) < len(_rl) + 10:
+                continue
             candidates[phrase] += 1
 
-    # Return top 2 candidates that appear more than once
-    top = [p for p, _ in candidates.most_common(5) if _ > 1][:2]
-    return top
+    # Score candidates for relevance and expansion value
+    scored = []
+    for phrase, freq in candidates.items():
+        score = _score_derived_topic(phrase, root_lower, freq)
+        if score >= 2.0:  # minimum quality threshold
+            scored.append((phrase, score))
+    scored.sort(key=lambda x: x[1], reverse=True)
+    return [p for p, _ in scored[:2]]
+
+
+def _score_derived_topic(phrase: str, root_lower: str, freq: int) -> float:
+    """Score a candidate derived topic for relevance, expansion value, and uniqueness.
+
+    Returns a score >= 0. Higher is better. Minimum threshold is 2.0.
+    """
+    pl = phrase.lower()
+    score = 0.0
+
+    # 1. Frequency bonus (appeared in multiple KB entries)
+    score += min(freq, 5) * 1.0
+
+    # 2. Topic relevance: shares significant words with root
+    root_words = set(root_lower.split())
+    phrase_words = set(pl.split())
+    common = root_words & phrase_words
+    if common:
+        score += len(common) * 0.5
+
+    # 3. Expansion potential: multi-word phrases are better
+    word_count = len(pl.split())
+    score += min(word_count, 5) * 0.3
+
+    # 4. Penalty for vague/short phrases
+    vague = {'introduction', 'overview', 'basics', 'fundamentals', 'getting started',
+             'quick start', 'what is', 'how to', 'guide', 'tutorial'}
+    if any(v in pl for v in vague):
+        score -= 1.0
+
+    # 5. Penalty for near-duplicates of root (too similar = no expansion)
+    similarity = len(set(pl.split()) & set(root_lower.split())) / max(len(set(pl.split()) | set(root_lower.split())), 1)
+    if similarity > 0.7:
+        score -= 2.0
+
+    # 6. Technical depth: has technical keywords
+    tech = {'algorithm', 'architecture', 'implementation', 'optimization', 'framework',
+            'protocol', 'pipeline', 'analysis', 'system', 'model', 'network', 'learning',
+            'programming', 'design', 'pattern', 'testing', 'deployment', 'integration'}
+    if any(t in pl for t in tech):
+        score += 1.0
+
+    return round(score, 1)
 
 
 def activate_curiosity(

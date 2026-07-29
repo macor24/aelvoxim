@@ -234,16 +234,9 @@ def _mask_api_key(text: str) -> str:
 
 def run_safety_check(user_msg: str, user: dict) -> Optional[dict]:
     """Local safety check — block common dangerous patterns.
-    Falls back silently when SentriKit is unavailable.
+    Falls back safely when no remote safety service is available.
     # Also checks prompt injection via content_filter (env-toggle: AELVOXIM_CONTENT_FILTER).
     """
-    try:
-        from ..client.sentrikit import check_user_input as _sk_check
-        _sk_result = _sk_check(user_msg)
-        if not _sk_result.get("allowed", True):
-            return _sk_result
-    except Exception:
-        _log.exception("service_chat error")
     # Content filter prompt injection check
     try:
         if os.environ.get("AELVOXIM_CONTENT_FILTER", "").lower() in ("true", "1", "yes"):
@@ -253,7 +246,7 @@ def run_safety_check(user_msg: str, user: dict) -> Optional[dict]:
                 return {"allowed": False, "reason": f"Content filter blocked: {verdict.reason}"}
     except Exception:
         _log.exception("service_chat error")
-    # Local keyword-based safety check (SentriKit unavailable fallback)
+    # Local keyword-based safety check
     _blocked_keywords = [
         "ignore all previous instructions", "ignore all prior",
         "你是一个", "system prompt:", "你是",
@@ -565,10 +558,7 @@ def inject_memory_context(user_msg: str, user: dict, extra_context: str) -> str:
 
 def inject_security_context(extra_context: str) -> str:
     try:
-        from ..client.sentrikit import is_available as _sk_ok
-        _sk_connected = _sk_ok()
-        sk_line = "Connected" if _sk_connected else "Not connected"
-        extra_context += f"\n[Security]\nSentriKit: {sk_line}\n"
+        extra_context += f"\n[Security]\nLocal check: active\n"
     except Exception:
         _log.exception("service_chat error")
     return extra_context

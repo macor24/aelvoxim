@@ -213,10 +213,13 @@ def check_pending_promotions(
         success = llm_verify_practice(entry, log_func)
         result = KnowledgeBase.practice_verify(eid, success)
 
-        # L2: Stale result detection
+        # L2: Stale result detection — only discard if entry exists but is genuinely stale
         r_pc = result.get('practice_count', 0)
         r_fc = result.get('failed_count', 0)
         if r_pc == 0 and r_fc == 0:
+            # Entry was already removed (approved/rejected/promoted), skip silently
+            if 'error' in result or 'approved' in result or 'validated' in result:
+                return True
             KnowledgeBase.discard_pending(eid)
             log_func(f"  🗑️ [Pending] Stale result (0/0), discard: {title}")
             return True
@@ -226,6 +229,13 @@ def check_pending_promotions(
         if r_pc == 5 or r_fc >= 10 or (r_pc + r_fc) % 3 == 0:
             log_func(f"  {status} [Pending] Practice result for '{title}': "
                      f"{r_pc}/5 (failed={r_fc})")
+        # Write ≥3/5 passes to belief pool
+        if r_pc >= 3 and success:
+            try:
+                from ..core.belief import BeliefPool
+                BeliefPool().record_outcome(f"practice:{title[:40]}", True)
+            except Exception:
+                pass
         return True
     except AttributeError as _ae:
         log_func(f"  ⚠️ [Pending] Method missing: {_ae}")

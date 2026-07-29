@@ -2,7 +2,7 @@
 
 Self-awareness: capability profile + decision log + state snapshot + bottleneck analysis.
 Hot-update capabilities (evolve without changing code, only strategy params).
-Standalone, no sentrikit dependency.
+Standalone, no external dependencies.
 """
 
 from __future__ import annotations
@@ -178,6 +178,7 @@ class SelfModel:
             "robustness": 0.20, "reusability": 0.15, "cost_risk": 0.20,
         }
         self._load()
+        self._sync_belief_from_pool()
 
     # ── Capability profile ───────────────────────────────
 
@@ -190,9 +191,15 @@ class SelfModel:
 
     def update_capabilities_from_history(self, history: List[Dict]) -> None:
         from collections import defaultdict
+        from datetime import datetime
         tasks_by_type: Dict[str, List[Dict]] = defaultdict(list)
+        
+        # Also sync belief_health from BeliefPool
+        self._sync_belief_from_pool()
         for task in history:
-            tt = task.get("task_type", "query")
+            tt = task.get("task_type")
+            if not tt or "status" not in task:
+                continue  # skip reports without explicit task tracking
             tasks_by_type[tt].append(task)
 
         for tt, tasks in tasks_by_type.items():
@@ -283,6 +290,21 @@ class SelfModel:
 
         self._save()
         self.take_snapshot()
+
+
+    # ── Retrieval tracking ─────────────────────────────
+
+    def record_retrieval_outcome(self, search_source: str, success: bool) -> None:
+        """Record a search/retrieval outcome for the 'retrieval' capability."""
+        cap = self._capabilities.get("retrieval")
+        if not cap:
+            cap = CapabilityScore(success_rate=0.0, task_count=0, alpha=1, beta=1)
+            self._capabilities["retrieval"] = cap
+        cap.record_outcome(success)
+        cap.last_success = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cap.avg_latency = search_source
+        cap.success_rate = round(cap.alpha / (cap.alpha + cap.beta), 2)
+        self._save()
 
 
     def compute_learning_effectiveness(self) -> Dict[str, float]:
@@ -402,7 +424,6 @@ class SelfModel:
                 self.weights = saved_weights
         except Exception:
             pass  # non-critical, continue
-
     def _save(self) -> None:
         fp = self.project_dir / "selfmodel.json"
         fp.parent.mkdir(parents=True, exist_ok=True)
@@ -414,6 +435,31 @@ class SelfModel:
         }
         with open(fp, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2, default=str)
+
+    def _sync_belief_from_pool(self) -> None:
+        """Sync belief_health capability from BeliefPool. Called at init and each cognition tick."""
+        try:
+            from datetime import datetime
+            from ..core.belief import BeliefPool
+            bp = BeliefPool()
+            pool_units = bp._units if hasattr(bp, '_units') else {}
+            learner_units = {k: v for k, v in pool_units.items()
+                           if not k.startswith('hypothesis:')}
+            if learner_units:
+                successes = sum(u.alpha - 1 for u in learner_units.values())
+                total_tasks = successes + sum(u.beta - 1 for u in learner_units.values())
+                rate = successes / max(total_tasks, 1)
+                self._capabilities['belief_health'] = CapabilityScore(
+                    success_rate=round(rate, 2),
+                    task_count=total_tasks,
+                    avg_latency='',
+                    last_success=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    alpha=successes + 1,
+                    beta=(total_tasks - successes) + 1,
+                )
+        except Exception:
+            _log.warning("_sync_belief_from_pool: BeliefPool sync failed")
+            pass
 
     def _calc_overall_success_rate(self) -> float:
         scores = [s.success_rate for s in self._capabilities.values()]
