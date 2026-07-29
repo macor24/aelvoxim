@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Message } from '../types/chat';
 import { getIsolationSuffix } from './authStore';
+import { useAuthStore } from './authStore';
 
 function storageKey(): string {
   return 'chatael_messages' + getIsolationSuffix();
@@ -17,34 +18,18 @@ function saveStreams(streams: Record<string, Message[]>) {
   try { localStorage.setItem(storageKey(), JSON.stringify(streams)); } catch {}
 }
 
-/** API key for PG sync */
-function apiKey(): string {
-  try {
-    const raw = localStorage.getItem('chatael_tenants');
-    if (!raw) return '';
-    const tenants = JSON.parse(raw);
-    return tenants?.[0]?.apiKey || '';
-  } catch { return ''; }
-}
-
-/** Sync messages for a session to PG */
+/** API key + baseUrl for PG sync */
 function syncToPG(sessionId: string, messages: Message[]) {
-  const key = apiKey();
-  if (!key) return;
-  fetch('http://127.0.0.1:9702/api/sessions/sync', {
+  const tenant = useAuthStore.getState().getActiveTenant();
+  if (!tenant.apiKey) return;
+  const baseUrl = (tenant.apiUrl || 'http://8.134.185.33:9701').replace(/\/+$/, '');
+  const msgs = messages.map(m => ({
+    role: m.role, content: m.content, timestamp: m.timestamp,
+  }));
+  fetch(`${baseUrl}/v1/chat/sessions/${sessionId}/messages`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-    body: JSON.stringify({
-      session: {
-        id: sessionId,
-        title: '',
-        messages: messages.map(m => ({
-          role: m.role,
-          content: m.content,
-          timestamp: m.timestamp,
-        })),
-      },
-    }),
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tenant.apiKey}` },
+    body: JSON.stringify({ messages: msgs }),
   }).catch(() => {});
 }
 

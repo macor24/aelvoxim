@@ -234,6 +234,32 @@ async def delete_session(session_id: str, user: dict = Depends(_verify_key)):
     return {"success": ok}
 
 
+@router.post("/chat/sessions/{session_id}/messages")
+async def sync_session_messages(
+    session_id: str,
+    body: dict,
+    user: dict = Depends(_verify_key),
+):
+    """Batch-sync messages for a session from frontend to PG."""
+    from ..storage.db import save_message_to_pg
+    messages = body.get("messages", [])
+    uid = str(user.get("id") or user.get("user_id", ""))
+    saved = 0
+    for msg in messages:
+        role = msg.get("role", "user")
+        content = msg.get("content", "")
+        if not content:
+            continue
+        try:
+            save_message_to_pg(session_id, role, content, user_id=uid)
+            saved += 1
+        except PermissionError:
+            raise HTTPException(403, detail="session does not belong to user")
+        except Exception:
+            pass
+    return {"success": True, "saved": saved}
+
+
 @router.post("/llm/chat/stream")
 async def llm_chat_stream(
     request: dict,

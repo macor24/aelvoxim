@@ -74,10 +74,9 @@ interface SessionState {
 
 export const useSessionStore = create<SessionState>((set, get) => {
   const sessions = ensureSession(loadSessions());
-  // Lazily merge backend sessions on first access
-  setTimeout(() => {
-    const key = apiKey();
-    if (!key) return;
+  // Merge backend sessions from PG (immediate, no delay)
+  const key = apiKey();
+  if (key) {
     import('../services/chatHistory').then(({ fetchSessions }) => {
       fetchSessions().then(backendSessions => {
         if (!backendSessions || backendSessions.length === 0) return;
@@ -103,7 +102,7 @@ export const useSessionStore = create<SessionState>((set, get) => {
         }
       }).catch(() => {});
     });
-  }, 1000);
+  }
   return {
     sessions,
     activeSessionId: sessions[0]?.id || null,
