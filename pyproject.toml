@@ -31,7 +31,7 @@ dependencies = [
 
 [project.optional-dependencies]
 pg = ["psycopg2-binary>=2.9.0"]
-test = ["pytest>=7.0", "httpx>=0.28.1"]
+test = ["pytest>=9.1.1", "httpx>=0.28.1"]
 dev = ["aelvoxim[pg,test]", "build>=1.5.0", "twine>=4.0"]
 full = ["aelvoxim[pg]"]
 
