@@ -26,7 +26,7 @@ classifiers = [
 dependencies = [
     "bcrypt>=4.0.0",
     "fastapi>=0.100.0",
-    "uvicorn[standard]>=0.51.0",
+    "uvicorn[standard]>=0.52.0",
 ]
 
 [project.optional-dependencies]
