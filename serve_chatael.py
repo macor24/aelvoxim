@@ -394,25 +394,25 @@ class SpaHandler(SimpleHTTPRequestHandler):
 
     def _serve_static(self):
         from urllib.parse import unquote
-        import posixpath
         raw = self.path.split("?")[0]
         # Decode percent-encoding BEFORE any traversal checks so encoded
         # ".." (%2e%2e) cannot bypass the guard.
         path = unquote(raw).lstrip("/")
         if not path:
             path = "index.html"
-        # Normalize and verify the resolved path stays inside DIST.
-        norm = posixpath.normpath(path)
-        if norm.startswith("..") or norm.startswith("/") or norm.startswith("~"):
-            self._send(b"Not found", 404)
-            return
-        file = (DIST / norm).resolve()
-        # Path traversal guard (defense in depth)
+        # Resolve against the static root and verify containment with
+        # commonpath (CodeQL-recognized guard): the real file must stay
+        # inside DIST, otherwise it is an attempted traversal.
+        root = os.path.realpath(DIST)
+        file = os.path.realpath(os.path.join(root, path))
         try:
-            file.relative_to(DIST.resolve())
+            if os.path.commonpath([file, root]) != root:
+                self._send(b"Not found", 404)
+                return
         except ValueError:
             self._send(b"Not found", 404)
             return
+        file = Path(file)
         if file.exists() and file.is_file():
             content_type = {
                 ".html": "text/html",
