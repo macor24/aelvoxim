@@ -401,10 +401,13 @@ class SpaHandler(SimpleHTTPRequestHandler):
         if not path:
             path = "index.html"
         # Resolve against the static root and verify containment with
-        # commonpath (CodeQL-recognized guard): the real file must stay
+        # a prefix guard (CodeQL-recognized): the real file must stay
         # inside DIST, otherwise it is an attempted traversal.
         root = os.path.realpath(DIST)
         file = os.path.realpath(os.path.join(root, path))
+        if not (file == root or file.startswith(root + os.sep)):
+            self._send(b"Not found", 404)
+            return
         try:
             if os.path.commonpath([file, root]) != root:
                 self._send(b"Not found", 404)
