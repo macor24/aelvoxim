@@ -393,15 +393,21 @@ class SpaHandler(SimpleHTTPRequestHandler):
         return ""
 
     def _serve_static(self):
-        path = self.path.split("?")[0].lstrip("/")
+        from urllib.parse import unquote
+        import posixpath
+        raw = self.path.split("?")[0]
+        # Decode percent-encoding BEFORE any traversal checks so encoded
+        # ".." (%2e%2e) cannot bypass the guard.
+        path = unquote(raw).lstrip("/")
         if not path:
             path = "index.html"
-        # Block path traversal characters early
-        if ".." in path or path.startswith("/") or path.startswith("~"):
+        # Normalize and verify the resolved path stays inside DIST.
+        norm = posixpath.normpath(path)
+        if norm.startswith("..") or norm.startswith("/") or norm.startswith("~"):
             self._send(b"Not found", 404)
             return
-        file = (DIST / path).resolve()
-        # Path traversal guard
+        file = (DIST / norm).resolve()
+        # Path traversal guard (defense in depth)
         try:
             file.relative_to(DIST.resolve())
         except ValueError:

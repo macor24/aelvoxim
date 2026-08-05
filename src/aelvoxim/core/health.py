@@ -269,5 +269,7 @@ def get_pg_status() -> dict:
             fetch_one("SELECT 1")
             return {"up": True, "version": "16+pgvector"}
         return {"up": False, "error": "PG not configured"}
-    except Exception as e:
-        return {"up": False, "error": str(e)[:60]}
+    except Exception:
+        # Do NOT leak connection error details (DSN host/user) to clients —
+        # health endpoints are unauthenticated. Fixed message only.
+        return {"up": False, "error": "PG unavailable"}
