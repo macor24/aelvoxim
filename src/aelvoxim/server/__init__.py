@@ -78,6 +78,26 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # ── Request timing middleware: record arrival + processing time for
+    # every request. Lets us align "chat timeout" windows with background
+    # activity (learner etc.) in the logs.
+    import time as _req_time
+    _req_log = logging.getLogger("aelvoxim.request")
+
+    @app.middleware("http")
+    async def _timing_middleware(request, call_next):
+        _t0 = _req_time.time()
+        try:
+            response = await call_next(request)
+        except Exception:
+            _req_log.info("req %s %s t=%.3fs status=ERR",
+                          request.method, request.url.path, _req_time.time() - _t0)
+            raise
+        _req_log.info("req %s %s t=%.3fs status=%d",
+                      request.method, request.url.path, _req_time.time() - _t0,
+                      response.status_code)
+        return response
+
     app.include_router(router)
     app.include_router(public_router)
     app.include_router(chimera_router)
@@ -166,17 +186,18 @@ def create_app() -> FastAPI:
             import logging
             logging.getLogger("aelvoxim.server").exception("startup: edition injection failed")
 
-        # Start Learner
+        # Start Learner — MOVED to standalone process (learn_worker.py /
+        # systemd aelvoxim-learner). Running it inside the API process made
+        # background LLM calls compete with user chat requests for GIL and
+        # model channel, causing chat timeouts. Keep this block as a no-op
+        # guard so old deployments that still expect it don't break.
         try:
             from aelvoxim.learn.learner import get_learner, LEARNER_DIR
             LEARNER_DIR.mkdir(parents=True, exist_ok=True)
             (LEARNER_DIR / "enabled.flag").touch()
-            _learner = get_learner()
-            if _learner and not _learner.is_running():
-                _learner.start()
         except Exception:
             import logging
-            logging.getLogger("aelvoxim.server").exception("startup: learner start failed")
+            logging.getLogger("aelvoxim.server").exception("startup: learner guard failed")
 
         # Start ProactiveEngine
         try:
@@ -195,15 +216,16 @@ def create_app() -> FastAPI:
             import logging
             logging.getLogger("aelvoxim.server").exception("startup: watchdog failed")
 
-        # Start Cortex Scheduler (formerly 9703 orchestrator's background tick)
+        # Start Cortex Scheduler — MOVED to learn_worker.py alongside the
+        # learner. Its _submit_task() calls get_learner() in-process, which is
+        # an empty instance now that the learner runs standalone; running it
+        # here would silently drop planner dispatches.
         try:
-            from aelvoxim.cortex.scheduler import Scheduler
-            from aelvoxim.planner import LongTermPlanner
-            _cortex_scheduler = Scheduler(planner=LongTermPlanner())
-            _cortex_scheduler.start()
+            from aelvoxim.learn.learner import LEARNER_DIR
+            LEARNER_DIR.mkdir(parents=True, exist_ok=True)
         except Exception:
             import logging
-            logging.getLogger("aelvoxim.server").exception("startup: cortex scheduler failed")
+            logging.getLogger("aelvoxim.server").exception("startup: scheduler guard failed")
 
         # Start daily backup scheduler
         try:
@@ -212,6 +234,17 @@ def create_app() -> FastAPI:
         except Exception:
             import logging
             logging.getLogger("aelvoxim.server").exception("startup: backup scheduler failed")
+
+    # Graceful shutdown: checkpoint SQLite WAL before exit (best-effort)
+    @app.on_event("shutdown")
+    async def _shutdown_checkpoint():
+        try:
+            from aelvoxim.memory import _get_db as _mem_db
+            conn = _mem_db()
+            conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
+            conn.close()
+        except Exception:
+            pass  # WAL checkpoint is best-effort; do not pollute logs
 
     @app.get("/")
     async def root():
@@ -230,21 +263,13 @@ def create_app() -> FastAPI:
 
     @app.get("/v1")
     async def v1_root():
+        # CodeQL: was returning a full internal endpoint map unauthenticated —
+        # reconnaissance aid. Keep only public identity, no internal routes.
         return {
-            "endpoints": {
-                "health": "GET /v1/health",
-                "register": "POST /v1/auth/register?plan=free",
-                "task_create": "POST /v1/task?goal=...&task_type=learn",
-                "task_status": "GET /v1/task/{task_id}",
-                "memory_read": "GET /v1/memory/{key}",
-                "memory_write": "POST /v1/memory?key=...&value=...",
-                "memory_search": "GET /v1/memory/search?q=...",
-                "config_list": "GET /v1/config",
-                "config_get": "GET /v1/config/{key}",
-                "config_set": "POST /v1/config?key=...&value=...",
-                "user_info": "GET /v1/user/me",
-            },
-            "auth": "Authorization: Bearer <your_api_key>",
+            "name": "Aelvoxim API",
+            "version": "1.0.0",
+            "docs": "/docs",
+            "health": "/v1/health",
         }
 
     @app.get("/api")
@@ -295,10 +320,10 @@ def create_app() -> FastAPI:
         """Proxy tool calls to Windows-MCP via Streamable HTTP."""
         import httpx, json, time, asyncio
         WINDOWS_MCP_KEY = os.environ.get("WINDOWS_MCP_KEY", "")
-        WINDOWS_MCP_URL = os.environ.get("WINDOWS_MCP_URL", "http://172.24.80.1:8000")
-        if not WINDOWS_MCP_KEY:
+        WINDOWS_MCP_URL = os.environ.get("WINDOWS_MCP_URL", "")
+        if not (WINDOWS_MCP_KEY and WINDOWS_MCP_URL):
             from fastapi.responses import JSONResponse
-            return JSONResponse({"success": False, "error": "Windows-MCP not configured (set WINDOWS_MCP_KEY)"}, status_code=500)
+            return JSONResponse({"success": False, "error": "Windows-MCP not configured (set WINDOWS_MCP_KEY and WINDOWS_MCP_URL)"}, status_code=500)
 
         action = body.get("action", "")
         params = body.get("params", {})

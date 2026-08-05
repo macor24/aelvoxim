@@ -1,4 +1,4 @@
-import { useAuthStore } from '../stores/authStore';
+import { useAuthStore, getApiBase } from '../stores/authStore';
 
 export interface BackendSession {
   id: string;
@@ -19,9 +19,9 @@ export async function fetchSessions(limit = 50): Promise<BackendSession[]> {
   const tenant = useAuthStore.getState().getActiveTenant();
   if (!tenant.apiKey) return [];
   try {
-    const baseUrl = (tenant.apiUrl || 'http://8.134.185.33:9701').replace(/\/+$/, '');
+    const baseUrl = getApiBase();
     const res = await fetch(`${baseUrl}/v1/chat/sessions?limit=${limit}`, {
-      headers: { Authorization: `Bearer ${tenant.apiKey}` },
+      headers: { Authorization: 'Bearer ' + tenant.apiKey },
     });
     if (!res.ok) return [];
     const data = await res.json();
@@ -35,9 +35,9 @@ export async function fetchSessionMessages(sessionId: string): Promise<BackendMe
   const tenant = useAuthStore.getState().getActiveTenant();
   if (!tenant.apiKey) return [];
   try {
-    const baseUrl = (tenant.apiUrl || 'http://8.134.185.33:9701').replace(/\/+$/, '');
+    const baseUrl = getApiBase();
     const res = await fetch(`${baseUrl}/v1/chat/sessions/${sessionId}`, {
-      headers: { Authorization: `Bearer ${tenant.apiKey}` },
+      headers: { Authorization: 'Bearer ' + tenant.apiKey },
     });
     if (!res.ok) return [];
     const data = await res.json();
@@ -51,10 +51,10 @@ export async function deleteSession(sessionId: string): Promise<boolean> {
   const tenant = useAuthStore.getState().getActiveTenant();
   if (!tenant.apiKey) return false;
   try {
-    const baseUrl = (tenant.apiUrl || 'http://8.134.185.33:9701').replace(/\/+$/, '');
+    const baseUrl = getApiBase();
     const res = await fetch(`${baseUrl}/v1/chat/sessions/${sessionId}`, {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${tenant.apiKey}` },
+      headers: { Authorization: 'Bearer ' + tenant.apiKey },
     });
     return res.ok;
   } catch {

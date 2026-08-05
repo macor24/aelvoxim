@@ -190,6 +190,17 @@ def call_llm_if_available() -> Optional[Tuple[Any, Any]]:
     return None
 
 
+def _bg_llm(call_fn, *args, **kwargs):
+    """Run a background LLM call under the global concurrency gate.
+
+    Background-only: learner extract/validate/decompose. User chat requests
+    never pass through here. Serializes to one in-flight background model call
+    and gives up after a short timeout instead of queueing behind a busy gate.
+    """
+    from .llm import bg_llm_call
+    return bg_llm_call(call_fn, *args, **kwargs)
+
+
 # ── Extraction layers ─────────────────────
 
 
@@ -232,7 +243,7 @@ def llm_distill(query: str, phase_name: str) -> Optional[str]:
                 "output generic conceptual descriptions — focus on runnable PPO code "
                 "and measurable reward modeling results."
             )
-        text = call_fn(
+        text = _bg_llm(call_fn,
             model=model,
             system_prompt="",
             user_message=prompt,
@@ -268,7 +279,7 @@ def llm_refine_search_with_hypothesis(query, phase_name, hypothesis, results):
             f"3. If there is not enough information, state what is missing.\n"
             f"Include specific tools, patterns, and code practices from search results."
         )
-        text = call_fn(
+        text = _bg_llm(call_fn,
             model=model,
             system_prompt="",
             user_message=prompt,
@@ -299,7 +310,7 @@ def llm_refine_search(query: str, phase_name: str, results: list) -> Optional[st
             f"synthesize a concise technical guide:\n\n{snippets}\n\n"
             f"Include specific tools, patterns, and code practices."
         )
-        text = call_fn(
+        text = _bg_llm(call_fn,
             model=model,
             system_prompt="",
             user_message=prompt,

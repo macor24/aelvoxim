@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, Eye, EyeOff, LogOut } from 'lucide-react';
-import { useAuthStore } from '../../stores/authStore';
+import { useAuthStore, getApiBase } from '../../stores/authStore';
 import type { Tenant } from '../../types/auth';
 
 interface Props {
@@ -143,7 +143,7 @@ export default function AuthModal({ open, onClose }: Props) {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('http://8.134.185.33:9701/v1/auth/login', {
+      const res = await fetch(`${getApiBase()}/v1/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -157,7 +157,7 @@ export default function AuthModal({ open, onClose }: Props) {
         name: email.split('@')[0],
         email: data.email || email,
         apiKey: key,
-        apiUrl: 'http://8.134.185.33:9701',
+        apiUrl: getApiBase(),
       };
       addTenant(tenant);
       setActiveTenant(tenant.id);
@@ -177,7 +177,7 @@ export default function AuthModal({ open, onClose }: Props) {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('http://8.134.185.33:9701/v1/auth/register', {
+      const res = await fetch(`${getApiBase()}/v1/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, plan: 'community' }),

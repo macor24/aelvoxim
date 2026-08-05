@@ -12,6 +12,7 @@ import re
 from typing import Dict, List, Optional
 
 from .search import search as _search
+from .llm import bg_llm_call as _bg_llm
 
 
 # ── Generic category fallback ─────────────
@@ -146,7 +147,7 @@ def _decompose_with_llm(topic: str, log_func) -> Optional[List[str]]:
             "- Output as a JSON array of strings, nothing else\n\n"
             f"Topic: {topic}"
         )
-        text = call_fn(
+        text = _bg_llm(call_fn,
             model=model,
             user_message=prompt,
             system_prompt="You are a technical task decomposer.",

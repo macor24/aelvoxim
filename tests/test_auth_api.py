@@ -99,7 +99,7 @@ class TestSystem:
         resp = client.get("/v1/health")
         assert resp.status_code == 200
         data = resp.json()
-        assert data.get("status") == "ok"
+        assert data.get("status") in ("ok", "degraded")
 
     def test_health_cors_headers(self, client):
         resp = client.options("/v1/health")

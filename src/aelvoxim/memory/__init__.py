@@ -35,6 +35,21 @@ _local = threading.local()
 _fusion = MemoryFusion()
 
 
+def _clean_stale_sqlite_files(path: str) -> None:
+    """Remove orphaned .rollback, -wal, -shm files from prior crashes.
+
+    These files are safe to delete ONLY when no other process holds the DB open.
+    On server restart this is always the case.
+    """
+    import glob, os as _os
+    for suffix in (".rollback", "-wal", "-shm"):
+        for f in glob.glob(path + suffix):
+            try:
+                _os.remove(f)
+            except OSError:
+                pass
+
+
 def _get_db() -> sqlite3.Connection:
     conn = getattr(_local, "conn", None)
     if conn is None:
@@ -43,7 +58,29 @@ def _get_db() -> sqlite3.Connection:
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA synchronous=NORMAL")
         _local.conn = conn
+    else:
+        # A cached connection that hit a transient disk I/O error stays broken
+        # in the thread-local cache forever (every subsequent query raises).
+        # Cheap probe: rebuild the connection once if it no longer works.
+        try:
+            conn.execute("SELECT 1").fetchone()
+        except (sqlite3.OperationalError, sqlite3.ProgrammingError):
+            try:
+                conn.close()
+            except Exception:
+                pass
+            _local.conn = None
+            return _get_db()
     return conn
+
+
+# ── WARNING: do NOT add stale -wal/-shm cleanup back ─────────────
+# SQLite WAL mode manages -wal/-shm file lifecycle itself, and crash
+# recovery (replay on open) is built in. Manually deleting these files
+# while another connection/process holds them open sends that writer's
+# commits into orphaned (deleted) inodes: store_entity returns True but
+# the row is invisible to every other reader. Root cause of the 1094
+# "disk I/O error" events and the lost entity writes seen 2026-08-01.
 
 
 # ── Layer-aware helpers ───────────────────

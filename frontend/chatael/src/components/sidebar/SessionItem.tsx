@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { memo, useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pencil, Trash2 } from 'lucide-react';
 import type { Session } from '../../types/chat';
@@ -13,7 +13,7 @@ interface Props {
   extraClass?: string;
 }
 
-export default function SessionItem({ session, isActive, onSelect, onRename, onDelete, extraClass = '' }: Props) {
+function SessionItemImpl({ session, isActive, onSelect, onRename, onDelete, extraClass = '' }: Props) {
   const { t } = useTranslation();
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(session.title);
@@ -96,3 +96,9 @@ export default function SessionItem({ session, isActive, onSelect, onRename, onD
     </>
   );
 }
+
+// Memoized: session list re-renders on every message/stream update; items
+// whose props didn't change (same session object, same active state, stable
+// callbacks) are skipped.
+const SessionItem = memo(SessionItemImpl);
+export default SessionItem;

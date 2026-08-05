@@ -49,6 +49,9 @@ _DERIVED_DEDUP_TTL = 120
 # Cache: topics that failed to add (e.g. due to plan limit) — skip for a while
 _FAILED_TOPICS: Dict[str, float] = {}
 _FAILED_TTL = 300  # re-try after 5 minutes
+# Anti-no-op backoff state (see activate_curiosity)
+_LAST_ATTEMPT_TS: float = 0.0
+_EMPTY_ATTEMPTS: int = 0
 
 # ── Exploration circuit breaker ─────────────────────────
 # 20 consecutive rounds with no new derived topic → switch seed
@@ -57,6 +60,52 @@ _EMPTY_LIMIT = 20
 _CUR_SEED_INDEX: int = 0  # current seed position for forced switch
 
 # ── Diversity metrics ───────────────────────────────────
+_CURIOSITY_STATS_FILE = None  # lazy init
+
+def _stats_path() -> str:
+    global _CURIOSITY_STATS_FILE
+    if _CURIOSITY_STATS_FILE is None:
+        try:
+            from ..utils import DATA_DIR
+            _CURIOSITY_STATS_FILE = str(DATA_DIR / "curiosity_stats.json")
+        except Exception:
+            _CURIOSITY_STATS_FILE = ""
+    return _CURIOSITY_STATS_FILE
+
+def _load_stats() -> None:
+    """Load persisted curiosity statistics from disk."""
+    global _CURIOSITY_STATS
+    fp = _stats_path()
+    if not fp:
+        return
+    try:
+        import json
+        from pathlib import Path
+        p = Path(fp)
+        if p.exists():
+            data = json.loads(p.read_text())
+            if isinstance(data, dict):
+                for k in _CURIOSITY_STATS:
+                    if k in data:
+                        _CURIOSITY_STATS[k] = data[k]
+    except Exception:
+        pass
+
+def _save_stats() -> None:
+    """Persist curiosity statistics to disk."""
+    fp = _stats_path()
+    if not fp:
+        return
+    try:
+        import json
+        from pathlib import Path
+        Path(fp).write_text(json.dumps(_CURIOSITY_STATS, ensure_ascii=False, indent=2))
+    except Exception:
+        pass
+
+# Load persisted stats on module init
+_load_stats()
+
 _CURIOSITY_STATS: Dict[str, float] = {
     "total_picks": 0.0,
     "seed_picks": 0.0,
@@ -164,6 +213,7 @@ def pick_next_topic(
             if root in topic.lower():
                 _consumed = sum(1 for b in branches if b in _DERIVED_DONE)
                 _CURIOSITY_STATS["branch_depth"] = max(_CURIOSITY_STATS["branch_depth"], float(_consumed))
+        _save_stats()  # persist after every pick
         return topic
 
     # 1. Check seeds
@@ -349,7 +399,22 @@ def activate_curiosity(
     Returns True if a new direction was added.
 
     Edition gate: community edition disables curiosity-driven discovery.
+
+    Anti-no-op backoff: consecutive fruitless attempts (no candidate, no seed,
+    or blocked topic) widen the retry interval (1min → 2 → 4 → 8 → 15min cap),
+    so idle cycles stop hammering the engine when there is nothing to learn.
     """
+    global _LAST_ATTEMPT_TS, _EMPTY_ATTEMPTS
+    _now0 = time.time()
+    # Near-capacity bonus: with many directions already tracked, attempts are
+    # likely to be rejected (blacklist / duplicates) — widen the retry window.
+    # Pure noise reduction: no capacity change, no free slots created.
+    _near_cap = 2 if len(directions) >= 80 else 0
+    _backoff = min(300 * (2 ** (_EMPTY_ATTEMPTS + _near_cap)), 7200)  # 5min→…→2h cap (was 2min→1h; fewer polls, less CPU churn when idle/full)
+    if _now0 - _LAST_ATTEMPT_TS < _backoff:
+        return False
+    _LAST_ATTEMPT_TS = _now0
+
     # Edition gate
     try:
         from aelvoxim.server.edition import get as _ed_get
@@ -361,13 +426,36 @@ def activate_curiosity(
     if add_direction_fn is None:
         return False
 
+    _now = time.time()
+
+    # Priority: UnknownDiscovery candidates first (fresh discovered terms)
+    try:
+        from .unknown_discovery import pop_unknown_candidates
+        _ud_candidates = pop_unknown_candidates(max_count=1)
+        if _ud_candidates:
+            _candidate = _ud_candidates[0]
+            if _candidate not in _FAILED_TOPICS or _now - _FAILED_TOPICS.get(_candidate, 0) >= _FAILED_TTL:
+                topic_short = _candidate[:180]
+                if add_direction_fn(topic_short):
+                    log_func(f"  🧠 [UnknownDiscovery] Started learning: {topic_short}")
+                    _EMPTY_ATTEMPTS = 0
+                    return True
+                _FAILED_TOPICS[_candidate] = _now
+                log_func(f"  ⚠️ [UnknownDiscovery] Failed to add: {topic_short}")
+                _EMPTY_ATTEMPTS += 1
+                return False
+    except Exception:
+        _log.exception("curiosity error")
+
     topic = pick_next_topic(directions, log_func)
     if not topic:
+        _EMPTY_ATTEMPTS += 1
         return False
 
     # Skip if this topic recently failed
     now = time.time()
     if topic in _FAILED_TOPICS and now - _FAILED_TOPICS[topic] < _FAILED_TTL:
+        _EMPTY_ATTEMPTS += 1
         return False
 
     # Truncate very long topic names (direction topic limit is 200 chars)
@@ -375,8 +463,10 @@ def activate_curiosity(
 
     if add_direction_fn(topic_short):
         log_func(f"  🧠 [Curiosity] Started learning: {topic_short}")
+        _EMPTY_ATTEMPTS = 0
         return True
 
     log_func(f"  ⚠️ [Curiosity] Failed to add: {topic_short}")
     _FAILED_TOPICS[topic] = now
+    _EMPTY_ATTEMPTS += 1
     return False

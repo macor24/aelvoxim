@@ -11,12 +11,24 @@ from typing import Callable, Optional
 
 from .knowledge import KnowledgeBase
 from .execute import try_execute_task
-from .extract import extract_knowledge, is_valid_content, content_has_real_value
+from .extract import extract_knowledge, is_valid_content, content_has_real_value, _bg_llm
 from .patches.validate_safe import safe_is_validated
 
 
 import logging
 _log = logging.getLogger("aelvoxim.learn.validate")
+
+# ── Direction cooldowns ──
+# topic -> epoch seconds until which validation retries are skipped.
+# Set on repeated validation failure so a stuck topic cannot dominate the
+# learning loop. Checked by the loop before calling execute_and_validate.
+_cooldowns: dict = {}
+
+
+def is_cooldown(topic: str) -> bool:
+    """True if the topic is in validation cooldown."""
+    import time as _t
+    return _cooldowns.get(f"validate_cooldown_{topic}", 0) > _t.time()
 
 def _topic_is_english(topic: str) -> bool:
     """Check if a topic is primarily English (no Chinese characters)."""
@@ -189,7 +201,9 @@ def execute_and_validate(
                 combined_score = 0.5
 
     if combined_score < 0.3:
-        # Multi-phase retry: progressively enrich with domain keywords
+        # Multi-phase retry: progressively enrich with domain keywords.
+        # Backoff between attempts (1s→2s→4s) instead of hammering; capped at
+        # 3 attempts so a stuck topic cannot burn the model channel.
         _retry_phrases = [
             "implementation, algorithm, architecture, performance, optimization, benchmark, configuration, deployment, integration, methodology, analysis, framework, pattern, pipeline, protocol, design, system, scale, evaluation, testing, monitoring, debugging, profiling.",
             "code example, practical usage, real-world application, technical specification, API reference, configuration guide, deployment strategy, performance tuning, best practice, design decision, trade-off analysis, comparison, benchmark result, error handling, edge case, troubleshooting, optimization technique.",
@@ -197,6 +211,9 @@ def execute_and_validate(
         ]
         _retry_success = False
         for _ri, _phrase in enumerate(_retry_phrases):
+            import time as _rt
+            if _ri > 0:
+                _rt.sleep(2 ** _ri)  # exponential backoff: 2s, 4s
             _retry_content = content + f"\n\nTechnical context ({_ri+1}): {_phrase}"
             _retry_title = title + f" (details v{_ri+1})"
             try:
@@ -223,57 +240,26 @@ def execute_and_validate(
                 SelfModel().record_retrieval_outcome(source_type, False)
             except Exception:
                 _log.exception("validate error")
+            # Cooldown: pause this direction so a failing topic does not
+            # dominate the next loop iterations.
+            try:
+                _cooldown_key = f"validate_cooldown_{topic}"
+                _cooldowns[_cooldown_key] = time.time() + 600  # 10 min
+            except Exception:
+                pass
             return False
 
     if combined_score < 0.6:
-        # Not halved — still store as base line (conf≥0.3 basis)
+        # Weak pass: store as baseline (conf≥0.3 basis), skip redundant quality checks
         _log_weak_pass(topic, f"  ⚠️ [{topic}] AutoValidator weak pass ({combined_score:.2f}), conf→{confidence}: {task}")
-        # Mark for selfmodel (base line, not high-quality)
         _rejection_reason = "validation_weak_pass"
 
-    # Step 3b: Code/metric detection — HIGHEST PRIORITY: directly store if detected
-    _has_code = bool(re.search(
-        r'```|\\b(def |class |function |import |from \\w+ import|print\\(|return )',
-        content))
-    _has_metric = bool(re.search(
-        r'\b\d+\.?\d*%\b|\b(speedup|latency|accuracy|throughput|F1|BLEU|ROUGE'
-        r'|scaling law|compute budget|FLOPs|parameter count|training loss'
-        r'|compute optimal|chinchilla|kaplan|model size|dataset size'
-        r'|reward function|convergence rate|average reward|episode'
-        r'|agent interaction|simulation.*step|training step'
-        r'|PPO|proximal policy|reward model|KL divergence'
-        r'|preference score|reward accuracy|rejection ratio)\b',
-        content, re.I))
-
-    # Force code retrieval for LLM architectures direction
-    if 'large language model' in topic.lower() and not (_has_code or _has_metric):
-        log(f"  🚫 [{topic}] No code/metric — force retrieval active: {task}")
-        return False
-    if _has_code or _has_metric:
-        confidence = max(confidence, 0.6)
-        _rejection_reason = "high_quality_code_or_metric"
-        log(f"  ⭐ [{topic}] Code/metric detected, conf boosted to {confidence:.2f}: {task}")
-        # Direct store: bypass quality checks — code/metric content IS high quality
-        if on_store:
-            on_store(topic, title, confidence)
-        return True
-
-    # Step 4: Quality checks — only for content WITHOUT code/metrics
-    if source_type == "learner_task":
-        if not is_valid_content(topic, task[:8], content):
-            log(f"  ⏭️ [{topic}] Quality check failed: {task}")
-            return False
-        if not content_has_real_value(content):
-            log(f"  ⏭️ [{topic}] [over_generic_content] Content too generic: {task}")
-            return False
-        if len(content.strip()) < 150:
-            log(f"  ⏭️ [{topic}] Content too short ({len(content.strip())} < 300): {task}")
-            return False
-        if not _has_technical_keywords(content, min_count=1):
-            log(f"  🚫 [{topic}] [missing_domain_keyword] No technical keywords found: {task}")
-            return False
-    else:
-        # Execution results also pass quality check
+    # ── Quality checks ──
+    # If AutoValidator already validated (score ≥ 0.3), skip redundant checks.
+    # AutoValidator is more lenient than is_valid_content, so weak passes would
+    # otherwise get double-rejected. Only run quality checks when no validator ran.
+    if source_type == "execution_result" and combined_score < 0.3:
+        # Execution results without AutoValidator: run quality checks
         if not content_has_real_value(content):
             log(f"  ⏭️ [{topic}] Execution content too generic: {task}")
             return False
@@ -494,7 +480,7 @@ def _execution_has_value(topic: str, task: str, content: str) -> Optional[bool]:
             "relevant to the topic that someone could learn from?\\n"
             "Answer ONLY: 'yes' / 'no' / 'metadata_only'"
         )
-        text = call_fn(
+        text = _bg_llm(call_fn,
             model=model,
             system_prompt="You are a technical content evaluator.",
             user_message=prompt,

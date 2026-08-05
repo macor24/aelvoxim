@@ -12,6 +12,7 @@ export default function MessageInput({ onSend, disabled }: Props) {
   const { t } = useTranslation();
   const [input, setInput] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const sendingRef = useRef(false);
   const activeId = useSessionStore((s) => s.activeSessionId);
 
   // Focus on mount, when disabled clears, and when session changes
@@ -22,8 +23,14 @@ export default function MessageInput({ onSend, disabled }: Props) {
     }
   }, [disabled, activeId]);
 
+  // Release the local send lock once the parent reports not streaming
+  useEffect(() => {
+    if (!disabled) sendingRef.current = false;
+  }, [disabled]);
+
   const handleSend = () => {
-    if (!input.trim() || disabled) return;
+    if (!input.trim() || disabled || sendingRef.current) return;
+    sendingRef.current = true;
     onSend(input.trim());
     setInput('');
   };

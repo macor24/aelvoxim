@@ -1,7 +1,18 @@
-import { useAuthStore } from '../stores/authStore';
+import { useAuthStore, getApiBase } from '../stores/authStore';
 
 /** Track consecutive timeouts per session for adaptive replies */
 const _timeoutCounts: Record<string, number> = {};
+
+// Module-level retry guard: empty-stream auto-retry fires at most ONCE per
+// sendChatMessage invocation chain (original + its retry). Not a React ref —
+// this service is a plain module, and the flag must survive the recursive
+// retry call.
+let _emptyStreamRetried = false;
+
+/** Reset the one-shot empty-stream retry budget (call per user message). */
+export function resetEmptyStreamRetry(): void {
+  _emptyStreamRetried = false;
+}
 
 /** Generate adaptive reply based on consecutive timeout count */
 function metacogTimeoutReply(sessionId: string): string {
@@ -81,18 +92,32 @@ export async function sendChatMessage(
   onDone: () => void,
   onError: (err: Error) => void
 ): Promise<void> {
+  // NOTE: _emptyStreamRetried is reset by the caller (useChat.send) per user
+  // message — NOT here, so the recursive auto-retry keeps its one-shot guard.
+  // Idle timeout, not total timeout: long streaming answers (30-45s of
+  // tokens) must not be killed by a fixed 35s budget. Only abort when no
+  // token arrives for this long (genuinely stuck). Declared outside try so
+  // the catch block can also clear it.
+  let idleTimer: ReturnType<typeof setTimeout> | undefined;
+  const IDLE_TIMEOUT_MS = 60000;
+
   try {
     const tenant = useAuthStore.getState().getActiveTenant();
-    const apiBase = tenant.apiUrl.replace(/\/+$/, '');
+    const apiBase = getApiBase();
     const lastMsg = history[history.length - 1];
     const query = lastMsg?.content || '';
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 35000);
+    const armIdle = () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => controller.abort(), IDLE_TIMEOUT_MS);
+    };
+    armIdle();
 
     const body = JSON.stringify({
       messages: history,
       mode: 'simple',
+      session_id: sessionId,
     });
 
     // Use streaming endpoint
@@ -105,7 +130,7 @@ export async function sendChatMessage(
       body,
       signal: controller.signal,
     });
-    clearTimeout(timeoutId);
+    if (idleTimer) clearTimeout(idleTimer);
 
     if (!res.ok) {
       const errBody = await res.text().catch(() => '');
@@ -127,6 +152,9 @@ export async function sendChatMessage(
       const text = decoder.decode(value, { stream: true });
       if (!text) continue;
 
+      // Any stream activity counts as alive — re-arm the idle timer
+      armIdle();
+
       buffer += text;
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
@@ -135,6 +163,7 @@ export async function sendChatMessage(
         if (line.startsWith('data: ')) {
           const data = line.slice(6);
           if (data.trim() === '[DONE]') {
+            if (idleTimer) clearTimeout(idleTimer);
             onDone();
             resetTimeoutCount(sessionId);
             return;
@@ -142,8 +171,21 @@ export async function sendChatMessage(
           try {
             const parsed = JSON.parse(data);
             if (parsed.token) {
+              // Empty-stream placeholders from the backend (model returned
+              // reasoning-only / hit max_tokens): auto-retry ONCE instead of
+              // showing the failure. deepseek-v4-flash intermittently returns
+              // 0 content tokens; a retry usually succeeds.
+              const t = parsed.token as string;
+              if (_emptyStreamRetried === false &&
+                  (t.includes('模型未生成内容') || t.includes('模型响应中断'))) {
+                _emptyStreamRetried = true;
+                if (idleTimer) clearTimeout(idleTimer);
+                await sendChatMessage(history, sessionId, onToken, onDone, onError);
+                return;
+              }
               onToken(parsed.token);
             } else if (parsed.error) {
+              if (idleTimer) clearTimeout(idleTimer);
               onError(new Error(parsed.error));
               return;
             }
@@ -153,9 +195,11 @@ export async function sendChatMessage(
     }
 
     // Stream ended without [DONE] — normal completion
+    if (idleTimer) clearTimeout(idleTimer);
     onDone();
     resetTimeoutCount(sessionId);
   } catch (err: any) {
+    if (idleTimer) clearTimeout(idleTimer);
 
     if (err instanceof DOMException && err.name === 'AbortError') {
       // Try DeepSeek fallback if configured

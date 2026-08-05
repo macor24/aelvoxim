@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Copy, Check, Trash2, Loader2 } from 'lucide-react';
 import type { Message } from '../../types/chat';
@@ -11,7 +11,7 @@ interface Props {
   tenantName?: string;
 }
 
-export default function MessageItem({ message, onDelete, onRetry, tenantName = '你' }: Props) {
+function MessageItemImpl({ message, onDelete, onRetry, tenantName = '你' }: Props) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -72,6 +72,9 @@ export default function MessageItem({ message, onDelete, onRetry, tenantName = '
               <Loader2 size={16} className="animate-spin" />
               <span className="text-sm">思考中<span className="loading-dots"></span></span>
             </div>
+          ) : !isUser && !message.content.trim() ? (
+            /* 空回复占位 — model returned no content (e.g. reasoning-only stream) */
+            <div className="text-sm text-gray-400 dark:text-gray-500 italic">（无回复）</div>
           ) : (
             <div className="whitespace-pre-wrap break-words">{message.content}</div>
           )}
@@ -126,3 +129,8 @@ export default function MessageItem({ message, onDelete, onRetry, tenantName = '
     </>
   );
 }
+
+// Memoized: only re-render when this message's content/status actually
+// changed (streaming updates touch one message, not the whole list).
+const MessageItem = memo(MessageItemImpl);
+export default MessageItem;

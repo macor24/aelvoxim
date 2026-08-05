@@ -235,9 +235,17 @@
 <!-- 系统日志 -->
 <div id="tab-logs" class="tab-content">
   <div class="container">
-    <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+      <select id="logSource" onchange="loadLogs()" style="padding:6px 10px;border-radius:6px;background:var(--bg-card,#fff);border:1px solid #d1d5db;font-size:13px">
+        <option value="learner">学习循环 (learner.log)</option>
+        <option value="monitor">监测告警 (monitor_alerts)</option>
+        <option value="chat_monitor">对话监测 (monitor.jsonl)</option>
+        <option value="health">自愈日志 (heal_log)</option>
+        <option value="server">服务日志 (server.log)</option>
+      </select>
       <button class="action-btn" onclick="loadLogs()" style="background:var(--brand-500);color:#fff;padding:6px 14px;border-radius:6px">🔄 刷新</button>
-      <span style="font-size:12px;color:var(--text-secondary)">最近 100 条日志</span>
+      <button class="action-btn" onclick="copyLogs()" style="background:#6b7280;color:#fff;padding:6px 14px;border-radius:6px">📋 复制</button>
+      <span style="font-size:12px;color:var(--text-secondary)">最近 100 条 · 监测告警保留 4 周(>2MB 轮转)</span>
     </div>
     <div id="logContainer" class="log-box">加载中...</div>
   </div>
@@ -254,18 +262,6 @@
       <button class="action-btn" onclick="showLlmEdit()" style="background:var(--brand-500);color:#fff;padding:6px 14px;border-radius:6px">✏️ 编辑 LLM 配置</button>
     </div>
     <hr style="margin:20px 0;border:none;border-top:1px solid var(--border-color)">
-
-    <!-- LLM 模型区块 -->
-    <div class="llm-card">
-      <h3 style="font-size:14px;font-weight:600">🤖 LLM 模型</h3>
-      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px">已配置的 LLM 模型列表。</div>
-      <div id="llmConfigList"></div>
-    </div>
-    <div class="llm-card" style="margin-top:12px">
-      <h3 style="font-size:14px;font-weight:600">🤖 默认模型 / 回退</h3>
-      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px">当所有模型不可用时的回退选项。</div>
-      <div id="llmFallbackList">加载中...</div>
-    </div>
   </div>
 </div>
 <!-- 学习计划 -->
@@ -656,9 +652,49 @@ function saveUser() {
 }
 
 // ── 系统日志 ──
+function copyLogs() {
+  var src = (document.getElementById('logSource') || {}).value || 'learner';
+  fetch('/v1/logs?source=' + encodeURIComponent(src), {headers: {'Authorization': 'Bearer ' + _apiKey}})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      var logs = d.logs || d.entries || d.lines || d;
+      var text;
+      if (Array.isArray(logs)) {
+        text = logs.slice(0,100).map(function(line){
+          return typeof line === 'string' ? line : (line.message||line.text||JSON.stringify(line));
+        }).join('\n');
+      } else {
+        text = JSON.stringify(logs, null, 2);
+      }
+      if (!text) { showToast('无日志可复制', 'error'); return; }
+      // Clipboard API with textarea fallback
+      function fallbackCopy(t){
+        var ta = document.createElement('textarea');
+        ta.value = t;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); showToast('日志已复制 (' + t.split('\n').length + ' 行)', 'success'); }
+        catch(e) { showToast('复制失败', 'error'); }
+        document.body.removeChild(ta);
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function(){
+          showToast('日志已复制 (' + text.split('\n').length + ' 行)', 'success');
+        }).catch(function(){ fallbackCopy(text); });
+      } else {
+        fallbackCopy(text);
+      }
+    }).catch(function(e){
+      showToast('复制失败: ' + (e.message||'未知错误'), 'error');
+    });
+}
+
 function loadLogs() {
   document.getElementById('logContainer').textContent = '加载中...';
-  fetch('/v1/logs', {headers: {'Authorization': 'Bearer ' + _apiKey}})
+  var src = (document.getElementById('logSource') || {}).value || 'learner';
+  fetch('/v1/logs?source=' + encodeURIComponent(src), {headers: {'Authorization': 'Bearer ' + _apiKey}})
     .then(function(r){return r.json();})
     .then(function(d){
       var logs = d.logs || d.entries || d.lines || d;
@@ -709,32 +745,6 @@ function loadLlmStatus() {
       document.getElementById('llmContainer').innerHTML = html;
     }).catch(function(e){
       document.getElementById('llmContainer').innerHTML = '<p style="color:#dc2626">加载失败: ' + (e.message||'未知错误') + '</p>';
-    });
-  // 加载 LLM 模型列表
-  fetch('/v1/llm/config', {headers: {'Authorization': 'Bearer ' + _apiKey}})
-    .then(function(r){return r.json();})
-    .then(function(d){
-      var models = d.models || d.config || d;
-      if (!Array.isArray(models)) models = [models];
-      var list = document.getElementById('llmConfigList');
-      if (models.length === 0) {
-        list.innerHTML = '<p style="color:var(--text-secondary);font-size:12px">未配置 LLM 模型</p>';
-        return;
-      }
-      var html = '';
-      models.forEach(function(m, i){
-        var name = m.name || m.model || 'Model '+(i+1);
-        var prov = m.provider || '-';
-        var base = m.base_url || '-';
-        var def = m.is_default ? ' ✅' : '';
-        html += '<div style="padding:8px 0;border-bottom:1px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center">'
-          + '<div><strong>' + esc(name) + '</strong>' + def + '<br><span style="font-size:11px;color:var(--text-secondary)">' + esc(prov) + ' · ' + esc(base) + ' · ' + (m.api_key?'✅ Key 已配置':'❌ 无 Key') + '</span></div>'
-          + '<button class="action-btn edit" onclick="showLlmEditByIndex('+i+')" style="font-size:11px">编辑</button>'
-          + '</div>';
-      });
-      list.innerHTML = html;
-    }).catch(function(){
-      document.getElementById('llmConfigList').innerHTML = '<p style="color:#dc2626;font-size:12px">加载失败</p>';
     });
 }
 

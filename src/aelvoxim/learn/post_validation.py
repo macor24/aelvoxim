@@ -268,8 +268,11 @@ class FactCrossVerifier:
                     "type": row["type"],
                     "tags": json.loads(row["tags"] or "[]"),
                     "attributes": json.loads(row["attributes"] or "{}"),
+                    "exact": True,
                 }
-            # Fallback: LIKE search
+            # Fallback: LIKE search — fuzzy hits are search noise from other
+            # KB-derived entities, NOT authoritative memory values. Callers must
+            # not use them to assert contradictions (exact=False).
             row = db.execute(
                 "SELECT id, type, value, tags, attributes FROM entities "
                 "WHERE (LOWER(id) LIKE ? OR LOWER(value) LIKE ?) AND type != 'event' "
@@ -283,6 +286,7 @@ class FactCrossVerifier:
                     "type": row["type"],
                     "tags": json.loads(row["tags"] or "[]"),
                     "attributes": json.loads(row["attributes"] or "{}"),
+                    "exact": False,
                 }
         except Exception:
             _log.exception("post_validation error")
@@ -318,6 +322,18 @@ class FactCrossVerifier:
 
             # 1. Direct contradiction: entry content vs memory value
             if mem_value:
+                # Skip self-references: memory value is just the entity name itself
+                # (e.g. topic:deploy_guide → "deploy_guide"), which carries no factual
+                # claim to contradict. Prevents P0 false positives on catalog-style
+                # entries (Ubuntu, deploy_guide, PostgreSQL...) whose content is a
+                # document, not an assertion about the named entity.
+                if _text_similarity(mem_value, name) > 0.8:
+                    continue
+                # Fuzzy (LIKE) hits are search noise from other KB-derived entities,
+                # not authoritative memory values — only exact matches can drive
+                # a contradiction verdict.
+                if not mem_entity.get("exact", True):
+                    continue
                 sim = _text_similarity(content_snippet, mem_value)
                 if sim < 0.3 and len(mem_value) > 10:
                     issues.append(AuditIssue(
@@ -772,7 +788,11 @@ class PostValidationEngine:
     @staticmethod
     def _adjust_confidence(entry: dict, issues: List[AuditIssue],
                            report: AuditReport) -> None:
-        """Apply the most severe confidence impact and write back."""
+        """Apply the most severe confidence impact and write back.
+
+        P0 direct_contradiction: auto-isolate the entry (archive + mark) since
+        the memory-side entity has higher provenance.
+        """
         if not issues:
             return
         min_impact = min(i.confidence_impact for i in issues)
@@ -786,6 +806,13 @@ class PostValidationEngine:
             if "requires_manual_review" not in flags:
                 flags.append("requires_manual_review")
             entry["_flags"] = flags
+            # Auto-isolate P0 direct_contradiction: archive entry with very low confidence
+            p0_facts = [i for i in issues if i.severity == "P0" and i.dimension == "direct_contradiction"]
+            if p0_facts and old_conf < 0.6:
+                entry["_status"] = "archived"
+                entry["confidence"] = 0.05
+                entry["_archived_reason"] = f"P0 contradiction with memory (conf={old_conf:.2f})"
+                report.entries_adjusted.append(f"{entry.get('id', 'unknown')} [ISOLATED]")
 
         # Write back
         try:

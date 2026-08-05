@@ -24,7 +24,10 @@ def test_detect_lang_other():
     assert detect_lang("") == "other"
 
 
-def test_decompose_preset():
+def test_decompose_preset(monkeypatch):
+    # Deterministic: bypass LLM decomposition (external API → flaky task count
+    # in batch runs). Forces the keyword-preset path which is stable offline.
+    monkeypatch.setattr("aelvoxim.learn.decompose._decompose_with_llm", lambda topic, log: None)
     tasks = decompose_direction("FastAPI optimization")
     assert len(tasks) >= 6, f"Expected >=6 tasks, got {len(tasks)}"
     assert any("async" in t.lower() or "route" in t.lower() for t in tasks), \

@@ -5,14 +5,16 @@
 # Web framework
 fastapi==0.136.1
 uvicorn==0.52.0
-pydantic>=2.13.4
+# pydantic 3 is a breaking major — cap <3 so future installs can't resolve
+# an incompatible release. (Running env: 2.13.4.)
+pydantic>=2.0,<3
 
 # Database
 psycopg2-binary==2.9.12
 
 # Image processing
 Pillow==12.3.0
-numpy==2.5.1
+numpy==2.4.4
 
 # OCR (Windows Gateway)
 # paddleocr==3.7.0        # uncomment on Windows

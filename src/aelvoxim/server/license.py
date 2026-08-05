@@ -26,8 +26,8 @@ from typing import Any, Dict
 _SECRET = os.environ.get("AELVOXIM_LICENSE_SECRET")
 if not _SECRET:
     import logging
-    logging.getLogger("aelvoxim.license").warning(
-        "AELVOXIM_LICENSE_SECRET not set — license verification disabled, defaulting to community edition"
+    logging.getLogger("aelvoxim.license").debug(
+        "AELVOXIM_LICENSE_SECRET not set — license verification disabled (enterprise features available by default)"
     )
 
 from ..utils import DATA_DIR

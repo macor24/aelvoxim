@@ -357,6 +357,9 @@ async def user_me(current_user: dict = Depends(_verify_key)):
 @router.get("/health")
 async def health_check():
     """Unified health endpoint."""
+    return _health_response()
+
+def _health_response():
     from datetime import datetime
     result = {
         "service": "aelvoxim-api",
@@ -412,13 +415,22 @@ async def get_logs(source: str = Query("learner"), lines: int = Query(50), _user
     from ..utils import DATA_DIR
     sources = {
         "learner": DATA_DIR / "learner" / "learner.log",
-        "chat_monitor": DATA_DIR / "chat_monitor" / "monitor.jsonl",
         "health": DATA_DIR / "heal_log.jsonl",
         "server": Path.home() / ".aelvoxim" / "logs" / "server.log",
+        "monitor": Path("/var/aelvoxim/logs") / "monitor_alerts.log",
     }
+    # chat_monitor stores per-day files (2026-08-01.jsonl …) — resolve the
+    # most recently modified one so the logs page always has something to show.
+    _cm_dir = DATA_DIR / "chat_monitor"
+    _cm_latest = max(_cm_dir.glob("*.jsonl"), key=lambda p: p.stat().st_mtime,
+                     default=None)
+    if _cm_latest:
+        sources["chat_monitor"] = _cm_latest
     path = sources.get(source)
-    if not path:
-        raise HTTPException(400, detail=f"unknown source: {source}")
+    if not path or not path.exists():
+        # Unknown source OR missing file: return empty instead of 500 so the
+        # admin page shows a clean "no logs yet" rather than an error.
+        return {"lines": [], "note": f"no log file for source: {source}"}
     try:
         text = path.read_text(errors="replace")
         all_lines = text.strip().split("\n")
@@ -745,6 +757,14 @@ async def admin_overview(user: dict = Depends(_verify_key)):
         from ..learn.knowledge import KnowledgeBase
         kb = KnowledgeBase()
         entries = list(kb.get_all_active())
+        # Exclude entries whose topic matches a completed direction
+        _completed_topics = {
+            d.get("topic", "").lower()
+            for d in (dirs if isinstance(dirs, list) else [])
+            if d.get("status") in ("completed", "mastery")
+        }
+        if _completed_topics:
+            entries = [e for e in entries if e.get("topic", "").lower() not in _completed_topics]
         data["knowledge"]["active"] = len(entries)
         from collections import Counter
         topics = Counter(e.get("topic", "") for e in entries)
@@ -798,7 +818,7 @@ async def admin_dashboard(user: dict = Depends(_verify_key)):
         result["learner"]["total"] = len(dirs)
         result["learner"]["completed"] = sum(1 for d in dirs if d["status"] in ("completed", "mastery"))
         result["learner"]["paused"] = sum(1 for d in dirs if d["status"] in ("paused", "pending"))
-        # 知识库条目数：用真实 DB 计数替代 Learner 碎片记录
+        # Knowledge entry count: use real DB count instead of Learner fragment records
         try:
             from ..storage.db import fetch_dict
             _kr = fetch_dict("SELECT count(*) as cnt FROM knowledge_entries")
@@ -942,7 +962,7 @@ async def admin_skill_timeline(months: int = 6, user: dict = Depends(_verify_key
             "total_entries": sum(m["entries"] for m in months_data), "active_entries": active_entries}
 
 
-# ═══ 知识库目录学习 API ═══
+# ═══ Knowledge directory learning API ═══
 
 
 @router.post("/admin/learn-directory")

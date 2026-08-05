@@ -21,14 +21,14 @@ from typing import Any, Dict, List, Optional, Tuple
 
 log = logging.getLogger("aelvoxim.directory_learner")
 
-# ── 已学习的文件记录 ──
+# ── Learned file registry ──
 _KNOWN_FILES: set[str] = set()  # SHA256 set for fast dedup
 _LEARNER_CONFIG_PATH: Optional[Path] = None
 _SCAN_CONFIG: Dict[str, Any] = {}  # in-memory scan config
 
 
 # ═══════════════════════════════════════════
-# 工具: SHA256 文件哈希
+# Tool: SHA256 file hash
 # ═══════════════════════════════════════════
 
 
@@ -45,7 +45,7 @@ def _sha256(path: Path) -> str:
 
 
 # ═══════════════════════════════════════════
-# 递归扫描
+# Recursive scan
 # ═══════════════════════════════════════════
 
 
@@ -293,7 +293,7 @@ def scan_directory(
 
 
 # ═══════════════════════════════════════════
-# 单个文件学习
+# Learn a single file
 # ═══════════════════════════════════════════
 
 
@@ -353,7 +353,7 @@ def _learn_file(path: Path, source: str, user_id: str) -> bool:
 
 
 # ═══════════════════════════════════════════
-# LLM 摘要生成
+# LLM summary generation
 # ═══════════════════════════════════════════
 
 
@@ -408,7 +408,7 @@ def _llm_summarize(title: str, text: str) -> Tuple[str, str, List[str]]:
 
 
 # ═══════════════════════════════════════════
-# 扫描配置持久化
+# Scan config persistence
 # ═══════════════════════════════════════════
 
 
@@ -448,7 +448,7 @@ def get_config() -> Dict[str, Any]:
 
 
 # ═══════════════════════════════════════════
-# 定时扫描任务
+# Scheduled scan task
 # ═══════════════════════════════════════════
 
 

@@ -1,8 +1,22 @@
 import { create } from 'zustand';
 import type { Tenant } from '../types/auth';
 
-// Default API URL: prefer env var at build time, fall back to localhost
-const DEFAULT_API_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_AELVOXIM_API_URL) || 'http://localhost:9701';
+// Default API URL: prefer env var at build time, then derive from the page
+// origin (chatael is served by 9702, API by 9701 on the same host), and only
+// fall back to localhost. Hardcoding localhost broke remote users with no
+// saved tenant (browser would try to reach the user's own machine).
+function defaultApiUrl(): string {
+  if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_AELVOXIM_API_URL) {
+    return import.meta.env.VITE_AELVOXIM_API_URL;
+  }
+  try {
+    const { protocol, hostname } = window.location;
+    if (hostname) return `${protocol}//${hostname}:9701`;
+  } catch {}
+  return 'http://localhost:9701';
+}
+
+const DEFAULT_API_URL = defaultApiUrl();
 
 const DEFAULT_TENANT: Tenant = {
   id: 'default',
@@ -72,6 +86,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 // Exported for use by sessionStore and messageStore to share the same isolation key
 export function getIsolationSuffix(): string {
   return storageSuffix();
+}
+
+/**
+ * Resolve the active tenant's API base URL (trailing slash stripped), with a
+ * sensible fallback. Single source of truth — services previously duplicated
+ * this (and some read localStorage directly, risking the wrong tenant).
+ */
+export function getApiBase(): string {
+  try {
+    const active = useAuthStore.getState().getActiveTenant();
+    if (active?.apiUrl) return active.apiUrl.replace(/\/+$/, '');
+  } catch {}
+  return DEFAULT_API_URL.replace(/\/+$/, '');
 }
 
 function storageSuffix(): string {

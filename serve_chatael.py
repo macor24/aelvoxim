@@ -5,7 +5,7 @@ Provides API endpoints for session/message persistence.
 PG primary, JSON file fallback (survives PG outages).
 """
 
-from http.server import HTTPServer, SimpleHTTPRequestHandler
+from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 import json
 import os
@@ -17,21 +17,52 @@ DIST = Path(__file__).parent / "frontend" / "chatael" / "dist"
 DATA_DIR = Path(__file__).parent / "frontend" / "chatael-v2" / "data"
 PORT = 9702
 
-# ── PG connection (optional) ──
+import logging
+_log = logging.getLogger("chatael")
+if not _log.handlers:
+    _h = logging.StreamHandler()
+    _h.setFormatter(logging.Formatter("%(asctime)s [chatael.%(levelname)s] %(message)s"))
+    _log.addHandler(_h)
+    _log.setLevel(logging.INFO)
+
+# ── PG connection (optional, self-healing) ──
 _PG_CONN = None
 _PG_DSN = os.environ.get(
     "CHATAEL_DATABASE_URL",
     "host=localhost port=5432 dbname=aelvoxim user=aelvoxim password=aelvoxim_pg_pass",
 )
-try:
-    import psycopg2 as _pg2
-    _PG_CONN = _pg2.connect(_PG_DSN)
-except Exception:
-    _PG_CONN = None
+_last_pg_attempt = 0.0  # throttle reconnect attempts to 1 per 15s
 
 
 def _pg() -> bool:
-    return _PG_CONN is not None
+    """Return True if a healthy PG connection is available.
+
+    Self-healing: if startup failed (e.g. PG not ready when chatael booted)
+    or the connection dropped, lazily retry connecting (throttled). Without
+    this, a failed init at boot leaves chatael stuck on JSON fallback forever.
+    """
+    global _PG_CONN, _last_pg_attempt
+    now = time.time()
+    if _PG_CONN is not None:
+        try:
+            _PG_CONN.cursor().execute("SELECT 1")
+            return True
+        except Exception:
+            try:
+                _PG_CONN.close()
+            except Exception:
+                pass
+            _PG_CONN = None  # stale connection → retry below
+    if now - _last_pg_attempt < 15.0:
+        return False
+    _last_pg_attempt = now
+    try:
+        import psycopg2 as _pg2
+        _PG_CONN = _pg2.connect(_PG_DSN)
+        return True
+    except Exception:
+        _PG_CONN = None
+        return False
 
 
 # ── JSON session persistence (fallback) ──
@@ -100,7 +131,7 @@ def _load_session_json(session_id: str) -> dict | None:
         msgs = json.loads(msg_path.read_text())
         return {
             "id": meta["id"],
-            "title": meta.get("title", "New Chat"),
+            "title": (meta.get("title") or "New Chat"),
             "created_at": meta.get("created_at", ""),
             "updated_at": meta.get("updated_at", ""),
             "messages": msgs,
@@ -118,7 +149,7 @@ def _list_sessions_json() -> list:
             meta = json.loads(f.read_text())
             results.append({
                 "id": meta["id"],
-                "title": meta.get("title", "New Chat"),
+                "title": (meta.get("title") or "New Chat"),
                 "message_count": meta.get("message_count", 0),
                 "created_at": meta.get("created_at", ""),
                 "updated_at": meta.get("updated_at", ""),
@@ -128,135 +159,149 @@ def _list_sessions_json() -> list:
     return results
 
 
-# ── Session persistence (PG primary, JSON fallback) ──
+# ── Title cleaning ──────────────────────────
 
 
-def _save_session(session: dict, user_id: str = ""):
-    """Save a session to PG with JSON fallback."""
-    if _pg():
-        try:
-            cur = _PG_CONN.cursor()
-            now = session.get("updated_at", time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
+def _clean_title(raw: str, max_len: int = 30) -> str:
+    """Normalize a session title for the list UI.
+
+    Collapses newlines/whitespace into single spaces and truncates.
+    Falls back to 'New Chat' when nothing usable remains.
+    """
+    if not raw:
+        return "New Chat"
+    import re as _re
+    s = _re.sub(r"\s+", " ", str(raw)).strip()
+    s = _re.sub(r"[ \t]+", " ", s)
+    if not s:
+        return "New Chat"
+    return s[:max_len] if len(s) > max_len else s
+
+
+# ── Session persistence (PG only) ──
+
+
+def _save_session(session: dict, user_id: str = "") -> bool:
+    """Save a session to PG (primary store). Returns True on success."""
+    if not _pg():
+        return False
+    try:
+        import datetime as _dt
+        # Use local server time (PG column is timestamp without tz, server TZ=Asia/Shanghai).
+        # Never store UTC "Z" strings here — they sort 8h behind local rows.
+        now_local = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        created = session.get("created_at") or now_local
+        if isinstance(created, str) and created.endswith("Z"):
+            try:
+                created = _dt.datetime.fromisoformat(created.replace("Z", "+00:00")).astimezone().strftime("%Y-%m-%d %H:%M:%S")
+            except Exception:
+                created = now_local
+        cur = _PG_CONN.cursor()
+        title = _clean_title(session.get("title", "New Chat"))
+        cur.execute(
+            "INSERT INTO chat_sessions (id, title, message_count, created_at, updated_at, user_id) "
+            "VALUES (%s, %s, %s, %s, %s, %s) "
+            "ON CONFLICT (id) DO UPDATE SET title=EXCLUDED.title, message_count=EXCLUDED.message_count, updated_at=EXCLUDED.updated_at;",
+            (session["id"], title, len(session.get("messages", [])),
+             created, now_local, user_id or None),
+        )
+        cur.execute("DELETE FROM chat_messages WHERE session_id = %s;", (session["id"],))
+        for m in session.get("messages", []):
             cur.execute(
-                "INSERT INTO chat_sessions (id, title, message_count, created_at, updated_at, user_id) "
-                "VALUES (%s, %s, %s, %s, %s, %s) "
-                "ON CONFLICT (id) DO UPDATE SET title=EXCLUDED.title, message_count=EXCLUDED.message_count, updated_at=EXCLUDED.updated_at;",
-                (session["id"], session.get("title", "New Chat"), len(session.get("messages", [])),
-                 session.get("created_at", now), now, user_id or None),
+                "INSERT INTO chat_messages (session_id, role, content, metadata, created_at) "
+                "VALUES (%s, %s, %s, '{}'::jsonb, %s);",
+                (session["id"], m.get("role", "user"), m.get("content", ""),
+                 m.get("timestamp", now_local)),
             )
-            cur.execute("DELETE FROM chat_messages WHERE session_id = %s;", (session["id"],))
-            for m in session.get("messages", []):
-                cur.execute(
-                    "INSERT INTO chat_messages (session_id, role, content, metadata, created_at) "
-                    "VALUES (%s, %s, %s, '{}'::jsonb, %s);",
-                    (session["id"], m.get("role", "user"), m.get("content", ""),
-                     m.get("timestamp", now)),
-                )
-            _PG_CONN.commit()
-        except Exception:
-            pass  # Fall through to JSON fallback
-    # JSON fallback (always, for PG-down resilience)
-    _save_session_json(session)
+        _PG_CONN.commit()
+        return True
+    except Exception:
+        _log.exception("chatael save_session error")
+        return False
 
 
 def _load_session(session_id: str, user_id: str = "") -> dict | None:
-    """Load a session from PG, then JSON fallback."""
-    if _pg():
-        try:
-            cur = _PG_CONN.cursor()
+    """Load a session from PG only."""
+    if not _pg():
+        return None
+    try:
+        cur = _PG_CONN.cursor()
+        cur.execute(
+            "SELECT id, title, created_at, updated_at, user_id FROM chat_sessions WHERE id = %s;",
+            (session_id,),
+        )
+        r = cur.fetchone()
+        if r:
+            _uid = str(r[4]) if r[4] else ""
+            if user_id and _uid and _uid != user_id:
+                return None
             cur.execute(
-                "SELECT id, title, created_at, updated_at, user_id FROM chat_sessions WHERE id = %s;",
+                "SELECT role, content, created_at FROM chat_messages WHERE session_id = %s ORDER BY created_at;",
                 (session_id,),
             )
-            r = cur.fetchone()
-            if r:
-                _uid = str(r[4]) if r[4] else ""
-                if user_id and _uid and _uid != user_id:
-                    return None
-                cur.execute(
-                    "SELECT role, content, created_at FROM chat_messages WHERE session_id = %s ORDER BY created_at;",
-                    (session_id,),
-                )
-                msgs = [{"role": m[0], "content": m[1], "timestamp": str(m[2]) if m[2] else ""}
-                        for m in cur.fetchall()]
-                return {
-                    "id": r[0], "title": r[1] or "New Chat",
-                    "created_at": str(r[2]) if r[2] else "",
-                    "updated_at": str(r[3]) if r[3] else "",
-                    "messages": msgs,
-                }
-        except Exception:
-            pass
-    return _load_session_json(session_id)
+            msgs = [{"role": m[0], "content": m[1], "timestamp": str(m[2]) if m[2] else ""}
+                    for m in cur.fetchall()]
+            return {
+                "id": r[0], "title": _clean_title(r[1]),
+                "created_at": str(r[2]) if r[2] else "",
+                "updated_at": str(r[3]) if r[3] else "",
+                "messages": msgs,
+            }
+        return None
+    except Exception:
+        _log.exception("chatael load_session error")
+        return None
 
 
 def _list_sessions(user_id: str = "") -> list:
-    """List sessions — PG then JSON fallback. PG requires user_id."""
-    if _pg() and user_id:
-        try:
-            cur = _PG_CONN.cursor()
-            cur.execute(
-                "SELECT id, title, message_count, created_at, updated_at FROM chat_sessions WHERE user_id = %s ORDER BY updated_at DESC;",
-                (user_id,),
-            )
-            return [
-                {"id": r[0], "title": r[1] or "New Chat",
-                 "message_count": r[2] or 0,
-                 "created_at": str(r[3]) if r[3] else "",
-                 "updated_at": str(r[4]) if r[4] else ""}
-                for r in cur.fetchall()
-            ]
-        except Exception:
-            pass
-    # JSON fallback (works without auth)
-    return _list_sessions_json()
+    """List sessions from PG only. Requires user_id."""
+    if not _pg() or not user_id:
+        return []
+    try:
+        cur = _PG_CONN.cursor()
+        cur.execute(
+            "SELECT id, title, message_count, created_at, updated_at FROM chat_sessions WHERE user_id = %s ORDER BY updated_at DESC;",
+            (user_id,),
+        )
+        return [
+            {"id": r[0], "title": _clean_title(r[1]),
+             "message_count": r[2] or 0,
+             "created_at": str(r[3]) if r[3] else "",
+             "updated_at": str(r[4]) if r[4] else ""}
+            for r in cur.fetchall()
+        ]
+    except Exception:
+        _log.exception("chatael list_sessions error")
+        return []
 
 
 def _search_sessions(q: str, user_id: str = "") -> list:
-    """Search sessions by keyword in messages."""
-    if _pg() and user_id:
-        try:
-            cur = _PG_CONN.cursor()
-            cur.execute(
-                "SELECT DISTINCT s.id, s.title, s.message_count, s.created_at, s.updated_at "
-                "FROM chat_sessions s JOIN chat_messages m ON m.session_id = s.id "
-                "WHERE LOWER(m.content) LIKE %s AND s.user_id = %s ORDER BY s.updated_at DESC;",
-                ('%' + q.lower() + '%', user_id),
-            )
-            return [
-                {"id": r[0], "title": r[1] or "New Chat",
-                 "message_count": r[2] or 0,
-                 "created_at": str(r[3]) if r[3] else "",
-                 "updated_at": str(r[4]) if r[4] else ""}
-                for r in cur.fetchall()
-            ]
-        except Exception:
-            pass
-    # JSON fallback — search content
-    ql = q.lower()
-    results = []
-    for f in sorted(_SESSIONS_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
-        try:
-            meta = json.loads(f.read_text())
-            msg_path = _messages_path(meta["id"])
-            if not msg_path.exists():
-                continue
-            msgs = json.loads(msg_path.read_text())
-            if any(ql in m.get("content", "").lower() for m in msgs):
-                results.append({
-                    "id": meta["id"],
-                    "title": meta.get("title", "New Chat"),
-                    "message_count": meta.get("message_count", 0),
-                    "created_at": meta.get("created_at", ""),
-                    "updated_at": meta.get("updated_at", ""),
-                })
-        except Exception:
-            pass
-    return results
+    """Search sessions by keyword in messages. PG only."""
+    if not _pg() or not user_id:
+        return []
+    try:
+        cur = _PG_CONN.cursor()
+        cur.execute(
+            "SELECT DISTINCT s.id, s.title, s.message_count, s.created_at, s.updated_at "
+            "FROM chat_sessions s JOIN chat_messages m ON m.session_id = s.id "
+            "WHERE LOWER(m.content) LIKE %s AND s.user_id = %s ORDER BY s.updated_at DESC LIMIT 50;",
+            ('%' + q.lower() + '%', user_id),
+        )
+        return [
+            {"id": r[0], "title": _clean_title(r[1]),
+             "message_count": r[2] or 0,
+             "created_at": str(r[3]) if r[3] else "",
+             "updated_at": str(r[4]) if r[4] else ""}
+            for r in cur.fetchall()
+        ]
+    except Exception:
+        _log.exception("chatael search_sessions error")
+        return []
 
 
 def _new_session(user_id: str = "") -> dict:
-    now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    import datetime as _dt
+    now = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     session = {
         "id": "sess_" + uuid.uuid4().hex[:12],
         "title": "New Chat",
@@ -264,7 +309,9 @@ def _new_session(user_id: str = "") -> dict:
         "updated_at": now,
         "messages": [],
     }
-    _save_session(session, user_id=user_id)
+    ok = _save_session(session, user_id=user_id)
+    if not ok:
+        _log.warning("chatael new_session: PG save failed for %s", user_id or "(no user)")
     return session
 
 
@@ -370,10 +417,44 @@ class SpaHandler(SimpleHTTPRequestHandler):
                 ".svg": "image/svg+xml",
                 ".ico": "image/x-icon",
             }.get(file.suffix, "application/octet-stream")
-            self._send(file.read_bytes(), content_type=content_type)
+            self._send_gzip(file.read_bytes(), content_type, file.suffix)
         else:
             # SPA fallback
-            self._send((DIST / "index.html").read_bytes(), content_type="text/html")
+            self._send_gzip((DIST / "index.html").read_bytes(), "text/html", ".html")
+
+    # Text assets are gzip'd when the client accepts it (JS 246KB → ~78KB,
+    # CSS 23KB → ~5KB). Compressed bytes are cached per file+size so a hot
+    # static server never re-compresses the same asset.
+    _gzip_cache: dict = {}
+
+    def _send_gzip(self, data: bytes, content_type: str, suffix: str):
+        if suffix not in (".html", ".js", ".css", ".json", ".svg"):
+            self._send(data, content_type=content_type)
+            return
+        accept = self.headers.get("Accept-Encoding", "")
+        if "gzip" not in accept.lower():
+            self._send(data, content_type=content_type)
+            return
+        cache_key = (len(data), suffix)
+        cached = SpaHandler._gzip_cache.get(cache_key)
+        if cached is None:
+            import gzip as _gz
+            cached = _gz.compress(data, 6)
+            # Cap the cache: a handful of assets, not unbounded
+            if len(SpaHandler._gzip_cache) < 64:
+                SpaHandler._gzip_cache[cache_key] = cached
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Encoding", "gzip")
+        self.send_header("Vary", "Accept-Encoding")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.end_headers()
+        try:
+            self.wfile.write(cached)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            pass  # client disconnected, safe to ignore
 
     def _handle_list_sessions(self):
         key = self._get_auth_key()
@@ -516,7 +597,11 @@ def serve(host="0.0.0.0", port=9702):
     _ensure_dirs()
     print(f"ChatAEL v2 started at http://{host}:{port}")
     print(f"  Serving: {DIST}")
-    server = HTTPServer((host, port), SpaHandler)
+    # Threading server: a slow request (PG query, SSE forward) must not block
+    # other clients. The old single-threaded HTTPServer let CLOSE-WAIT
+    # connections pile up until the backlog (5) filled and 9702 hung.
+    server = ThreadingHTTPServer((host, port), SpaHandler)
+    server.daemon_threads = True
     server.serve_forever()
 
 

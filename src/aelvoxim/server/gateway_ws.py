@@ -12,7 +12,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 
 log = logging.getLogger("aelvoxim.gateway_ws")
 
-# 活跃连接和待处理指令（模块级别，通过函数访问）
+# Active connections and pending commands (module-level, accessed via functions)
 _GATEWAY_CONNECTIONS: Dict[str, Dict[str, Any]] = {}
 _PENDING_COMMANDS: Dict[str, list] = {}
 

@@ -56,13 +56,20 @@ _CN_STOP: Set[str] = {
 # ── Constants ──
 
 _MAX_PENDING = 20
-_SCAN_INTERVAL = 300  # seconds between scans
+_SCAN_INTERVAL = 7200  # 2h base between scans (was 1h) — fewer polls, less CPU churn when idle/full
 _DEDUP_WINDOW = 7200  # 2-hour dedup for re-queued candidates
 _SHORT_DEDUP = 1200   # 20-min short-term hash cache
 _SHORT_CACHE: Set[str] = set()  # hashes in current 20-min window
 _LAST_SHORT_CLEAN: float = 0.0
 _MAX_QUEUE_HISTORY = 5  # track how many times each term was queued
 _queue_count: Dict[str, int] = {}  # md5_hash → queue count, for exponential backoff
+_MAX_CANDIDATE_AGE = 86400  # 24h: candidates longer than this are dropped
+_pending_queued_at: Dict[str, float] = {}  # candidate → timestamp when added to pending
+_MAX_RETRY = 6  # max times a candidate can be re-queued before permanent discard
+
+# ── Anti-noise / anti-polling state ──
+_empty_scans: int = 0  # consecutive scans with no output → exponential backoff
+_skip_log_at: Dict[str, float] = {}  # skip-reason → last log timestamp (rate-limit noisy Skipped logs)
 
 # Core AI domains (boosted priority)
 _CORE_AI_PATTERNS = [
@@ -271,12 +278,35 @@ def scan_unknowns(directions: Dict[str, object], log_func: Callable) -> bool:
     Called from _cognition_tick.  Rate-limited to once per _SCAN_INTERVAL.
     Returns True if at least one candidate was queued.
     """
-    global _pending_unknowns, _last_scan_ts, _LAST_SHORT_CLEAN
+    global _pending_unknowns, _last_scan_ts, _LAST_SHORT_CLEAN, _empty_scans
 
     now = time.time()
-    if now - _last_scan_ts < _SCAN_INTERVAL:
+    # Near-capacity bonus: when active directions are almost at the cap, widen
+    # the interval aggressively. Pure noise reduction — capacity checks below
+    # are untouched, so no free slots are created by this change.
+    _active = sum(1 for d in directions.values() if d.status == "active")
+    _near_cap = 2 if _active >= 20 else 0
+    # Dynamic interval: base 1h, ×2 per consecutive empty scan (up to 4h);
+    # near capacity the +2 factor jumps straight to the 4h ceiling.
+    _effective_interval = _SCAN_INTERVAL * (2 ** min(_empty_scans + _near_cap, 3))
+    if now - _last_scan_ts < _effective_interval:
         return False
     _last_scan_ts = now
+
+    # Capacity gate: skip scanning if too many directions already exist or are pending.
+    _total = len(directions)
+    if _active >= 22:
+        _empty_scans += 1
+        if now - _skip_log_at.get("cap", 0.0) > 7200:
+            _skip_log_at["cap"] = now
+            log_func(f"  ⏸️ [UnknownDiscovery] Skipped: {_active} active — no capacity for new directions")
+        return False
+    if len(_pending_unknowns) >= _MAX_PENDING:
+        _empty_scans += 1
+        if now - _skip_log_at.get("full", 0.0) > 7200:
+            _skip_log_at["full"] = now
+            log_func(f"  ⏸️ [UnknownDiscovery] Skipped: {len(_pending_unknowns)} pending already queued")
+        return False
 
     # 1. Collect source text
     sources: List[str] = []
@@ -294,6 +324,7 @@ def scan_unknowns(directions: Dict[str, object], log_func: Callable) -> bool:
     for s in sources:
         candidates.extend(_extract(s))
     if not candidates:
+        _empty_scans += 1
         return False
 
     # Load persisted dedup cache (survives restarts)
@@ -308,10 +339,24 @@ def scan_unknowns(directions: Dict[str, object], log_func: Callable) -> bool:
     stale_dedup = [h for h, ts in _recently_queued.items() if ts < _dedup_cutoff]
     for h in stale_dedup:
         _recently_queued.pop(h, None)
+    # Permanent discard: candidates retried _MAX_RETRY+ times are blacklisted
+    _perm_discard = {h for h, n in _queue_count.items() if n > _MAX_RETRY}
+    for h in _perm_discard:
+        _recently_queued.pop(h, None)
+        _queue_count.pop(h, None)
     # Clear 20-min short cache periodically
     if now - _LAST_SHORT_CLEAN > _SHORT_DEDUP:
         _SHORT_CACHE.clear()
         _LAST_SHORT_CLEAN = now
+    # Clean stale pending candidates (>_MAX_CANDIDATE_AGE)
+    _stale_pending = [t for t in _pending_unknowns
+                      if t.lower() in _pending_queued_at
+                      and now - _pending_queued_at[t.lower()] > _MAX_CANDIDATE_AGE]
+    for t in _stale_pending:
+        _pending_unknowns.remove(t)
+        _pending_queued_at.pop(t.lower(), None)
+    if _stale_pending:
+        log_func(f"  🗑️ [UnknownDiscovery] dropped {len(_stale_pending)} stale candidate(s) (>24h)")
 
     for term in candidates:
         low = term.lower()
@@ -324,6 +369,9 @@ def scan_unknowns(directions: Dict[str, object], log_func: Callable) -> bool:
         # Check dedup with exponential backoff
         if h in _recently_queued:
             _queue_n = _queue_count.get(h, 0)
+            # Permanent discard: exceeded max retries
+            if _queue_n > _MAX_RETRY:
+                continue
             _effective_ttl = _DEDUP_WINDOW * (2 ** min(_queue_n, 5))  # 2h, 4h, 8h, 16h, 32h, 64h
             if now - _recently_queued[h] < _effective_ttl:
                 continue
@@ -335,13 +383,18 @@ def scan_unknowns(directions: Dict[str, object], log_func: Callable) -> bool:
             fresh.append((term, s))
 
     if not fresh:
+        _empty_scans += 1
         return False
 
     # 4. Take top 2 by score (capped to prevent queue flooding)
     fresh.sort(key=lambda x: x[1], reverse=True)
     top = [t for t, _ in fresh[:2]]
+    _empty_scans = 0  # produced output → reset backoff
 
     _pending_unknowns.extend(top)
+    # Record queue timestamp for aging
+    for t in top:
+        _pending_queued_at[t.lower()] = now
     # Record in 20-min short cache
     for t in top:
         _SHORT_CACHE.add(_md5(t))
@@ -364,10 +417,16 @@ def pop_unknown_candidates(max_count: int = 1) -> List[str]:
     """Pop highest-scored pending candidates for learning.
 
     Called by curiosity.activate_curiosity during idle cycles.
+    Stale candidates (>_MAX_CANDIDATE_AGE) are silently dropped.
     """
     global _pending_unknowns
     if not _pending_unknowns:
         return []
+    # Drop stale entries before serving
+    now = time.time()
+    _pending_unknowns = [t for t in _pending_unknowns
+                         if t.lower() not in _pending_queued_at
+                         or now - _pending_queued_at[t.lower()] <= _MAX_CANDIDATE_AGE]
     result = _pending_unknowns[:max_count]
     _pending_unknowns = _pending_unknowns[max_count:]
     return result

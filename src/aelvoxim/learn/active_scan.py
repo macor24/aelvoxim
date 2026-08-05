@@ -66,13 +66,23 @@ def run_scan(log_fn: Optional[callable] = None) -> Dict[str, Any]:
 
     memory_stats = {}
     try:
-        # L3 rollback: backup memory.db before cleanup
+        # L3 rollback: backup memory.db before cleanup.
+        # NOTE: must NOT use shutil.copy2 — in WAL mode another process (the
+        # API server) may hold the db open; copying the main file out from
+        # under it triggers "disk I/O error" in both processes. SQLite's
+        # backup API is WAL-safe (it snapshots via the same connection).
         try:
-            import shutil
+            import sqlite3 as _sq_bak
             from ..utils import METACORE_DIR as _md
             _src = str(_md / "memory.db")
             _dst = str(_md / "memory.db.rollback")
-            shutil.copy2(_src, _dst)
+            _src_c = _sq_bak.connect(_src)
+            _dst_c = _sq_bak.connect(_dst)
+            try:
+                _src_c.backup(_dst_c)
+            finally:
+                _dst_c.close()
+                _src_c.close()
         except Exception:
             import logging
             logging.getLogger("aelvoxim.active_scan").exception("active_scan error")

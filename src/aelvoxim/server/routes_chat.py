@@ -13,6 +13,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from .routes import _verify_key
 
 _log = logging.getLogger("aelvoxim.routes")
+
+
+class _McpNotConfigured(Exception):
+    """Raised when Windows-MCP env vars are absent — caller decides to skip silently."""
 router = APIRouter()
 
 
@@ -66,6 +70,7 @@ async def llm_chat(
 def _safe_chat_handler(call_fn, mc, messages, user, temperature, max_tokens,
                        skip_experts=False, skip_memory=False, mode="simple"):
     """Wrap chat_pipeline with safe exception handling to prevent information leakage."""
+    from .service_chat import chat_pipeline
     try:
         return chat_pipeline(call_fn, mc, messages, user, temperature, max_tokens,
                              skip_experts=skip_experts, skip_memory=skip_memory, mode=mode)
@@ -241,22 +246,16 @@ async def sync_session_messages(
     user: dict = Depends(_verify_key),
 ):
     """Batch-sync messages for a session from frontend to PG."""
-    from ..storage.db import save_message_to_pg
+    from ..storage.db import save_messages_batch_to_pg
     messages = body.get("messages", [])
     uid = str(user.get("id") or user.get("user_id", ""))
-    saved = 0
-    for msg in messages:
-        role = msg.get("role", "user")
-        content = msg.get("content", "")
-        if not content:
-            continue
-        try:
-            save_message_to_pg(session_id, role, content, user_id=uid)
-            saved += 1
-        except PermissionError:
-            raise HTTPException(403, detail="session does not belong to user")
-        except Exception:
-            pass
+    try:
+        saved = save_messages_batch_to_pg(session_id, messages, user_id=uid)
+    except PermissionError:
+        raise HTTPException(403, detail="session does not belong to user")
+    except Exception:
+        _log.exception("routes_chat error")
+        saved = 0
     return {"success": True, "saved": saved}
 
 
@@ -268,7 +267,7 @@ async def llm_chat_stream(
     """SSE streaming chat. Same pipeline as /v1/llm/chat, but yields tokens
     one-by-one via Server-Sent Events. Pre-LLM phases run the same code."""
     from ..learn.extract import call_llm_if_available
-    from ..learn.llm import ModelConfig, call_llm_stream
+    from ..learn.llm import ModelConfig, LLMError, call_llm_stream
     from .service_chat import (
         build_system_prompt, build_conversation_history, inject_system_time,
         inject_topic_anchor, build_identity_prefix, process_memory_commands,
@@ -287,6 +286,7 @@ async def llm_chat_stream(
     messages = request.get("messages", [])
     temperature = request.get("temperature", 0.7)
     max_tokens = request.get("max_tokens", 4096)
+    mode = request.get("mode", "simple")
     if not messages:
         raise HTTPException(400, detail="missing messages")
 
@@ -395,33 +395,38 @@ async def llm_chat_stream(
     # Phase 4: Security
     extra_context = inject_security_context(extra_context)
 
-    # Phase 5: Experts
-    from ..cortex import classify_fine, run_experts as cortex_run_experts, decide as cortex_decide
-    _cortex_routing = classify_fine(user_msg)
+    # Phase 5: Experts — skipped in "simple" mode. The frontend always sends
+    # mode="simple"; running 5+ serial expert subprocesses there made every
+    # complex question wait 30-40s for the first token (and hit the 35s
+    # client timeout). Expert routing remains available via mode="auto"/"expert".
+    _cortex_routing = None
     _cortex_tone = "normal"
     _cortex_clarify = None
     _cortex_recap = None
     _cortex_drift_warning = None
-    if _cortex_routing.get("level") == "expert":
-        expert_result = cortex_run_experts(user_msg, user.get("email", "") if user else "",
-                                           expert_subset=_cortex_routing.get("experts"))
-        decision = cortex_decide(expert_result,
-                                 first_msg=next((m["content"] for m in messages if m.get("role") == "user"), ""),
-                                 latest_reply=next((m["content"] for m in reversed(messages) if m.get("role") == "assistant"), ""))
-        if decision["blocked"]:
-            # Return block reason as SSE message instead of HTTP error
-            # — HTTP 403 causes frontend to show "API Key invalid" which is misleading
-            _block_msg = str(decision.get("opinion", "I'm not able to answer that."))
-            async def _blocked_stream():
-                yield f"data: {json.dumps({'token': _block_msg})}\n\n"
-                yield "data: [DONE]\n\n"
-            return StreamingResponse(_blocked_stream(), media_type="text/event-stream")
-        _cortex_tone = decision["adjustments"]["tone"]
-        _cortex_clarify = decision["adjustments"]["clarify"]
-        _cortex_recap = decision["adjustments"]["recap"]
-        _cortex_drift_warning = decision["adjustments"]["drift_warning"]
-        if decision["expert_notes"]:
-            extra_context += "\n" + decision["expert_notes"].strip()
+    if mode != "simple":
+        from ..cortex import classify_fine, run_experts as cortex_run_experts, decide as cortex_decide
+        _cortex_routing = classify_fine(user_msg)
+        if _cortex_routing.get("level") == "expert":
+            expert_result = cortex_run_experts(user_msg, user.get("email", "") if user else "",
+                                               expert_subset=_cortex_routing.get("experts"))
+            decision = cortex_decide(expert_result,
+                                     first_msg=next((m["content"] for m in messages if m.get("role") == "user"), ""),
+                                     latest_reply=next((m["content"] for m in reversed(messages) if m.get("role") == "assistant"), ""))
+            if decision["blocked"]:
+                # Return block reason as SSE message instead of HTTP error
+                # — HTTP 403 causes frontend to show "API Key invalid" which is misleading
+                _block_msg = str(decision.get("opinion", "I'm not able to answer that."))
+                async def _blocked_stream():
+                    yield f"data: {json.dumps({'token': _block_msg})}\n\n"
+                    yield "data: [DONE]\n\n"
+                return StreamingResponse(_blocked_stream(), media_type="text/event-stream")
+            _cortex_tone = decision["adjustments"]["tone"]
+            _cortex_clarify = decision["adjustments"]["clarify"]
+            _cortex_recap = decision["adjustments"]["recap"]
+            _cortex_drift_warning = decision["adjustments"]["drift_warning"]
+            if decision["expert_notes"]:
+                extra_context += "\n" + decision["expert_notes"].strip()
 
     # Build prompt
     enhanced_system = build_system_prompt(system_msg)
@@ -513,12 +518,15 @@ async def llm_chat_stream(
     enhanced_system, identity_prefix = inject_safety_and_metacog(
         enhanced_system, identity_prefix, user)
 
-    # ── Windows-MCP 能力注入 ──
+    # ── Windows-MCP capability injection ──
     try:
         import httpx as _httpx
-        WINDOWS_MCP_KEY = "sk-aelvoxim-38179e1738a8b83daaf8145e5a85f7db5200753ab2100811"
-        WINDOWS_MCP_URL = "http://172.24.80.1:8000"
-        # 测试连通性并获取桌面路径
+        import os as _os_mcp
+        WINDOWS_MCP_KEY = _os_mcp.environ.get("WINDOWS_MCP_KEY", "")
+        WINDOWS_MCP_URL = _os_mcp.environ.get("WINDOWS_MCP_URL", "")
+        if not (WINDOWS_MCP_KEY and WINDOWS_MCP_URL):
+            raise _McpNotConfigured()
+        # Probe connectivity and fetch desktop path
         _test = _httpx.get(f"{WINDOWS_MCP_URL}/mcp",
                            headers={"Authorization": f"Bearer {WINDOWS_MCP_KEY}"}, timeout=3)
         if _test.status_code < 500:
@@ -572,6 +580,8 @@ async def llm_chat_stream(
 你: "我通过 Windows-MCP 查询桌面文件。
 [WIN:PowerShell] {{"command": "Get-ChildItem 'C:\\Users\\{_win_user}\\Desktop' | Select-Object Name | ConvertTo-Json"}}"
 """
+    except _McpNotConfigured:
+        pass  # Windows-MCP 未配置 — 静默跳过能力注入，不再 3s 干等
     except Exception:
         _log.exception("routes_chat error")
 
@@ -579,7 +589,17 @@ async def llm_chat_stream(
 
     # ── Streaming LLM call — use config from call_llm_if_available ──
     models = [mc]
-    stream = call_llm_stream(models, enhanced_system, full_prompt)
+    try:
+        stream = call_llm_stream(models, enhanced_system, full_prompt)
+    except LLMError as _llm_err:
+        # Surface a readable message instead of a 500 or a silent empty
+        # stream. The generator below turns this into an SSE token.
+        _log.error("LLM stream init failed: %s", _llm_err)
+
+        def _err_stream():
+            yield f"data: {json.dumps({'token': f'（模型暂时不可用：{_llm_err}）'})}\n\n"
+            yield "data: [DONE]\n\n"
+        stream = _err_stream()
 
     # Collect full response in background task
     _pg_collected = []
@@ -591,9 +611,12 @@ async def llm_chat_stream(
     # Generate a session ID upfront so user message is saved immediately
     # — this prevents data loss when user switches sessions mid-stream
     import time as _tmod
-    _pg_sid = _pg_email.replace("@", "_at_") + ":" + str(int(_tmod.time()))
+    _req_sid = str(request.get("session_id", "") or "").strip()
+    _pg_sid = _req_sid or (_pg_email.replace("@", "_at_") + ":" + str(int(_tmod.time())))
 
     # Save user message immediately (not waiting for stream to finish)
+    import time as _tmod2
+    _t0_stream = _tmod2.time()  # wall-clock start for post-chat response_time_ms
     if _pg_email and _pg_msg:
         try:
             from ..storage.db import save_session_to_pg, save_message_to_pg
@@ -616,7 +639,7 @@ async def llm_chat_stream(
                         if _re.search(r'\[TOOL:\w+\]\s*\{', _norm):
                             _tool_seen = True
                             continue
-                        # 检测 Windows-MCP 调用标记
+                        # Detect Windows-MCP call marker
                         if _re.search(r'\[WIN:\w+\]', _norm):
                             _tool_seen = True
                             continue
@@ -624,7 +647,7 @@ async def llm_chat_stream(
 
             _full_text = "".join(_pg_collected)
             if _full_text:
-                # ── Windows-MCP 工具执行 ──
+                # ── Windows-MCP tool execution ──
                 _win_match = _re.search(r'\[WIN:(\w+)\]\s*(\{.*?\})', _full_text, _re.DOTALL)
                 if _win_match:
                     _win_action = _win_match.group(1)
@@ -637,9 +660,9 @@ async def llm_chat_stream(
                         import httpx as _httpx_w
                         import os as _os_w
                         WINDOWS_MCP_KEY = _os_w.environ.get("WINDOWS_MCP_KEY", "")
-                        WINDOWS_MCP_URL = _os_w.environ.get("WINDOWS_MCP_URL", "http://172.24.80.1:8000")
-                        if not WINDOWS_MCP_KEY:
-                            raise RuntimeError("Windows-MCP not configured (set WINDOWS_MCP_KEY)")
+                        WINDOWS_MCP_URL = _os_w.environ.get("WINDOWS_MCP_URL", "")
+                        if not (WINDOWS_MCP_KEY and WINDOWS_MCP_URL):
+                            raise RuntimeError("Windows-MCP not configured (set WINDOWS_MCP_KEY and WINDOWS_MCP_URL)")
                         _sid_resp = _httpx_w.get(f"{WINDOWS_MCP_URL}/mcp",
                             headers={"Authorization": f"Bearer {WINDOWS_MCP_KEY}"}, timeout=5)
                         _sid = _sid_resp.headers.get("mcp-session-id", "")
@@ -661,7 +684,7 @@ async def llm_chat_stream(
                                     _c = _win_result.get("result",{}).get("content",[])
                                     if _c and _c[0].get("text"):
                                         _win_output = _c[0]["text"][:500]
-                                    # 替换 [WIN:xxx] 为结果，然后让 AI 继续
+                                    # Replace [WIN:xxx] with result, let AI continue
                                     _full_text = _full_text.replace(
                                         _win_match.group(0),
                                         f"\n[Windows 执行结果] {_win_output}\n"
@@ -700,6 +723,16 @@ async def llm_chat_stream(
                             return
                 except Exception as _exc:
                     _chat_log.warning("  Stream tool execution error: %s", _exc)
+            if not "".join(_pg_collected).strip():
+                # Empty stream (e.g. model returned reasoning-only, no content):
+                # surface a visible placeholder instead of a silent blank bubble.
+                yield f"data: {json.dumps({'token': '（模型未生成内容，请重试或换一种问法）'})}\n\n"
+            yield "data: [DONE]\n\n"
+        except LLMError as _llm_err:
+            # Mid-stream LLM failure (429/network/empty) — tell the user what
+            # happened instead of a generic "Internal error" or a blank bubble.
+            _log.error("LLM stream mid-stream error: %s", _llm_err)
+            yield f"data: {json.dumps({'token': f'（模型响应中断：{_llm_err}）'})}\n\n"
             yield "data: [DONE]\n\n"
         except Exception as e:
             _log.exception("routes_chat stream error")  # log real error
@@ -712,6 +745,21 @@ async def llm_chat_stream(
                 save_message_to_pg(_pg_sid, "assistant", _text)
             except Exception:
                 _log.exception("routes_chat error")
+
+        # Post-chat quality evaluation (mirrors chat_pipeline). Must run for
+        # BOTH non-empty and empty replies — an empty reply IS a quality
+        # signal (failed/blank stream). Safe: wrapped in try.
+        try:
+            from .chat_monitor import evaluate_conversation
+            evaluate_conversation(
+                query=_pg_msg or user_msg,
+                answer=_text,
+                user_id=user.get("email", "") if user else "",
+                knowledge_results=[],
+                response_time_ms=max(0.0, _tmod.time() - _t0_stream) * 1000,
+            )
+        except Exception:
+            _log.exception("routes_chat post-chat eval error")
     return StreamingResponse(
         _generate(),
         media_type="text/event-stream",

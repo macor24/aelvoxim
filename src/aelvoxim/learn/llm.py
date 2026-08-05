@@ -20,6 +20,49 @@ from urllib.error import URLError
 import logging
 _log = logging.getLogger("aelvoxim.learn.llm")
 
+# ── Background concurrency gate ────────────────────
+#
+# Background tasks (learner extract/validate/decompose, scheduler) must never
+# saturate the model channel. A single semaphore serializes ALL background LLM
+# calls: at most one in flight at any time. User chat requests run in the API
+# process and never pass through this gate (they are isolated by process).
+import threading as _threading
+_BG_LLM_SEM = _threading.Semaphore(1)
+_BG_LLM_TIMEOUT = 15  # seconds — background calls give up fast; chat must not wait
+
+def bg_llm_call(fn, *args, **kwargs):
+    """Run a background LLM call under the global concurrency gate.
+
+    Acquires the semaphore (blocks if another background call is in flight),
+    enforces a short wall-clock timeout, and always releases. Returns None on
+    timeout so callers can treat it as 'skip this task'.
+    """
+    acquired = _BG_LLM_SEM.acquire(timeout=_BG_LLM_TIMEOUT)
+    if not acquired:
+        _log.warning("bg_llm_call: gate busy >%ss, skipping", _BG_LLM_TIMEOUT)
+        return None
+    try:
+        # Wall-clock cap: even if the underlying model call has its own
+        # timeout, never let a background call exceed the budget — a failed
+        # background task is skippable, a stalled chat request is not.
+        _result = {}
+        def _run():
+            try:
+                _result["val"] = fn(*args, **kwargs)
+            except BaseException as _e:  # noqa: BLE001 — capture everything
+                _result["exc"] = _e
+        _t = _threading.Thread(target=_run, daemon=True)
+        _t.start()
+        _t.join(timeout=_BG_LLM_TIMEOUT)
+        if _t.is_alive():
+            _log.warning("bg_llm_call: timed out after %ss, abandoning", _BG_LLM_TIMEOUT)
+            return None
+        if "exc" in _result:
+            raise _result["exc"]
+        return _result.get("val")
+    finally:
+        _BG_LLM_SEM.release()
+
 # ── Model config ────────────────────────────────────
 
 
@@ -404,13 +447,22 @@ def _call_openai_compat_stream(
     try:
         conn.request("POST", path, body=payload, headers=headers)
         resp = conn.getresponse()
-        
+
+        # Non-2xx (429 rate-limit, 5xx upstream, auth errors) means the body is
+        # an error JSON, not SSE — silently ignoring it produced empty streams
+        # that surfaced as blank bubbles / "no content" on the frontend.
+        if resp.status != 200:
+            err_body = resp.read(2000).decode("utf-8", errors="replace")
+            _log.error("LLM stream HTTP %s from %s: %s", resp.status, model.name, err_body[:300])
+            raise LLMError(f"LLM {model.name} returned HTTP {resp.status}: {err_body[:120]}")
+
+        yielded = False
         while True:
             line = resp.readline()
             if not line:
                 break
             line_str = line.decode("utf-8", errors="replace").strip()
-            
+
             # SSE format: data: {"choices":[{"delta":{"content":"..."}}]}
             if line_str.startswith("data: "):
                 data_str = line_str[6:]
@@ -421,9 +473,23 @@ def _call_openai_compat_stream(
                     delta = data.get("choices", [{}])[0].get("delta", {})
                     content = delta.get("content", "")
                     if content:
+                        yielded = True
                         yield content
                 except json.JSONDecodeError:
                     _log.exception("llm error")
+
+        # Stream ended with zero content tokens (e.g. reasoning-only or
+        # upstream sent nothing). Surface it instead of a silent blank reply.
+        if not yielded:
+            _log.error("LLM stream %s ended with no content tokens", model.name)
+            raise LLMError(f"LLM {model.name} returned empty stream")
+    except LLMError:
+        raise
+    except Exception as e:
+        # Network/timeout/connection errors → fail loudly so the caller can
+        # fall back, never a silent empty reply.
+        _log.error("LLM stream %s failed: %s", model.name, e)
+        raise LLMError(f"LLM {model.name} stream failed: {e}")
     finally:
         conn.close()
 

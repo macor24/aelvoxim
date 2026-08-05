@@ -22,25 +22,39 @@ function fireSessionConflict() {
 }
 
 /**
- * Wrapped fetch that checks for X-Session-Conflict header.
+ * Wrapped fetch that checks for X-Session-Conflict header and enforces a
+ * default timeout so a hung backend cannot spin the UI forever.
  * Use this instead of raw fetch for all API calls.
  */
 export async function apiFetch(
   url: string,
   options: RequestInit = {},
+  timeoutMs = 30000,
 ): Promise<Response> {
-  const res = await fetch(url, options);
-
-  if (res.headers.get('X-Session-Conflict') === 'true') {
-    fireSessionConflict();
-    try {
-      const store = useAuthStore.getState();
-      store.tenants.forEach((t: { id: string }) => store.removeTenant(t.id));
-    } catch {}
-    throw new Error('session_conflict');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  // Chain an external signal if the caller provided one
+  const extSignal = options.signal;
+  if (extSignal) {
+    if (extSignal.aborted) controller.abort();
+    else extSignal.addEventListener('abort', () => controller.abort());
   }
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
 
-  return res;
+    if (res.headers.get('X-Session-Conflict') === 'true') {
+      fireSessionConflict();
+      try {
+        const store = useAuthStore.getState();
+        store.tenants.forEach((t: { id: string }) => store.removeTenant(t.id));
+      } catch {}
+      throw new Error('session_conflict');
+    }
+
+    return res;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**

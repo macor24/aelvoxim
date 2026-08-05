@@ -90,6 +90,13 @@ def save_config_to_file(data: Dict) -> None:
                     val.get("entries_created", 0),
                     json.dumps(val),
                 ))
+            # Full-sync: purge PG rows no longer in memory. Without this, stale-cleanup
+            # (which only pops memory) leaves ghost rows that resurrect on reload.
+            _topics = [str(v.get("topic", k)) for k, v in data.items()]
+            if _topics:
+                execute("DELETE FROM learning_directions WHERE NOT (topic = ANY(%s))", (_topics,))
+            else:
+                execute("DELETE FROM learning_directions")
         except Exception as e:
             import logging
             logging.getLogger("aelvoxim.direction").warning("PG save failed: %s", e)
@@ -145,6 +152,7 @@ class DirectionManager:
         self._log = log_func
         self._plan_getter = plan_getter  # optional callable → plan name
         self._creation_lock: Dict[str, float] = {}  # topic_lower → timestamp, 20-min cooldown
+        self._cleanup_blacklist: Dict[str, float] = {}  # topic_lower → timestamp, 1h cooldown
 
     # ── Validation ──
 
@@ -168,6 +176,29 @@ class DirectionManager:
             return False
         return True
 
+    @staticmethod
+    def _is_semantically_similar(new_topic: str, existing: Dict[str, 'LearningDirection']) -> Optional[str]:
+        """Check if a new topic is semantically similar to an existing direction.
+
+        Uses word-overlap Jaccard similarity. Returns the existing direction topic
+        if similarity >= 0.6 (near-duplicate), None otherwise.
+        """
+        if not existing:
+            return None
+        new_words = set(w.lower() for w in new_topic.split() if len(w) > 2)
+        if not new_words:
+            return None
+        for topic, _ in existing.items():
+            existing_words = set(w.lower() for w in topic.split() if len(w) > 2)
+            if not existing_words:
+                continue
+            intersection = new_words & existing_words
+            union = new_words | existing_words
+            jaccard = len(intersection) / max(len(union), 1)
+            if jaccard >= 0.6:
+                return topic
+        return None
+
     # ── Safety gate ──
 
     @staticmethod
@@ -180,6 +211,21 @@ class DirectionManager:
         except Exception:
             return True
 
+    def mark_cleanup_removed(self, topic: str, cooldown: float = 3600) -> None:
+        """Mark a topic removed by cleanup, preventing re-creation for `cooldown` seconds.
+
+        Capacity-driven cleanup (passive) should use a short cooldown (soft ban,
+        e.g. 900s) so core technical domains are not repeatedly hard-blocked.
+        Failure-driven cleanup (active) keeps the default long cooldown (hard ban).
+        """
+        _key = topic.lower()
+        self._cleanup_blacklist[_key] = time.time() + cooldown
+        # Also clean stale blacklist entries
+        _now = time.time()
+        _stale = [k for k, t in self._cleanup_blacklist.items() if _now > t]
+        for k in _stale:
+            self._cleanup_blacklist.pop(k, None)
+
     # ── CRUD ──
 
     def add(self, topic: str, plan: str = "community") -> bool:
@@ -189,6 +235,15 @@ class DirectionManager:
         if not self.is_valid_direction(topic):
             self._log(f"  🚫 Rejected low-quality direction: {topic}")
             return False
+        # Cleanup blacklist check: topic removed by capacity cleanup cannot be recreated for 1h
+        _key = topic.lower()
+        _now = time.time()
+        if _key in self._cleanup_blacklist:
+            if _now < self._cleanup_blacklist[_key]:
+                self._log(f"  🚫 [{topic}] In cleanup blacklist ({(self._cleanup_blacklist[_key] - _now)/60:.0f}min remaining)")
+                return False
+            else:
+                self._cleanup_blacklist.pop(_key, None)
         if topic in self._directions:
             # Allow re-adding if the existing direction is archived (completed + archived)
             existing = self._directions[topic]
@@ -212,6 +267,16 @@ class DirectionManager:
         _stale = [k for k, t in self._creation_lock.items() if _now - t > 1200]
         for k in _stale:
             self._creation_lock.pop(k, None)
+        # Semantic similarity check: block near-duplicate directions
+        _similar = self._is_semantically_similar(topic, self._directions)
+        if _similar:
+            self._log(f"  🚫 [{topic}] Semantically similar to existing direction: '{_similar}' — blocking duplicate")
+            return False
+        # Active direction hard limit: block if too many are already active
+        _active = self.active_count()
+        if _active >= 22:
+            self._log(f"  🚫 [{topic}] Active direction hard limit reached ({_active}/22) — rejecting new direction")
+            return False
         # Plan limit check
         try:
             from ..server.auth import PLANS

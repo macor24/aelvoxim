@@ -97,6 +97,7 @@ def _user_to_dict(row: tuple) -> dict:
 def _user_to_dict_pg(u: dict) -> dict:
     """Convert PG RealDict row to dict matching old JSON format."""
     return {
+        "id": str(u.get("id", "")),
         "api_key": u.get("api_key", ""),
         "email": u.get("email", ""),
         "username": u.get("username", "") or "",
@@ -465,8 +466,14 @@ def update_user_field(email: str, field: str, value: any) -> bool:
 
 
 def delete_user(email: str) -> bool:
-    """Delete a user and all their data. Works with both PG and JSON storage."""
+    """Delete a user and all their data. Works with both PG and JSON storage.
+
+    Always cleans BOTH stores: users can exist in PG, JSON, or both (the
+    combined list merges them), so deleting only the active store leaves
+    ghost entries that reappear in the admin list.
+    """
     email_lower = email.lower().strip()
+    pg_ok = True
     if use_pg():
         try:
             # Cascade: messages → sessions → user
@@ -474,16 +481,20 @@ def delete_user(email: str) -> bool:
             execute("DELETE FROM chat_sessions WHERE user_id IN (SELECT id FROM users WHERE email = %s)", (email_lower,))
             execute("DELETE FROM proactive_push_log WHERE user_id IN (SELECT id FROM users WHERE email = %s)", (email_lower,))
             execute("DELETE FROM users WHERE email = %s", (email_lower,))
-            return True
         except Exception:
-            return False
-    # JSON fallback
+            pg_ok = False
+            _log.exception("auth error")
+    # JSON cleanup — always run, so JSON-only users (e.g. test accounts that
+    # never got written to PG) are actually removed.
+    json_found = False
     for f in USERS_DIR.glob("*.json"):
         try:
             data = json.loads(f.read_text())
             if data.get("email", "").lower() == email_lower:
                 f.unlink()
-                return True
+                json_found = True
         except Exception:
             _log.exception("auth error")
-    return False
+    if use_pg():
+        return pg_ok or json_found
+    return json_found

@@ -18,7 +18,7 @@ from typing import TypeVar, Generic, Set
 _T = TypeVar("_T")
 
 
-# ═══ Topic Fuse (话题切换熔断) ═══
+# ═══ Topic Fuse (topic-switch circuit breaker) ═══
 
 class TopicFuse:
     """Detect consecutive topic switches without explicit signal — fuse old context.
@@ -189,7 +189,14 @@ def get_topic_fuse() -> TopicFuse:
 class _UserScoped(Generic[_T]):
     """Each user (identified by email) gets an isolated copy of a mutable value.
     Thread-safe — uses Lock for concurrent FastAPI requests.
+
+    Bounded: the store keeps at most _MAX_USERS entries; when exceeded, the
+    least-recently-created entries are dropped (FIFO) so memory cannot grow
+    unbounded with user count.
     """
+
+    _MAX_USERS = 1000
+
     def __init__(self, factory):
         self._factory = factory
         self._store: dict[str, _T] = {}
@@ -198,23 +205,28 @@ class _UserScoped(Generic[_T]):
     def _uid(self, user: dict) -> str:
         return (user or {}).get("email", "") or ""
 
+    def _bounded_get(self, uid: str) -> _T:
+        if uid not in self._store:
+            if len(self._store) >= _UserScoped._MAX_USERS:
+                # Drop oldest entries (dict preserves insertion order)
+                for old_uid in list(self._store)[: len(self._store) - _UserScoped._MAX_USERS + 1]:
+                    self._store.pop(old_uid, None)
+            self._store[uid] = self._factory()
+        return self._store[uid]
+
     def get(self, user: dict, *, default=None) -> _T:
         uid = self._uid(user)
         if not uid:
             return default  # type: ignore[return-value]
         with self._lock:
-            if uid not in self._store:
-                self._store[uid] = self._factory()
-            return self._store[uid]
+            return self._bounded_get(uid)
 
     def get_raw(self, uid: str, *, default=None) -> _T:
         """Bypass user dict — use when only uid string is available."""
         if not uid:
             return default  # type: ignore[return-value]
         with self._lock:
-            if uid not in self._store:
-                self._store[uid] = self._factory()
-            return self._store[uid]
+            return self._bounded_get(uid)
 
     def clear(self, user: dict) -> None:
         uid = self._uid(user)
@@ -594,7 +606,7 @@ def run_experts(user_msg: str, user: dict, extra_context: str) -> str:
 
 def build_conversation_history(messages: List[dict], enhanced_system: str) -> str:
     history = ""
-    # 只取非 system 消息，保留最近 20 轮（40 条：user + assistant）
+    # Keep only non-system messages, last 20 turns (40 msgs: user + assistant)
     non_system = [m for m in messages[:-1] if m.get("role") != "system"]
     if len(non_system) > 40:
         history += "[早期消息已省略]\n\n"
@@ -621,7 +633,7 @@ def inject_system_time(enhanced_system: str) -> str:
 
 def inject_topic_anchor(messages: List[dict], enhanced_system: str) -> str:
     try:
-        # 从最后 3 条 user 消息中取第一条非短引用词的消息作为话题锚点
+        # Topic anchor: first non-short-reference message among last 3 user messages
         user_msgs = []
         for m in reversed(messages):
             if m.get("role") == "user":
@@ -631,7 +643,7 @@ def inject_topic_anchor(messages: List[dict], enhanced_system: str) -> str:
                 user_msgs.append(content)
                 if len(user_msgs) >= 3:
                     break
-        # 从后往前找，取第一个不是短应答词的消息
+        # Scan backwards for the first non-short-reply message
         filler = {"嗯", "好", "行", "对", "是的", "没错", "继续", "next", "嗯嗯"}
         anchor = ""
         for msg in reversed(user_msgs):
@@ -710,13 +722,14 @@ def store_conversation_memory(user_msg: str, text: str, user: dict) -> str:
 
 def extract_and_store_entities(user_msg: str, text: str, user: dict, event_id: str) -> None:
     try:
-        from .entity_extractor import extract
-        entities = extract(user_msg + " " + (text or ""))
+        from .entity_extractor import extract_entities
+        _result = extract_entities(user_msg, str(text or ""))
+        entities = _result.get("entities", [])
         if entities:
             for ent in entities:
                 try:
                     from ..memory import store_entity
-                    store_entity(key=ent.get("name", ent.get("key", "")),
+                    store_entity(ent.get("name", ent.get("key", "")),
                                 etype=ent.get("type", "concept"),
                                 attributes={"value": ent.get("value", ""), "source": "chat"})
                 except Exception:
@@ -790,7 +803,7 @@ def _is_reference_phrase(msg: str) -> bool:
     if not msg:
         return False
     m = msg.strip().lower()
-    # 短引用词
+    # Short reference words
     short_refs = {"that", "this", "next", "continue", "结果", "然后", "继续",
                   "elaborate", "explain", "tell me more", "go on", "嗯", "好",
                   "行", "对", "是的", "没错", "然后呢", "还有呢"}
@@ -798,9 +811,9 @@ def _is_reference_phrase(msg: str) -> bool:
         return True
     if any(m.startswith(r) for r in short_refs):
         return True
-    # 消息很短（少于15字）且没有明显的新话题关键词，视为引用
+    # Very short message (<15 chars) without new-topic keywords -> treated as reference
     if len(m) < 15:
-        # 如果有疑问词或新话题标记，不算引用
+        # Question words or new-topic markers -> not a reference
         question_words = {"什么", "怎么", "为什么", "如何", "是否", "有没有",
                           "who", "what", "why", "how", "where", "when", "which"}
         if not any(q in m for q in question_words):
@@ -839,7 +852,7 @@ def chat_pipeline(
     user_msg = next((m["content"] for m in reversed(messages) if m.get("role") == "user"), "")
     extra_context = ""
 
-    # ═══ Topic Fuse (话题切换熔断) — highest priority ═══
+    # ═══ Topic Fuse (topic-switch circuit breaker) — highest priority ═══
     if user and user.get("email"):
         _user_email = user["email"]
         # Build current topic context from ALL user messages (broad context)
@@ -859,7 +872,7 @@ def chat_pipeline(
 
     # Reference phrase
     if _is_reference_phrase(user_msg):
-        # 取最近 2 轮 assistant 回复作为引用上下文
+        # Use last 2 assistant replies as reference context
         refs = []
         for m in reversed(messages[:-1]):
             if m.get("role") == "assistant":
@@ -1151,24 +1164,27 @@ def chat_pipeline(
         _log.exception("service_chat error")
 
     # Post-chat quality evaluation
-    if text:
-        try:
-            from .chat_monitor import evaluate_conversation
-            evaluate_conversation(
-                query=user_msg,
-                answer=text,
-                user_id=user.get("email", "") if user else "",
-                knowledge_results=[],
-                response_time_ms=(time.time() - t0) * 1000,
-            )
-        except Exception:
-            _log.exception("service_chat error")
+    # NOTE: evaluate even when text is empty — an empty/blank reply IS a
+    # quality signal (failed stream, no content) and must be recorded.
+    # Self-review and learning below still require non-empty text.
+    try:
+        from .chat_monitor import evaluate_conversation
+        evaluate_conversation(
+            query=user_msg,
+            answer=text,
+            user_id=user.get("email", "") if user else "",
+            knowledge_results=[],
+            response_time_ms=(_time.time() - t0) * 1000,
+        )
+    except Exception:
+        _log.exception("service_chat error")
 
-        # Self-review (content-level quality assessment)
+    # Self-review (content-level quality assessment)
+    if text:
         try:
             from ..core.self_review import hook_review
             _review_result = hook_review(
-                conversation_id=f"sess_{int(time.time())}",
+                conversation_id=f"sess_{int(_time.time())}",
                 user_question=user_msg,
                 assistant_response=text,
             )
@@ -1217,9 +1233,9 @@ def chat_pipeline(
 
                 # ── 1c. Repeat question → belief decay ──
                 if signals.get("repeat_question"):
-                    from ..core.belief import get_pool as _bp
-                    _pool = _bp()
-                    _pool.decay_belief(f"topic:{signals.get('raw_topic', 'unknown')}")
+                    from ..core.belief import BeliefPool
+                    _pool = BeliefPool()
+                    _pool.record_outcome(f"topic:{signals.get('raw_topic', 'unknown')}", success=False)
 
                 # ── 1d. Iterate: update confidence for recently-referenced knowledge ──
                 _recent_hit = _get_recent_knowledge_hit(user_msg, user)
@@ -1271,8 +1287,8 @@ def _extract_facts_from_reply(reply: str, query: str) -> list:
 def _record_belief(key: str, success: bool) -> None:
     """Record a belief outcome in the BeliefPool."""
     try:
-        from ..core.belief import get_pool as _bp
-        _pool = _bp()
+        from ..core.belief import BeliefPool
+        _pool = BeliefPool()
         _pool.record_outcome(key, success)
     except Exception:
         _log.exception("service_chat error")

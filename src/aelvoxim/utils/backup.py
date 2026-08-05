@@ -1,10 +1,11 @@
-"""aelvoxim.utils.backup — Scheduled data backup."""
+"""aelvoxim.utils.backup — Scheduled data backup (tar.gz, logs excluded)."""
 from __future__ import annotations
 
 import json
 import logging
 import os
 import shutil
+import tarfile
 import threading
 import time
 from datetime import datetime
@@ -16,40 +17,45 @@ from . import DATA_DIR
 log = logging.getLogger("aelvoxim.backup")
 
 BACKUP_DIR = DATA_DIR / "backups"
-_MAX_BACKUPS = 7  # keep 7 days of backups
+_MAX_BACKUPS = 3  # keep 3 most recent backups
 _BACKUP_INTERVAL = 86400  # once per day
+_EXCLUDE_DIRS = {"backups", "logs"}  # logs live in /var/aelvoxim/logs — no need to duplicate 54MB each time
 
 
 def _backup_path() -> Path:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-    return BACKUP_DIR / f"aelvoxim_backup_{ts}"
+    return BACKUP_DIR / f"aelvoxim_backup_{ts}.tar.gz"
 
 
 def _cleanup_old():
-    """Remove backups older than the max count."""
+    """Remove backups beyond the max count (legacy dirs + new tarballs both match)."""
     backups = sorted(BACKUP_DIR.glob("aelvoxim_backup_*"))
     while len(backups) > _MAX_BACKUPS:
         try:
-            shutil.rmtree(backups[0])
-            log.info("Removed old backup: %s", backups[0].name)
+            victim = backups[0]
+            if victim.is_dir():
+                shutil.rmtree(victim)
+            else:
+                victim.unlink()
+            log.info("Removed old backup: %s", victim.name)
         except Exception as e:
-            log.warning("Failed to remove old backup %s: %s", backups[0].name, e)
+            log.warning("Failed to remove old backup %s: %s", backups[0], e)
         backups = backups[1:]
 
 
 def _do_backup() -> Optional[Path]:
-    """Copy DATA_DIR to timestamped backup dir, excluding backups/ itself."""
+    """Pack DATA_DIR into a timestamped tar.gz, excluding backups/ and logs/."""
     try:
         dest = _backup_path()
-        dest.mkdir(parents=True, exist_ok=True)
-        for item in DATA_DIR.iterdir():
-            if item.name == "backups":
-                continue
-            if item.is_file():
-                shutil.copy2(item, dest / item.name)
-            elif item.is_dir():
-                shutil.copytree(item, dest / item.name, dirs_exist_ok=True)
+        with tarfile.open(dest, "w:gz") as tar:
+            for item in DATA_DIR.iterdir():
+                if item.name in _EXCLUDE_DIRS:
+                    continue
+                try:
+                    tar.add(item, arcname=item.name)
+                except Exception as e:
+                    log.warning("Skipped %s in backup: %s", item.name, e)
         log.info("Backup created: %s", dest)
         _cleanup_old()
         return dest

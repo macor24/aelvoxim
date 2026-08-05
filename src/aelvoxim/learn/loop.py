@@ -18,7 +18,10 @@ from typing import Any, Dict, List, Optional
 
 from ..utils import METACORE_DIR, ensure_dir, read_json, write_json, LLM_CONFIG_FILE
 
-_RATE_LIMIT_MAX = 5  # Max cognition ticks per 24 hours
+_RATE_LIMIT_MAX = 5  # Max cognition ticks per 24 hours (per direction)
+_RATE_LIMIT_MIN_INTERVAL = 300  # Min seconds between cognition ticks per direction (5 min — was 60s; fewer, slower ticks)
+_LOOP_ROUND_SLEEP = 600       # Rest between full loop rounds (10 min — was ~8-15s per direction)
+_MAX_ACTIVE_DIRECTIONS = 22  # Max concurrently active learning directions; beyond this, auto-discovery pauses
 
 # Paths
 LEARNER_DIR = METACORE_DIR / "learner"
@@ -87,6 +90,11 @@ class Learner:
         self._running = False
         self._thread: Optional[threading.Thread] = None
         self._health_thread: Optional[threading.Thread] = None
+        self._health_alive = False          # health daemon lifecycle (independent of _running)
+        self._start_lock = threading.Lock()   # prevent duplicate start() spawns
+        self._restart_lock = threading.Lock() # serialize health-daemon respawns
+        self._last_restart_ts = 0.0          # anti-flap: min 60s between respawns
+        self._rapid_restarts = 0             # rapid-death counter → 10min cooldown
         self._knowledge = KnowledgeBase()
         self._last_auto_discover = 0
         self._enable_auto_discover = enable_auto_discover
@@ -283,14 +291,25 @@ class Learner:
         """Process one learning direction: decompose → execute → validate → review."""
         topic = direction.topic
 
-        # ── 执行前检查点：已完成任务不再执行 ──
+        # ── Validation cooldown: skip topics that recently failed validation
+        # repeatedly, so a stuck topic cannot dominate the loop or burn LLM
+        # quota. Cooldown is set in validate.execute_and_validate().
+        try:
+            from .validate import is_cooldown
+            if is_cooldown(topic):
+                self._log(f"  ⏸️ [{topic}] In validation cooldown, skipping cycle")
+                return False
+        except Exception:
+            pass
+
+        # ── Pre-execution checkpoint: skip completed tasks ──
         if direction.current_task:
             _done = json.loads(direction.completed_tasks or "[]")
             if direction.current_task in _done:
                 self._log(f"  ⏭️ [{topic}] Task already completed, skipping: {direction.current_task[:50]}")
                 direction.current_task = ""
                 self._dir_mgr.save()
-                # 尝试取下一个未完成任务
+                # Try to fetch the next unfinished task
                 if direction.task_queue and direction.task_queue != "[]":
                     q = json.loads(direction.task_queue)
                     while q:
@@ -548,10 +567,10 @@ class Learner:
                                save_config_fn=self._dir_mgr.save, log_func=self._log)
                 self._dir_mgr.save()
             return True
-        # ── 饱和度评估（v3）：加权验证质量 + 任务完成率 + 难度因子 ──
+        # ── Saturation estimate (v3): weighted validation quality + task completion + difficulty ──
         conf_avg = sum(e.get("confidence", 0.5) for e in entries) / max(len(entries), 1)
         entry_ratio = min(direction.entries_created / 5.0, 1.0)
-        # 验证通过率
+        # validation pass rate
         done_tasks = json.loads(direction.completed_tasks or "[]")
         total_tasks = len(done_tasks) + (len(json.loads(direction.task_queue or "[]")) if direction.task_queue and direction.task_queue != "[]" else 0)
         high_conf = sum(1 for e in entries if e.get("confidence", 0) >= 0.6)
@@ -559,8 +578,8 @@ class Learner:
         high_conf = max(high_conf, direction.entries_created)
         verify_pass_rate = high_conf / max(len(entries) + direction.entries_created, 1)
         task_complete_rate = len(done_tasks) / max(total_tasks, 1) if total_tasks > 0 else 0
-        # 难度因子：总任务数越大、已消耗 cycle 越多 → 难度越高
-        # 饱和度完成门槛应该随难度降低
+        # difficulty: more tasks + more cycles consumed -> higher difficulty
+        # saturation threshold should drop as difficulty rises
         difficulty = min(1.0, total_tasks / 10.0) if total_tasks > 0 else 0.3
         # w_quality > w_progress > w_difficulty
         direction.saturation = round(
@@ -732,10 +751,34 @@ class Learner:
                             _repeat_fail = _failures
                 except Exception:
                     _log.exception("loop error")
+                # ── Per-timeframe success rate tracking ──
+                _tick_snapshots = getattr(self, '_tick_snapshots', [])
+                _tick_snapshots.append((time.time(), _total_entries, _total_cycles))
+                if len(_tick_snapshots) > 100:
+                    _tick_snapshots = _tick_snapshots[-100:]
+                self._tick_snapshots = _tick_snapshots
+                _now = time.time()
+
+                def _window_rate(window_hours: int) -> float:
+                    """Compute success rate over last N hours from snapshots."""
+                    cutoff = _now - window_hours * 3600
+                    recent = [(e, c) for ts, e, c in _tick_snapshots if ts >= cutoff]
+                    if not recent or len(recent) < 2:
+                        return _overall_success  # fall back to lifetime
+                    e0, c0 = recent[0]
+                    e1, c1 = recent[-1]
+                    de = e1 - e0
+                    dc = c1 - c0
+                    return de / max(dc, 1)
+
+                _sr_1d = _window_rate(24)
+                _sr_3d = _window_rate(72)
+                _sr_7d = _window_rate(168)
+
                 _mc_report = _trigger.evaluate(
-                    success_rate_7d=_overall_success,
-                    success_rate_3d=_overall_success,
-                    success_rate_1d=_overall_success,
+                    success_rate_7d=_sr_7d,
+                    success_rate_3d=_sr_3d,
+                    success_rate_1d=_sr_1d,
                     days_since_last_improvement=int(_max_age_days),
                     repeat_error_count=_repeat_fail,
                     external_signal_strength=0.0,
@@ -771,9 +814,17 @@ class Learner:
 
             # ── Unknown discovery (every tick) ──
             try:
-                from aelvoxim.learn.unknown_discovery import scan_unknowns
+                from aelvoxim.learn.unknown_discovery import scan_unknowns, pop_unknown_candidates
                 if scan_unknowns(self._directions, self._log):
                     self._log("  🔍 UnknownDiscovery: new candidate(s) queued")
+                # Consume candidates: try to add as directions (respects hard limit of 22)
+                _ud_topic = pop_unknown_candidates(max_count=1)
+                if _ud_topic:
+                    _candidate = _ud_topic[0][:180] if isinstance(_ud_topic[0], str) else str(_ud_topic[0])[:180]
+                    if self.add_direction(_candidate):
+                        self._log(f"  🧠 [UnknownDiscovery] Started learning: {_candidate}")
+                    else:
+                        self._log(f"  ⏭️ [UnknownDiscovery] Failed to add: {_candidate}")
             except Exception:
                 _log.exception("loop error")
 
@@ -801,7 +852,7 @@ class Learner:
             except Exception:
                 _log.exception("loop error")
 
-            # ── Meta-review: 元认知日志自审（每10个tick） ──
+            # ── Meta-review: self-audit of metacog logs (every 10 ticks) ──
             try:
                 _mrv = getattr(self, '_meta_review_tick', 0) + 1
                 self._meta_review_tick = _mrv
@@ -845,6 +896,10 @@ class Learner:
                     _log.exception("loop error")
             else:
                 _memory_cleanup()
+            # KB quality cleanup: archive low-confidence entries (every 60 cycles ≈ 30min)
+            if getattr(self, '_kb_cleanup_tick', 0) % 60 == 0:
+                _kb_cleanup(self._log)
+            self._kb_cleanup_tick = getattr(self, '_kb_cleanup_tick', 0) + 1
 
             # 4. Auto-tune + reflection (skippable via focus)
             if "auto_tune" not in _current_skip and report.get("score", 0) > 0:
@@ -1050,10 +1105,33 @@ class Learner:
                 self._detect_llm_status()
 
                 any_active = False
-                # Cold-first ordering: directions with fewer entries get priority
+                # Priority ordering: near-saturation first, suppress brand-new starts
+                _SAT_NEAR = 0.65  # saturation threshold for "near graduation"
+                _SAT_LOW = 0.30   # below this = just started
+                _now_ts = time.time()
+
+                def _priority(item):
+                    _, d = item
+                    sat = getattr(d, 'saturation', 0.0) or 0.0
+                    entries = d.entries_created
+                    cycles = d.cycles_completed or 1
+                    # Efficiency: higher = better signal
+                    efficiency = entries / max(cycles, 1)
+                    # Distance from near-saturation sweet spot (0.65-0.80)
+                    # Peaked reward around 0.72, steep falloff below 0.4
+                    if sat >= _SAT_NEAR:
+                        # Nearly done — highest priority, push to graduation
+                        return (0, -sat, -efficiency)
+                    elif sat <= _SAT_LOW and entries <= 3:
+                        # Brand new — lowest priority, suppress starting
+                        return (2, sat, cycles)
+                    else:
+                        # Mid-learning — moderate priority
+                        return (1, -efficiency, -entries)
+
                 _sorted = sorted(
                     self._directions.items(),
-                    key=lambda x: (x[1].entries_created, getattr(x[1], "weak_pass_streak", 0))
+                    key=_priority,
                 )
                 for topic, direction in _sorted:
                     if not self._running:
@@ -1076,20 +1154,41 @@ class Learner:
                     _wps = getattr(direction, "weak_pass_streak", 0)
                     if _wps >= 3 and _wps % 2 != 0:
                         continue
+                    # Rate limit: respect _RATE_LIMIT_MIN_INTERVAL per direction
+                    _last_tick = getattr(direction, '_last_tick_time', 0)
+                    _since_last = time.time() - _last_tick
+                    if _since_last < _RATE_LIMIT_MIN_INTERVAL:
+                        self._sleep(min(_RATE_LIMIT_MIN_INTERVAL - _since_last, 10))
+                        continue
+                    # Rate limit: respect _RATE_LIMIT_MAX per 24h per direction
+                    _cycles_today = getattr(direction, 'cycles_completed', 0)
+                    _started = getattr(direction, 'started_at', '')
+                    if _started:
+                        try:
+                            from datetime import datetime as _dt
+                            _start_dt = _dt.strptime(_started, '%Y-%m-%d %H:%M:%S')
+                            _hours_alive = max(1, (time.time() - _start_dt.timestamp()) / 3600)
+                            if _cycles_today / _hours_alive > _RATE_LIMIT_MAX / 24:
+                                self._sleep(10)
+                                continue
+                        except (ValueError, TypeError):
+                            pass
                     any_active = True
 
                     # LLM degraded AND search mock → teach mode
                     if self._llm_status != "available" and self._search_mock:
                         if self._teach_one_cycle(direction):
                             self._last_heartbeat = time.time()
-                            self._sleep(10)
+                            direction._last_tick_time = time.time()
+                            self._sleep(60)
                             continue
                     else:
                         if self._learn_one_cycle(direction):
                             self._last_heartbeat = time.time()
-                            self._sleep(15)
+                            direction._last_tick_time = time.time()
+                            self._sleep(60)
                             continue
-                    self._sleep(8)
+                    self._sleep(30)
                     self._last_heartbeat = time.time()
 
                 # ── Active health scan (every 30 min) ──
@@ -1117,10 +1216,14 @@ class Learner:
                     stale = [t for t, d in self._directions.items()
                              if d.status in ('paused', 'pending') and
                              getattr(d, 'cycles_completed', 0) == 0 and
-                             getattr(d, 'entries_created', 0) == 0]
+                             getattr(d, 'entries_created', 0) == 0 and
+                             getattr(d, 'fail_streak', 0) == 0]
                     for t in stale[:max(0, len(self._directions) - 10)]:
+                        # Passive (capacity) cleanup → soft ban (15 min): core tech
+                        # domains should not be repeatedly hard-blocked.
+                        self._dir_mgr.mark_cleanup_removed(t, cooldown=900)
                         self._directions.pop(t, None)
-                        self._log(f'  🗑️ Removed stale direction (cap): {t}')
+                        self._log(f'  🗑️ Removed stale direction (cap) + soft-blacklisted (15min): {t}')
                     if stale:
                         self._dir_mgr.save()
                         self._log(f'  💾 Direction config saved after cleanup')
@@ -1151,11 +1254,16 @@ class Learner:
                                     getattr(d, 'cycles_completed', 0) >= 5 and
                                     getattr(d, 'entries_created', 0) == 0]
                     for t in stale[:max(0, len(self._directions) - 10)]:
+                        # Passive (capacity) cleanup → soft ban (15 min): core tech
+                        # domains should not be repeatedly hard-blocked.
+                        self._dir_mgr.mark_cleanup_removed(t, cooldown=900)
                         self._directions.pop(t, None)
-                        self._log(f'  🗑️ Removed stale direction (cap): {t}')
+                        self._log(f'  🗑️ Removed stale direction (cap) + soft-blacklisted (15min): {t}')
                     for t in stuck_paused[:max(0, len(self._directions) - 10)]:
+                        # Active (failure-driven) cleanup → hard ban (1h): strict.
+                        self._dir_mgr.mark_cleanup_removed(t)
                         self._directions.pop(t, None)
-                        self._log(f'  🗑️ Removed stuck paused direction: {t}')
+                        self._log(f'  🗑️ Removed stuck paused direction + blacklisted (1h): {t}')
                     if stale or stuck_paused:
                         self._dir_mgr.save()
                         self._log(f'  💾 Direction config saved after cleanup')
@@ -1202,29 +1310,35 @@ class Learner:
                         except Exception:
                             _log.exception("loop error")
 
-                    if self._enable_auto_discover:
-                        found, new_ts = _auto_add(
-                            self._directions, self._last_auto_discover, self._log,
-                            self.add_direction, KnowledgeBase.get_all_active,
-                            suggest_directions_from_knowledge, _search,
+                    # Auto-discovery: only when active count is below the max threshold
+                    _active_cnt = sum(1 for d in self._directions.values() if d.status == "active")
+                    if _active_cnt >= _MAX_ACTIVE_DIRECTIONS:
+                        if self._loop_count % 10 == 0:
+                            self._log(f"  ⏸️ Auto-discovery paused: {_active_cnt} active >= {_MAX_ACTIVE_DIRECTIONS} max")
+                    else:
+                        if self._enable_auto_discover:
+                            found, new_ts = _auto_add(
+                                self._directions, self._last_auto_discover, self._log,
+                                self.add_direction, KnowledgeBase.get_all_active,
+                                suggest_directions_from_knowledge, _search,
+                            )
+                            self._last_auto_discover = new_ts
+                            if found:
+                                self._log("🔄 Auto-discovered new direction")
+                                self._sleep(5)
+                                continue
+
+                        self._last_discovery = _try_discover(
+                            self._directions, self._last_discovery, self._log,
+                            suggest_directions_from_knowledge, self.add_direction,
                         )
-                        self._last_auto_discover = new_ts
-                        if found:
-                            self._log("🔄 Auto-discovered new direction")
-                            self._sleep(5)
-                            continue
 
-                    self._last_discovery = _try_discover(
-                        self._directions, self._last_discovery, self._log,
-                        suggest_directions_from_knowledge, self.add_direction,
-                    )
-
-                    # Post-validation audit (every 30 min, Pro feature)
+                    # Post-validation audit (every 60 min, Pro feature)
                     try:
                         from ..server.edition import get as _ed_get_pv
                         if _ed_get_pv("auto_post_validation", False):
                             _now_pv = time.time()
-                            if not hasattr(self, '_last_post_audit') or _now_pv - self._last_post_audit > 1800:
+                            if not hasattr(self, '_last_post_audit') or _now_pv - self._last_post_audit > 3600:
                                 self._last_post_audit = _now_pv
                                 from ..learn.post_validation import PostValidationEngine
                                 _pve = PostValidationEngine(log_func=self._log)
@@ -1245,14 +1359,37 @@ class Learner:
                     _paused = sum(1 for d in self._directions.values() if d.status == "paused")
                     self._log(f"  📊 Loop#{self._loop_count}: {_active}active/{_completed}completed/{_paused}paused llm={self._llm_status}")
 
+                # Heartbeat: refresh status.json every round so monitors and
+                # the admin panel see a live learner (previously only written
+                # on start/stop → appeared dead while running).
+                try:
+                    self._save_status()
+                except Exception:
+                    pass
+
+                # ── Round rest: pause before the next full pass so the
+                # background loop stays out of the model channel for most of
+                # the time (chat requests run in a separate process anyway).
+                self._sleep(_LOOP_ROUND_SLEEP)
+
             except Exception as e:
                 self._log(f"  ⚠️ Main loop error: {e}")
-                self._sleep(10)
+                self._sleep(30)
 
     def _sleep(self, seconds: int):
-        """Sleep with interrupt support (watchdog or stop)."""
-        self._watchdog_event.wait(timeout=seconds)
-        self._watchdog_event.clear()
+        """Sleep with interrupt support (watchdog or stop).
+
+        Long sleeps are chunked so _last_heartbeat stays fresh — the
+        watchdog threshold (900s) must never fire during a legitimate
+        round rest (600s) or direction sleep (60s).
+        """
+        _remaining = seconds
+        while _remaining > 0 and self._running:
+            _chunk = min(_remaining, 60)
+            self._watchdog_event.wait(timeout=_chunk)
+            self._watchdog_event.clear()
+            self._last_heartbeat = time.time()
+            _remaining -= _chunk
         # Re-check running flag after sleep
         if not self._running:
             raise SystemExit("Stopped")
@@ -1260,39 +1397,41 @@ class Learner:
     # ── Start / Stop ──
 
     def start(self):
-        if self._running and self._thread and self._thread.is_alive():
-            self._log("⚠️ Already running")
-            return
-        self._dir_mgr.load()
-        if not self._directions:
-            self._log("⚠️ No directions, use add_direction() first")
-            return
-
-        # Edition gate: community edition does not run auto-learning loop
-        try:
-            from ..server.edition import get as _ed_get
-            if not _ed_get("auto_learn", False):
-                self._log("  ℹ️ Community edition: auto-learning disabled (start Pro for 7×24 loop)")
+        with self._start_lock:
+            if self._running and self._thread and self._thread.is_alive():
+                self._log("⚠️ Already running")
                 return
-        except ImportError:
-            _log.exception("loop error")
+            self._dir_mgr.load()
+            if not self._directions:
+                self._log("⚠️ No directions, use add_direction() first")
+                return
 
-        self._running = True
-        self._thread = threading.Thread(target=self._main_loop_safe, daemon=True, name="learner-main")
-        self._thread.start()
-        self._log("🚀 Learning loop started in background thread")
-        self._save_status()
+            # Edition gate: community edition does not run auto-learning loop
+            try:
+                from ..server.edition import get as _ed_get
+                if not _ed_get("auto_learn", False):
+                    self._log("  ℹ️ Community edition: auto-learning disabled (start Pro for 7×24 loop)")
+                    return
+            except ImportError:
+                _log.exception("loop error")
 
-        # Health daemon
-        try:
-            if not self._health_thread or not self._health_thread.is_alive():
-                self._health_thread = threading.Thread(target=self._health_daemon, daemon=True)
-                self._health_thread.start()
-        except Exception:
-            _log.exception("loop error")
+            self._running = True
+            self._thread = threading.Thread(target=self._main_loop_safe, daemon=True, name="learner-main")
+            self._thread.start()
+            self._log("🚀 Learning loop started in background thread")
+            self._save_status()
 
-        # Watchdog
-        self._start_watchdog()
+            # Health daemon (single instance)
+            try:
+                self._health_alive = True
+                if not self._health_thread or not self._health_thread.is_alive():
+                    self._health_thread = threading.Thread(target=self._health_daemon, daemon=True)
+                    self._health_thread.start()
+            except Exception:
+                _log.exception("loop error")
+
+            # Watchdog
+            self._start_watchdog()
 
     def _main_loop_safe(self):
         """Wrap main loop with exception boundary."""
@@ -1307,16 +1446,33 @@ class Learner:
             self._running = False
 
     def _health_daemon(self):
-        """Background health check: restart if main loop dies."""
-        while self._running:
+        """Background health check: restart main loop if it dies (anti-flap backoff).
+
+        Uses an independent _health_alive flag so a main-loop crash (which sets
+        _running=False) does not kill the daemon that is supposed to revive it.
+        """
+        while self._health_alive:
             time.sleep(10)
-            if not self._running:
+            if not self._health_alive:
                 break
             if self._thread and not self._thread.is_alive():
-                self._log("🩺 Main loop died, restarting...")
-                self._running = True
-                self._thread = threading.Thread(target=self._main_loop_safe, daemon=True)
-                self._thread.start()
+                _now = time.time()
+                # Anti-flap: min 60s between respawns; 3 rapid deaths → 10min cooldown
+                if _now - self._last_restart_ts < 60:
+                    self._rapid_restarts += 1
+                    if self._rapid_restarts >= 3:
+                        self._log(f"🩺 Main loop died {self._rapid_restarts}x within 60s — 10min cooldown")
+                        time.sleep(600)
+                        self._rapid_restarts = 0
+                    continue
+                self._last_restart_ts = _now
+                self._rapid_restarts = 0
+                with self._restart_lock:
+                    if self._thread and not self._thread.is_alive():
+                        self._log("🩺 Main loop died, restarting...")
+                        self._running = True
+                        self._thread = threading.Thread(target=self._main_loop_safe, daemon=True)
+                        self._thread.start()
 
     def _run_health_scan(self):
         """Run a health scan and log results."""
@@ -1349,6 +1505,7 @@ class Learner:
 
     def stop(self):
         self._running = False
+        self._health_alive = False
         if self._thread:
             self._watchdog_event.set()
         self._save_status()
@@ -1364,8 +1521,10 @@ class Learner:
                 time.sleep(30)
                 if not self._running:
                     break
-                if time.time() - self._last_heartbeat > 300:
-                    self._log("⚠️ Watchdog: no heartbeat for 300s")
+                # Threshold must exceed the longest legitimate quiet period:
+                # round rest (600s) + direction sleep (60s) + slow LLM call.
+                if time.time() - self._last_heartbeat > 900:
+                    self._log("⚠️ Watchdog: no heartbeat for 900s")
                     self._last_heartbeat = time.time()
         t = threading.Thread(target=_watch, daemon=True)
         t.start()

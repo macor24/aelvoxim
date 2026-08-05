@@ -49,7 +49,9 @@ DEFAULT_COLOR = "#999999"
 
 
 def _get_db() -> sqlite3.Connection:
-    return sqlite3.connect(_DB_PATH)
+    """Reuse memory module's connection (WAL mode + stale file cleanup)."""
+    from ..memory import _get_db as _mem_get_db  # noqa: F811
+    return _mem_get_db()
 
 
 def get_graph(user_id: str = "", limit: int = 50) -> Dict[str, list]:

@@ -44,6 +44,12 @@ SERVICES: Dict[str, Dict[str, Any]] = {
         "label": "ChatAEL 9702",
         "auto_heal": False,  # supervisor manages restarts
     },
+    "postgres": {
+        "port": 5432,
+        "url": "tcp://127.0.0.1:5432",  # TCP probe (PG speaks no HTTP)
+        "label": "5432 PostgreSQL",
+        "auto_heal": False,
+    },
 }
 
 HEAL_LOG_PATH = METACORE_DIR / "health" / "heal_log.jsonl"
@@ -118,9 +124,18 @@ class Watchdog:
             pass
 
     def _check(self, url: str) -> tuple[bool, int, str]:
-        """Returns (up, latency_ms, error). Single attempt, 5s timeout."""
+        """Returns (up, latency_ms, error). Single attempt, 5s timeout.
+
+        Supports tcp://host:port for non-HTTP services (e.g. PostgreSQL).
+        """
         t0 = time.time()
         try:
+            if url.startswith("tcp://"):
+                from urllib.parse import urlparse as _up
+                _p = _up(url)
+                import socket as _sock
+                with _sock.create_connection((_p.hostname, _p.port), timeout=5):
+                    return True, round((time.time() - t0) * 1000), ""
             req = Request(url, method="GET")
             with urlopen(req, timeout=5):
                 return True, round((time.time() - t0) * 1000), ""

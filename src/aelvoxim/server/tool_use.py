@@ -54,7 +54,20 @@ if not _GATEWAY_HOST:
             if _line.startswith("default"):
                 _parts = _line.split()
                 if len(_parts) > 2:
-                    _GATEWAY_HOST = _parts[2]
+                    _candidate = _parts[2]
+                    # Only adopt the gateway IP if the Gateway API (9705) is
+                    # actually reachable there — otherwise every check_gateway()
+                    # call burns a 3s connect timeout against an unreachable
+                    # host (e.g. Aliyun VPC default gateway). Keep 127.0.0.1.
+                    try:
+                        import urllib.request as _gw_ur
+                        _req = _gw_ur.Request(
+                            f"http://{_candidate}:9705/api/status", method="GET")
+                        with _gw_ur.urlopen(_req, timeout=1) as _resp:
+                            if _resp.status == 200:
+                                _GATEWAY_HOST = _candidate
+                    except Exception:
+                        pass  # unreachable — keep 127.0.0.1
                     break
     except Exception:
         log.exception("tool_use error")

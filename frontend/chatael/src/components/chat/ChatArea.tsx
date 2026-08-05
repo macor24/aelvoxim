@@ -34,15 +34,20 @@ export default function ChatArea() {
 
   return (
     <main className="flex-1 flex flex-col bg-gray-100 dark:bg-gray-900 min-w-0">
-      {/* 顶边栏 — 登录、语言、主题 */}
-      <div className="flex items-center justify-end gap-1 px-4 py-2 bg-white/80 dark:bg-gray-950/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800">
-        <button onClick={() => setShowAuth(true)}
-          className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 transition-colors"
-          title={isLoggedIn ? tenant!.name : '登录'}>
-          <User size={16} />
-        </button>
-        <LanguageToggle />
-        <ThemeToggle />
+      {/* 顶边栏 — 免责标记(居中) + 登录、语言、主题 */}
+      <div className="relative flex items-center justify-between px-4 py-2 bg-white/80 dark:bg-gray-950/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800">
+        <span className="absolute left-1/2 -translate-x-1/2 text-[11px] text-gray-400 dark:text-gray-500 font-medium truncate max-w-[60%] select-none pointer-events-none">
+          ⚠️ AI 生成可能有误，注意核实
+        </span>
+        <div className="flex items-center gap-1 shrink-0 ml-auto">
+          <button onClick={() => setShowAuth(true)}
+            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 transition-colors"
+            title={isLoggedIn ? tenant!.name : '登录'}>
+            <User size={16} />
+          </button>
+          <LanguageToggle />
+          <ThemeToggle />
+        </div>
       </div>
       <MessageList />
       <MessageInput onSend={send} disabled={isStreaming} />

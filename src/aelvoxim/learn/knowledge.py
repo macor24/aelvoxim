@@ -41,6 +41,11 @@ LOCK_FILE = KNOWLEDGE_DIR / ".lock"  # process-level file lock
 _file_lock = threading.Lock()
 _lock_fd: Optional[int] = None
 
+# Recently discarded topics cache: topic_lower → expiry timestamp (3600s TTL)
+# Prevents immediate re-creation of pending entries for the same topic
+_RECENTLY_DISCARDED: Dict[str, float] = {}
+_DISCARDED_TTL = 3600  # 1 hour
+
 
 def _acquire_process_lock():
     """Acquire process-level file lock (blocking). All write operations acquire this lock before the thread lock."""
@@ -870,6 +875,35 @@ class KnowledgeBase:
         return False
 
     @staticmethod
+    def mark_discarded(topic: str) -> None:
+        """Record a topic as recently discarded to prevent re-creation."""
+        if not topic:
+            return
+        global _RECENTLY_DISCARDED
+        _key = topic.lower().strip()
+        _expiry = time.time() + _DISCARDED_TTL
+        _RECENTLY_DISCARDED[_key] = _expiry
+        # Clean stale entries
+        _now = time.time()
+        _stale = [k for k, t in _RECENTLY_DISCARDED.items() if _now > t]
+        for k in _stale:
+            _RECENTLY_DISCARDED.pop(k, None)
+
+    @staticmethod
+    def is_recently_discarded(topic: str) -> bool:
+        """Check if a topic was recently discarded and is in cooldown."""
+        if not topic:
+            return False
+        global _RECENTLY_DISCARDED
+        _key = topic.lower().strip()
+        _expiry = _RECENTLY_DISCARDED.get(_key, 0)
+        if time.time() < _expiry:
+            return True
+        if _key in _RECENTLY_DISCARDED:
+            _RECENTLY_DISCARDED.pop(_key, None)
+        return False
+
+    @staticmethod
     def discard_pending(entry_id: str, reason: str = "") -> bool:
         """Discard a pending entry without archiving (clean removal).
 
@@ -1021,6 +1055,12 @@ class KnowledgeBase:
             return {"id": "", "_status": "rejected_sanity", "_sanity_reason": sanity_check,
                     "title": title, "topic": topic, "created_at": now}
 
+        # Recently discarded check: prevent re-creation of topics that were discarded
+        if KnowledgeBase.is_recently_discarded(topic):
+            _log.info("  🚫 [Discarded cooldown] Topic '%s' recently discarded, blocking re-creation", topic)
+            return {"id": "", "_status": "rejected_discarded_cooldown",
+                    "title": title, "topic": topic, "created_at": now}
+
         # Check pending for duplicates
         pending_data = _read_pending()
         for existing in pending_data["pending"]:
@@ -1166,6 +1206,14 @@ class KnowledgeBase:
             try:
                 vec_results = _vector_search(query, limit=limit * 2)
                 if vec_results:
+                    # PG unavailable → degraded path. Log it so silent
+                    # degradation (e.g. a PG blip during a lockup) is visible
+                    # in logs instead of surfacing as "irrelevant knowledge".
+                    _log.warning(
+                        "knowledge search degraded to vector (PG unavailable), "
+                        "query=%.50s results=%d",
+                        str(query)[:50], len(vec_results),
+                    )
                     # Filter vector results by confidence
                     filtered = []
                     seen_ids = set()
@@ -1178,6 +1226,11 @@ class KnowledgeBase:
                         if topic and entry["topic"] != topic:
                             continue
                         if tags and not any(t in entry.get("tags", []) for t in tags):
+                            continue
+                        # Relevance gate: cosine similarity must be meaningful,
+                        # otherwise unrelated entries (e.g. a high-confidence
+                        # topic that shares no terms) get injected as context.
+                        if vec_score < 0.15:
                             continue
                         entry["_vec_score"] = round(vec_score, 3)
                         filtered.append(entry)
@@ -1421,7 +1474,12 @@ def _search_fuzzy(query: str, index: dict, min_confidence: float = 0.0, limit: i
         hits = sum(1 for t in tokens if t in text)
         if hits > 0:
             ratio = hits / len(tokens)
-            scored.append((entry, ratio))
+            # Relevance gate: require a meaningful fraction of the query
+            # tokens to match. hits>0 alone let one-token coincidences
+            # (e.g. "rust" inside an unrelated English topic) rank above
+            # genuinely relevant entries.
+            if ratio >= 0.4:
+                scored.append((entry, ratio))
 
     scored.sort(key=lambda x: -x[1])
     return [e for e, s in scored[:limit]]

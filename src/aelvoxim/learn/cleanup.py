@@ -28,7 +28,8 @@ def cleanup_knowledge_base(log_func) -> None:
 
     Runs every 6 hours.
     - conf < 0.3: auto-delete
-    - conf 0.3-0.5 AND age > 30 days: flag for review
+    - conf 0.3-0.5 AND age > 7 days: auto-archive (more aggressive than flag)
+    - conf 0.3-0.5 AND age > 30 days: flag for review (original behavior)
     """
     try:
         from ..learn.knowledge import KnowledgeBase
@@ -39,6 +40,7 @@ def cleanup_knowledge_base(log_func) -> None:
         now = datetime.now()
 
         deleted = 0
+        archived = 0
         flagged = 0
 
         for e in entries:
@@ -59,12 +61,32 @@ def cleanup_knowledge_base(log_func) -> None:
                 deleted += 1
             elif conf >= 0.7:
                 continue  # high-confidence entries (≥0.7) are whitelisted
+            elif conf < 0.5 and age_days > 7:
+                # Auto-archive stale low-confidence entries (7 days → archive)
+                eid = e.get("id", "")
+                try:
+                    e["_status"] = "archived"
+                    e["_archived_reason"] = f"auto: low confidence ({conf:.2f}, {age_days}d old)"
+                    from ..learn.knowledge import _write_entry
+                    _write_entry(e)
+                    archived += 1
+                except Exception:
+                    pass
             elif conf < 0.5 and age_days > 30:
                 if hasattr(kb, 'flag_for_review'):
                     kb.flag_for_review(e.get("id", ""))
                 flagged += 1
 
-        if deleted or flagged:
-            log_func(f"  🧹 KB cleanup: deleted {deleted} low-confidence, flagged {flagged} for review")
+        report_parts = []
+        if deleted:
+            report_parts.append(f"deleted {deleted} low-confidence")
+        if archived:
+            report_parts.append(f"archived {archived} stale low-confidence")
+        if flagged:
+            report_parts.append(f"flagged {flagged} for review")
+        if report_parts:
+            log_func(f"  🧹 KB cleanup: {', '.join(report_parts)}")
+        elif not any([deleted, archived, flagged]):
+            log_func("  🧹 KB cleanup: nothing to clean")
     except Exception as ex:
         log_func(f"  ⚠️ KB cleanup failed: {ex}")

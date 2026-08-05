@@ -30,6 +30,23 @@ _console = logging.StreamHandler()
 _console.setFormatter(logging.Formatter("%(asctime)s [%(name)s] %(levelname)s %(message)s"))
 logging.getLogger().addHandler(_console)
 
+# ── atexit: checkpoint SQLite WAL on process exit ──
+import atexit as _atexit
+
+
+def _checkpoint_db():
+    """Checkpoint WAL to prevent orphaned journal files on crash."""
+    try:
+        from aelvoxim.memory import _get_db
+        conn = _get_db()
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        conn.close()
+    except Exception:
+        pass  # Best-effort on exit
+
+
+_atexit.register(_checkpoint_db)
+
 app = create_app()
 
 if __name__ == "__main__":

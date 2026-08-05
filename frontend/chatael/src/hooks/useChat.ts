@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useMessageStore } from '../stores/messageStore';
 import { useSessionStore } from '../stores/sessionStore';
-import { sendChatMessage } from '../services/chatService';
+import { sendChatMessage, resetEmptyStreamRetry } from '../services/chatService';
 import type { Message } from '../types/chat';
 
 function genId() { return Math.random().toString(36).substring(2, 10); }
@@ -34,6 +34,7 @@ export function useChat() {
   const send = useCallback(async (content: string) => {
     if (!activeSessionId || !content.trim() || isStreaming) return;
     const sessionId = activeSessionId;
+    resetEmptyStreamRetry();  // fresh retry budget per user message
 
     const userMsg: Message = { id: genId(), role: 'user', content, timestamp: now(), status: 'done' };
     const aiMsgId = genId();
@@ -62,10 +63,8 @@ export function useChat() {
         updateMessage(sessionId, aiMsgId, { status: 'done' });
         setStoreStreaming(sessionId, false);
         setLocalStreaming(false);
-        setTimeout(() => {
-          const el = document.querySelector('textarea');
-          if (el) el.focus();
-        }, 100);
+        // Focus handled by MessageInput's own useEffect (disabled → enabled);
+        // no global DOM query here (fragile, and the input may not be mounted).
       },
       (err) => {
         updateMessage(sessionId, aiMsgId, { status: 'error', content: err.message });

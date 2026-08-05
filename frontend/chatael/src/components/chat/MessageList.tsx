@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { useMessageStore } from '../../stores/messageStore';
 import { useSessionStore } from '../../stores/sessionStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -16,6 +17,10 @@ export default function MessageList() {
   const tenantName = tenant?.name || '你';
   const { retryLast } = useChat();
 
+  const handleDelete = useCallback((id: string) => {
+    if (activeId) deleteMessage(activeId, id);
+  }, [activeId, deleteMessage]);
+
   if (!activeId) return null;
 
   return (
@@ -23,7 +28,7 @@ export default function MessageList() {
       {messages.length === 0 ? (
         <div className="flex items-center justify-center h-full text-gray-400 text-sm">{t('chat.noMessages')}</div>
       ) : (
-        messages.map((msg) => <MessageItem key={msg.id} message={msg} tenantName={tenantName} onDelete={(id) => deleteMessage(activeId!, id)} onRetry={msg.status === 'error' ? retryLast : undefined} />)
+        messages.map((msg) => <MessageItem key={msg.id} message={msg} tenantName={tenantName} onDelete={handleDelete} onRetry={msg.status === 'error' ? retryLast : undefined} />)
       )}
       <div ref={scrollRef} />
     </div>

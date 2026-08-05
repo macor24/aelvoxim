@@ -61,7 +61,28 @@ def _learner_status() -> dict[str, Any]:
         if learner is None:
             return out
 
-        out["running"] = learner.is_running()
+        # Running state comes from the standalone learner process heartbeat
+        # (status.json written by learn_worker). The in-process instance here
+        # is a file-backed mirror and never runs its own loop, so
+        # learner.is_running() is always False in the API process.
+        try:
+            from aelvoxim.learn.loop import STATUS_FILE as _L_STATUS
+            import json as _json
+            if _L_STATUS.exists():
+                _st = _json.loads(_L_STATUS.read_text(encoding="utf-8"))
+                out["running"] = bool(_st.get("running", False))
+                _st_ts = _st.get("updated_at", "")
+                if _st_ts:
+                    try:
+                        from datetime import datetime as _dt
+                        _last = _dt.strptime(str(_st_ts), "%Y-%m-%d %H:%M:%S")
+                        out["uptime_hours"] = round(max(0, (time.time() - _last.timestamp()) / 3600), 1)
+                    except (ValueError, TypeError):
+                        pass
+        except Exception:
+            _log.exception("learner_status error")
+        if not out["running"]:
+            out["running"] = learner.is_running()
 
         # Compute uptime from first direction heartbeat, or current status
         directions = getattr(learner, "_directions", {}) or {}
@@ -231,12 +252,23 @@ def _subsystem_health() -> list[dict[str, Any]]:
     """Report health status of key subsystems."""
     checks: list[dict[str, Any]] = []
 
-    # Learner health
+    # Learner health — running state comes from the standalone learner
+    # process heartbeat (status.json), not the in-process mirror instance
+    # (which never runs its own loop in the API process).
     try:
-        from aelvoxim.learn.learner import get_learner
-
-        l = get_learner()
-        if l and l.is_running():
+        _l_running = False
+        try:
+            from aelvoxim.learn.loop import STATUS_FILE as _L_STATUS
+            if _L_STATUS.exists():
+                import json as _json
+                _l_running = bool(_json.loads(_L_STATUS.read_text(encoding="utf-8")).get("running", False))
+        except Exception:
+            _log.exception("learner_status error")
+        if not _l_running:
+            from aelvoxim.learn.learner import get_learner
+            _l = get_learner()
+            _l_running = bool(_l and _l.is_running())
+        if _l_running:
             checks.append({"name": "Learner Loop", "status": "online", "detail": "Running"})
         else:
             checks.append({"name": "Learner Loop", "status": "offline", "detail": "Stopped"})
@@ -260,17 +292,23 @@ def _subsystem_health() -> list[dict[str, Any]]:
     except Exception:
         checks.append({"name": "PostgreSQL", "status": "offline", "detail": "Check failed"})
 
-    # SelfModel health
+    # SelfModel health — capability data lives in _capabilities (a dict of
+    # CapabilityScore), not a "scores" attribute. Empty dict = degraded.
     try:
         from aelvoxim.core.selfmodel import SelfModel
 
         sm = SelfModel()
-        ok = bool(getattr(sm, "scores", None) or hasattr(sm, "scores"))
+        caps = getattr(sm, "_capabilities", {}) or {}
+        ok = bool(caps)
+        detail = f"{len(caps)} capabilities loaded"
+        if ok:
+            _top = max(caps.values(), key=lambda c: c.task_count)
+            detail += f" (best: {_top.task_count} tasks, {_top.success_rate} rate)"
         checks.append(
             {
                 "name": "SelfModel",
                 "status": "online" if ok else "degraded",
-                "detail": "Capability model loaded" if ok else "Empty scores",
+                "detail": detail,
             }
         )
     except Exception:

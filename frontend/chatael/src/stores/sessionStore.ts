@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Session } from '../types/chat';
-import { getIsolationSuffix } from './authStore';
+import { useAuthStore, getApiBase, getIsolationSuffix } from './authStore';
 
 function genId() { return Math.random().toString(36).substring(2, 10); }
 function now() { return new Date().toISOString(); }
@@ -18,20 +18,12 @@ function apiKey(): string {
 
 /** Sync a session to PG (fire-and-forget) — returns PG session id on success */
 function syncToPG(session: Session): Promise<string | null> {
-  const key = apiKey();
-  if (!key || !session.id) return Promise.resolve(null);
-  const baseUrl = (() => {
-    try {
-      const raw = localStorage.getItem('chatael_tenants');
-      if (!raw) return 'http://8.134.185.33:9701';
-      const tenants = JSON.parse(raw);
-      const active = tenants?.[0];
-      return active?.apiUrl || 'http://8.134.185.33:9701';
-    } catch { return 'http://8.134.185.33:9701'; }
-  })().replace(/\/+$/, '');
+  const tenant = useAuthStore.getState().getActiveTenant();
+  if (!tenant.apiKey || !session.id) return Promise.resolve(null);
+  const baseUrl = getApiBase();
   return fetch(`${baseUrl}/v1/chat/sessions`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tenant.apiKey },
     body: JSON.stringify({ session: { ...session, messages: [] } }),
   })
     .then(r => r.json())
@@ -85,6 +77,8 @@ export const useSessionStore = create<SessionState>((set, get) => {
         const merged = [...existing];
         let changed = false;
         for (const bs of backendSessions) {
+          // 跳过历史碎片会话(email:ts 型) — 由 SessionList 按天分组展示
+          if (bs.id.includes(':')) continue;
           if (!existingIds.has(bs.id)) {
             merged.push({
               id: bs.id,

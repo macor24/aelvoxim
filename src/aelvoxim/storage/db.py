@@ -373,6 +373,7 @@ def _init_tables():
             )""")
         _safe_execute(cur, "CREATE INDEX IF NOT EXISTS idx_chat_session ON chat_messages(session_id)")
         _safe_execute(cur, "CREATE INDEX IF NOT EXISTS idx_chat_session_time ON chat_messages(session_id, created_at)")
+        _safe_execute(cur, "CREATE INDEX IF NOT EXISTS idx_chat_sessions_user_updated ON chat_sessions(user_id, updated_at DESC)")
         _safe_execute(cur, """CREATE TABLE IF NOT EXISTS proactive_push_log (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                 user_id UUID REFERENCES users(id) ON DELETE CASCADE,
@@ -474,18 +475,27 @@ def save_session_to_pg(session: dict) -> None:
         conn = _pg_connect()
         cur = conn.cursor()
         _uid = session.get("user_id", "") or None
+        # Normalize title: collapse newlines/whitespace, truncate for the list UI
+        _title = _clean_session_title(session.get("title") or "新对话")
         cur.execute("""
             INSERT INTO chat_sessions (id, user_id, title, message_count, updated_at)
             VALUES (%s, %s::uuid, %s, %s, NOW())
             ON CONFLICT (id) DO UPDATE SET
                 title = EXCLUDED.title,
-                message_count = EXCLUDED.message_count,
                 updated_at = NOW()
-        """, (session["id"], _uid, session.get("title") or "新对话", len(session.get("messages", []))))
+        """, (session["id"], _uid, _title, len(session.get("messages", []))))
         conn.commit()
         conn.close()
     except Exception as e:
         pass  # logged above
+
+
+def _clean_session_title(raw, max_len: int = 30) -> str:
+    """Collapse newlines/multiple spaces and truncate a session title."""
+    if not raw:
+        return "新对话"
+    s = " ".join(str(raw).split())
+    return s[:max_len] if len(s) > max_len else (s or "新对话")
 
 
 def save_message_to_pg(session_id: str, role: str, content: str, user_id: str = "") -> None:
@@ -502,16 +512,83 @@ def save_message_to_pg(session_id: str, role: str, content: str, user_id: str = 
             if cur.fetchone() is None:
                 conn.close()
                 raise PermissionError(f"Session {session_id} does not belong to user {user_id}")
-        cur.execute("""
-            INSERT INTO chat_messages (session_id, role, content)
-            VALUES (%s, %s, %s)
-        """, (session_id, role, content))
+        # Idempotent insert — skip if identical (role, content) already exists
+        cur.execute(
+            "SELECT 1 FROM chat_messages WHERE session_id = %s AND role = %s AND content = %s LIMIT 1",
+            (session_id, role, content),
+        )
+        if cur.fetchone() is None:
+            cur.execute("""
+                INSERT INTO chat_messages (session_id, role, content)
+                VALUES (%s, %s, %s)
+            """, (session_id, role, content))
+            cur.execute(
+                "UPDATE chat_sessions SET message_count = message_count + 1 WHERE id = %s",
+                (session_id,),
+            )
         conn.commit()
         conn.close()
     except PermissionError:
         raise
     except Exception as e:
         pass  # logged above
+
+
+def save_messages_batch_to_pg(session_id: str, messages: list[dict], user_id: str = "") -> int:
+    """Insert multiple chat messages in a single connection/transaction.
+
+    Returns the number of rows actually inserted (idempotent — identical
+    (role, content) rows are skipped). Ownership is verified once up front.
+    """
+    if not _USE_PG or not messages:
+        return 0
+    conn = _pg_connect()
+    try:
+        cur = conn.cursor()
+        # Verify session belongs to user if user_id is provided
+        if user_id:
+            cur.execute(
+                "SELECT id FROM chat_sessions WHERE id = %s AND user_id = %s::uuid",
+                (session_id, user_id),
+            )
+            if cur.fetchone() is None:
+                raise PermissionError(f"Session {session_id} does not belong to user {user_id}")
+        inserted = 0
+        for msg in messages:
+            role = (msg.get("role") or "user")[:10]
+            content = msg.get("content") or ""
+            if not content:
+                continue
+            cur.execute(
+                "SELECT 1 FROM chat_messages WHERE session_id = %s AND role = %s AND content = %s LIMIT 1",
+                (session_id, role, content),
+            )
+            if cur.fetchone() is None:
+                cur.execute(
+                    "INSERT INTO chat_messages (session_id, role, content) VALUES (%s, %s, %s)",
+                    (session_id, role, content),
+                )
+                inserted += 1
+        if inserted:
+            cur.execute(
+                "UPDATE chat_sessions SET message_count = message_count + %s WHERE id = %s",
+                (inserted, session_id),
+            )
+        conn.commit()
+        return inserted
+    except PermissionError:
+        raise
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            _log.exception("db error")
+        raise
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 
 def _pg_connect():

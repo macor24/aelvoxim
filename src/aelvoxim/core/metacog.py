@@ -148,7 +148,7 @@ class MetaCogTrigger:
             key=lambda x: list(TriggerLevel).index(x)
         ).value if levels else TriggerLevel.MILD.value
 
-        evolve_threshold = self._cw("evolve_threshold", default=0.10)
+        evolve_threshold = self._cw("evolve_threshold", default=0.03)
         # Skip recording if overall score is too low (filters noise)
         if overall < evolve_threshold:
             return MetaCogReport(

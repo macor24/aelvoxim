@@ -180,10 +180,11 @@ def check_pending_promotions(
         practice_count = entry.get('_practice_count', 0)
         fail_count = entry.get('_failed_count', 0)
 
-        # L1: Max 20 attempts
-        if practice_count >= 20:
+        # L1: Max 10 attempts before discard
+        if practice_count >= 10:
+            KnowledgeBase.mark_discarded(entry.get("topic", ""))
             KnowledgeBase.discard_pending(eid)
-            log_func(f"  🗑️ [Pending] Max 20 attempts reached, discard: {title}")
+            log_func(f"  🗑️ [Pending] Max {practice_count} attempts reached, discard + cooldown: {title}")
             return True
 
         # L3: Streak detection
@@ -197,8 +198,9 @@ def check_pending_promotions(
         state["_pending_streak"] = streak
 
         if streak >= 10:
+            KnowledgeBase.mark_discarded(entry.get("topic", ""))
             KnowledgeBase.discard_pending(eid)
-            log_func(f"  🗑️ [Pending] Streak ({streak}) same eid, discard: {title}")
+            log_func(f"  🗑️ [Pending] Streak ({streak}) same eid, discard + cooldown: {title}")
             return True
 
         # Practice verification — log every 3rd attempt or on status change
@@ -206,8 +208,9 @@ def check_pending_promotions(
             log_func(f"  🔄 [Pending] Practice verify: {title} (practice #{practice_count})")
 
         if fail_count >= 10:
+            KnowledgeBase.mark_discarded(entry.get("topic", ""))
             KnowledgeBase.discard_pending(eid)
-            log_func(f"  🗑️ [Pending] Auto-discarded after {fail_count} fails: {title}")
+            log_func(f"  🗑️ [Pending] Auto-discarded after {fail_count} fails + cooldown: {title}")
             return True
 
         success = llm_verify_practice(entry, log_func)
