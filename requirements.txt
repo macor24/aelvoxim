@@ -3,7 +3,7 @@
 # Last updated: 2026-07-12
 
 # Web framework
-fastapi==0.136.1
+fastapi==0.141.1
 uvicorn==0.52.0
 # pydantic 3 is a breaking major — cap <3 so future installs can't resolve
 # an incompatible release. (Running env: 2.13.4.)
