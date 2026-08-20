@@ -543,7 +543,8 @@ def _detect_knowledge_gap(query: str, results: list) -> str:
 def inject_memory_context(user_msg: str, user: dict, extra_context: str) -> str:
     try:
         from ..api import memory_search
-        mem_results = memory_search(user_msg[:50], limit=15) if len(user_msg.strip()) > 3 else []
+        _uid = user.get("email", "") if user else ""
+        mem_results = memory_search(user_msg[:50], limit=15, user_id=_uid) if len(user_msg.strip()) > 3 else []
         if mem_results:
             msg_lower = user_msg.lower()
             def _relevance(m):
@@ -604,6 +605,17 @@ def run_experts(user_msg: str, user: dict, extra_context: str) -> str:
 
 # ═══ Conversation history ═══
 
+# Character budget for conversation history injected into the system prompt.
+# v4-flash is a reasoning model: input context and its reasoning tokens share
+# the model's budget window. Keeping history under ~20K tokens (≈40K chars of
+# mixed CJK/Latin text) leaves headroom for reasoning + generation, preventing
+# the context-bloat empty-stream issue (see aelvoxim-remote-ops #42/#58).
+_HISTORY_CHAR_BUDGET = 40_000
+# Early messages beyond the budget are degraded to a skeleton (role + first N
+# chars per message) so the model still sees the topic threads at near-zero cost.
+_HISTORY_SKELETON_CHARS = 60
+
+
 def build_conversation_history(messages: List[dict], enhanced_system: str) -> str:
     history = ""
     # Keep only non-system messages, last 20 turns (40 msgs: user + assistant)
@@ -611,6 +623,33 @@ def build_conversation_history(messages: List[dict], enhanced_system: str) -> st
     if len(non_system) > 40:
         history += "[早期消息已省略]\n\n"
         non_system = non_system[-40:]
+
+    # Character budget: keep the newest messages intact (the latest one is always
+    # kept even if it alone exceeds the budget); degrade older ones to skeletons
+    # so a long session's context can't bloat past the budget.
+    total = sum(len(m.get("content", "")) for m in non_system)
+    if total > _HISTORY_CHAR_BUDGET:
+        kept_full: List[dict] = []
+        skeletons: List[dict] = []
+        acc = 0
+        for i, m in enumerate(reversed(non_system)):
+            c = m.get("content", "")
+            if i == 0 or acc + len(c) <= _HISTORY_CHAR_BUDGET:
+                acc += len(c)
+                kept_full.append(m)
+            else:
+                skeletons.append(m)
+        kept_full.reverse()
+        if skeletons:
+            history += "[早期对话摘要(骨架)]\n"
+            for m in reversed(skeletons):  # oldest first
+                role = m.get("role", "user")
+                prefix = "User" if role == "user" else "Assistant"
+                snippet = m.get("content", "")[:_HISTORY_SKELETON_CHARS].replace("\n", " ")
+                history += f"{prefix}: {snippet}…\n"
+            history += "\n"
+        non_system = kept_full
+
     for m in non_system:
         role = m.get("role", "user")
         content = m.get("content", "")
@@ -687,9 +726,11 @@ def process_memory_commands(user_msg: str, user: dict, identity_prefix: str) -> 
 def inject_memory_status(user_msg: str, user: dict, identity_prefix: str) -> str:
     try:
         from ..memory import memory_search
-        results = memory_search("preference", limit=5)
+        _uid = user.get("email", "") if user else ""
+        results = memory_search("preference", limit=5, user_id=_uid)
         if results:
-            identity_prefix += "[Memory: preferences exist]\n"
+            prefs = "; ".join(str(m.get("value", ""))[:80] for m in results[:3])
+            identity_prefix += f"[Memory preferences: {prefs}]\n"
     except Exception:
         _log.exception("service_chat error")
     return identity_prefix
@@ -714,9 +755,19 @@ def inject_safety_and_metacog(enhanced_system: str, identity_prefix: str, user: 
 def store_conversation_memory(user_msg: str, text: str, user: dict) -> str:
     try:
         from ..memory import store_event
-        eid = store_event("conversation", {"user": user_msg[:200], "assistant": str(text)[:200]})
-        return eid or ""
+        import uuid as _uuid
+        eid = f"conv:{_uuid.uuid4().hex[:12]}"
+        store_event(
+            eid=eid,
+            event_type="conversation",
+            participants=[user.get("email", "")] if user else [],
+            content=json.dumps({"user": user_msg[:200], "assistant": str(text)[:200]},
+                               ensure_ascii=False),
+            user_id=user.get("email", "") if user else "",
+        )
+        return eid
     except Exception:
+        _log.exception("service_chat memory store error")
         return ""
 
 
@@ -731,7 +782,8 @@ def extract_and_store_entities(user_msg: str, text: str, user: dict, event_id: s
                     from ..memory import store_entity
                     store_entity(ent.get("name", ent.get("key", "")),
                                 etype=ent.get("type", "concept"),
-                                attributes={"value": ent.get("value", ""), "source": "chat"})
+                                attributes={"value": ent.get("value", ""), "source": "chat"},
+                                user_id=user.get("email", "") if user else "")
                 except Exception:
                     _log.exception("service_chat error")
     except Exception:
@@ -936,6 +988,15 @@ def chat_pipeline(
     # Phase 3: Memory
     if not skip_memory:
         extra_context = inject_memory_context(user_msg, user, extra_context)
+
+    # Cross-session context restore (latest snapshot from a previous session)
+    try:
+        from .session_manager import restore_context
+        _restore = restore_context(user.get("email", "") if user else "")
+        if _restore:
+            extra_context += "\n" + _restore
+    except Exception:
+        _log.exception("service_chat session restore error")
 
     # Phase 4: Security
     extra_context = inject_security_context(extra_context)
@@ -1169,11 +1230,19 @@ def chat_pipeline(
     # Self-review and learning below still require non-empty text.
     try:
         from .chat_monitor import evaluate_conversation
+        # Real KB results (not hardcoded []): hit_count/topics in the
+        # monitor must reflect actual knowledge retrieval.
+        _eval_kb = []
+        try:
+            from ..learn.knowledge import KnowledgeBase
+            _eval_kb = KnowledgeBase.search(query=user_msg[:200], min_confidence=0.3, limit=5) or []
+        except Exception:
+            _log.exception("service_chat eval kb search error")
         evaluate_conversation(
             query=user_msg,
             answer=text,
             user_id=user.get("email", "") if user else "",
-            knowledge_results=[],
+            knowledge_results=_eval_kb,
             response_time_ms=(_time.time() - t0) * 1000,
         )
     except Exception:

@@ -746,16 +746,52 @@ async def llm_chat_stream(
             except Exception:
                 _log.exception("routes_chat error")
 
+        # Cross-session snapshot: persist session summary/topics/tasks so a
+        # future session can restore context (session_manager.restore_context).
+        try:
+            from .session_manager import save_snapshot
+            save_snapshot(
+                user.get("email", "") if user else "",
+                _pg_sid,
+                [{"role": "user", "content": _pg_msg or ""},
+                 {"role": "assistant", "content": _text}],
+                entities=[],
+                task_keywords=None,
+            )
+        except Exception:
+            _log.exception("routes_chat snapshot error")
+
+        # Stream path memory write: persist conversation event + extracted
+        # entities (mirrors chat_pipeline's post-processing, which the
+        # streaming endpoint previously never called).
+        try:
+            if _pg_email and _text:
+                from .service_chat import store_conversation_memory, extract_and_store_entities
+                _ev_id = store_conversation_memory(_pg_msg, _text, user)
+                extract_and_store_entities(_pg_msg, _text, user, _ev_id)
+        except Exception:
+            _log.exception("routes_chat memory store error")
+
         # Post-chat quality evaluation (mirrors chat_pipeline). Must run for
         # BOTH non-empty and empty replies — an empty reply IS a quality
         # signal (failed/blank stream). Safe: wrapped in try.
         try:
             from .chat_monitor import evaluate_conversation
+            # Real KB results (not hardcoded []): hit_count/topics in the
+            # monitor must reflect actual knowledge retrieval, otherwise the
+            # panel always shows 0 and looks like KB search is broken.
+            _eval_q = _pg_msg or user_msg
+            _eval_kb = []
+            try:
+                from ..learn.knowledge import KnowledgeBase
+                _eval_kb = KnowledgeBase.search(query=_eval_q[:200], min_confidence=0.3, limit=5) or []
+            except Exception:
+                _log.exception("routes_chat eval kb search error")
             evaluate_conversation(
-                query=_pg_msg or user_msg,
+                query=_eval_q,
                 answer=_text,
                 user_id=user.get("email", "") if user else "",
-                knowledge_results=[],
+                knowledge_results=_eval_kb,
                 response_time_ms=max(0.0, _tmod.time() - _t0_stream) * 1000,
             )
         except Exception:
