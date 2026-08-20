@@ -123,10 +123,12 @@ class MemoryFusion:
 
     def add_to_index(self, layer_name: str, key: str, entry) -> None:
         """Incrementally update inverted index for a single entry.
-        
+
         Call this after storing a new entry, instead of marking dirty
         and forcing a full rebuild later.
         """
+        # Drop stale postings for this key first (entry may have moved layers)
+        self.remove_from_index(key)
         tokens = _tokenize(entry.key, str(entry.value))
         for token, weight in tokens:
             self._inverted_index.setdefault(token, []).append(
@@ -186,26 +188,29 @@ class MemoryFusion:
             for layer_name, key, weight in matches:
                 candidates.setdefault(key, []).append((layer_name, weight))
 
-        # Scan layers in priority order
-        for layer_name in ["procedural", "semantic", "episodic", "working"]:
-            layer = self._get_layer_by_name(layer_name)
-            if not layer:
+        # Resolve only index-hit keys, in layer-priority order — no full scan
+        _priority_order = ["procedural", "semantic", "episodic", "working"]
+        for key, cand in candidates.items():
+            if key in seen_keys:
                 continue
-
-            for key, entry in layer._entries.items():
-                if entry.is_expired() or key in seen_keys:
-                    continue
-                if entry.conflict_status not in ("active", "pending"):
-                    continue
-
-                cand = candidates.get(key)
-                if cand:
-                    # Score = average hit weight * layer priority + importance
-                    avg_weight = sum(w for _, w in cand) / len(cand)
-                    priority = self._layer_priority.get(layer_name, 1.0)
-                    score = avg_weight * priority + entry.importance * 0.3
-                    seen_keys.add(key)
-                    results.append((entry, score))
+            entry = None
+            layer_name = ""
+            for _ln in _priority_order:
+                _l = self._get_layer_by_name(_ln)
+                if _l and key in _l._entries:
+                    entry = _l._entries[key]
+                    layer_name = _ln
+                    break
+            if entry is None or entry.is_expired():
+                continue
+            if entry.conflict_status not in ("active", "pending"):
+                continue
+            # Score = average hit weight * layer priority + importance
+            avg_weight = sum(w for _, w in cand) / len(cand)
+            priority = self._layer_priority.get(layer_name, 1.0)
+            score = avg_weight * priority + entry.importance * 0.3
+            seen_keys.add(key)
+            results.append((entry, score))
 
         results.sort(key=lambda x: -x[1])
         return [e for e, _ in results[:limit]]

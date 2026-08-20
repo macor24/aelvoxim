@@ -101,9 +101,9 @@ def batch_decay(fusion: MemoryFusion, db_path: str = "") -> Dict[str, Any]:
         fusion.working, fusion.episodic,
         fusion.semantic, fusion.procedural,
     ]
-    to_archive: List[str] = []
-    to_dormant: List[str] = []
-    to_decay: List[tuple] = []  # (key, strength)
+    to_archive: List[tuple] = []  # (key, strength)
+    to_dormant: List[tuple] = []  # (key, strength)
+    to_decay: List[tuple] = []    # (key, strength)
     for layer in layers:
         for entry in list(layer._entries.values()):
             stats["scanned"] += 1
@@ -116,8 +116,9 @@ def batch_decay(fusion: MemoryFusion, db_path: str = "") -> Dict[str, Any]:
                 continue
             if entry.ttl_seconds is not None and entry.is_expired():
                 layer._entries.pop(entry.key, None)
+                fusion.remove_from_index(entry.key)
                 stats["archived"] += 1
-                to_archive.append(entry.key)
+                to_archive.append((entry.key, entry.strength))
                 continue
             active = apply_decay(entry)
             if active:
@@ -125,33 +126,50 @@ def batch_decay(fusion: MemoryFusion, db_path: str = "") -> Dict[str, Any]:
                 to_decay.append((entry.key, entry.strength))
             elif entry.conflict_status == "dormant":
                 stats["dormant"] += 1
-                to_dormant.append(entry.key)
+                to_dormant.append((entry.key, entry.strength))
             elif entry.conflict_status == "archived":
                 layer._entries.pop(entry.key, None)
+                fusion.remove_from_index(entry.key)
                 stats["archived"] += 1
-                to_archive.append(entry.key)
+                to_archive.append((entry.key, entry.strength))
 
-    # Batch-sync status to SQLite
-    if db_path and (to_dormant or to_archive):
+    # ── Batch-sync status to storage ──
+    if to_dormant or to_archive or to_decay:
         try:
-            _db = sqlite3.connect(db_path)
-            for _key in to_dormant:
-                _db.execute(
-                    "UPDATE entities SET attributes = json_set(COALESCE(attributes,'{}'), '$.status', ?, '$.strength', ?) WHERE id = ?",
-                    ("dormant", 0.19, _key)
-                )
-            for _key in to_archive:
-                _db.execute(
-                    "UPDATE entities SET attributes = json_set(COALESCE(attributes,'{}'), '$.status', ?, '$.strength', ?) WHERE id = ?",
-                    ("archived", 0.1, _key)
-                )
-            for _key, _strength in to_decay:
-                _db.execute(
-                    "UPDATE entities SET attributes = json_set(COALESCE(attributes,'{}'), '$.strength', ?) WHERE id = ?",
-                    (_strength * 0.5, _key)
-                )
-            _db.commit()
-            _db.close()
+            from . import _pg_active
+            if _pg_active():
+                from ..storage.db import execute
+                for _key, _strength in to_dormant:
+                    execute(
+                        "UPDATE memory_entities SET metadata = jsonb_set(jsonb_set(COALESCE(metadata,'{}'), '{status}', %s::jsonb), '{strength}', %s::jsonb) WHERE name = %s",
+                        (json.dumps("dormant"), json.dumps(round(float(_strength), 4)), _key))
+                for _key, _strength in to_archive:
+                    execute(
+                        "UPDATE memory_entities SET metadata = jsonb_set(jsonb_set(COALESCE(metadata,'{}'), '{status}', %s::jsonb), '{strength}', %s::jsonb) WHERE name = %s",
+                        (json.dumps("archived"), json.dumps(round(float(_strength), 4)), _key))
+                for _key, _strength in to_decay:
+                    execute(
+                        "UPDATE memory_entities SET metadata = jsonb_set(COALESCE(metadata,'{}'), '{strength}', %s::jsonb) WHERE name = %s",
+                        (json.dumps(round(float(_strength), 4)), _key))
+            elif db_path:
+                _db = sqlite3.connect(db_path)
+                for _key, _strength in to_dormant:
+                    _db.execute(
+                        "UPDATE entities SET attributes = json_set(COALESCE(attributes,'{}'), '$.status', ?, '$.strength', ?) WHERE id = ?",
+                        ("dormant", round(float(_strength), 4), _key)
+                    )
+                for _key, _strength in to_archive:
+                    _db.execute(
+                        "UPDATE entities SET attributes = json_set(COALESCE(attributes,'{}'), '$.status', ?, '$.strength', ?) WHERE id = ?",
+                        ("archived", round(float(_strength), 4), _key)
+                    )
+                for _key, _strength in to_decay:
+                    _db.execute(
+                        "UPDATE entities SET attributes = json_set(COALESCE(attributes,'{}'), '$.strength', ?) WHERE id = ?",
+                        (round(float(_strength), 4), _key)
+                    )
+                _db.commit()
+                _db.close()
         except Exception:
             _log.exception("decay error")
 

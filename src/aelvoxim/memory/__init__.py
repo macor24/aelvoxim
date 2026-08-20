@@ -15,6 +15,7 @@ External API (unchanged):
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 import threading
 import uuid
@@ -25,6 +26,9 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from ..utils import METACORE_DIR
 from .entry import MemoryEntry, LAYER_WORKING, LAYER_EPISODIC, LAYER_SEMANTIC, LAYER_PROCEDURAL, should_store
 from .fusion import MemoryFusion
+from .forget import cleanup_all
+
+_log = logging.getLogger("aelvoxim.memory")
 
 _DB_PATH = str(Path(METACORE_DIR) / "memory.db")
 _LEGACY_JSON_PATH = str(Path(METACORE_DIR) / "memory.json")
@@ -90,12 +94,15 @@ def _determine_layer(entry: MemoryEntry) -> str:
     """Determine which layer a MemoryEntry belongs to based on importance + access.
 
     Dormant/archived entries stay in their current layer.
+    person/preference entities are long-term by nature → semantic layer.
     """
     if entry.conflict_status not in ("active", "pending"):
         return entry.layer
     if entry.access_count >= 5 or entry.importance >= 0.95:
         return LAYER_PROCEDURAL
     if entry.immutable or entry.importance >= 0.8:
+        return LAYER_SEMANTIC
+    if any(t in ("person", "preference") for t in entry.tags):
         return LAYER_SEMANTIC
     if entry.importance >= 0.5 or entry.access_count >= 3:
         return LAYER_EPISODIC
@@ -117,6 +124,231 @@ def _store_to_fusion(entry: MemoryEntry) -> MemoryEntry:
     # Update inverted index incrementally
     _fusion.add_to_index(layer, entry.key, entry)
     return entry
+
+
+# ── PG-first persistence layer ─────────────────────────
+# When PostgreSQL is available, memory reads/writes go through PG
+# (memory_entities / memory_relations / memory_events). SQLite stays as
+# the no-PG fallback. The in-memory fusion layers remain the retrieval
+# cache and are kept in sync by the callers.
+
+def _pg_active() -> bool:
+    """Return True when PostgreSQL is usable for memory storage."""
+    try:
+        from ..storage.db import use_pg
+        return use_pg()
+    except Exception:
+        return False
+
+
+def _pg_upsert_entity(eid: str, etype: str, value: str, tags: list,
+                      attributes: dict, user_id: str) -> bool:
+    """Upsert one entity row into PG memory_entities (name = eid)."""
+    try:
+        from ..storage.db import execute
+        import json as _js
+        from ..storage.embedding import get_embedding
+        _emb = get_embedding(value or eid)
+        _meta = {"tags": tags or [], "attributes": attributes or {}}
+        execute(
+            """INSERT INTO memory_entities (name, entity_type, content, embedding, source, metadata, user_id)
+               VALUES (%s, %s, %s, %s::vector, %s, %s::jsonb, %s)
+               ON CONFLICT (name, entity_type) DO UPDATE SET
+                   content = EXCLUDED.content,
+                   embedding = EXCLUDED.embedding,
+                   metadata = EXCLUDED.metadata,
+                   user_id = EXCLUDED.user_id,
+                   updated_at = NOW()""",
+            (eid[:200], etype, value, str(_emb), "chat", _js.dumps(_meta), user_id or ""),
+        )
+        return True
+    except Exception:
+        _log.exception("pg upsert entity error")
+        return False
+
+
+def _pg_delete_entity(eid: str, user_id: str = "") -> bool:
+    """Delete an entity row from PG memory_entities by name."""
+    try:
+        from ..storage.db import execute
+        if user_id:
+            execute("DELETE FROM memory_entities WHERE name = %s AND user_id = %s", (eid, user_id))
+        else:
+            execute("DELETE FROM memory_entities WHERE name = %s", (eid,))
+        return True
+    except Exception:
+        _log.exception("pg delete entity error")
+        return False
+
+
+def _pg_store_event(eid: str, event_type: str, participants: list,
+                    content: str, ts: str, user_id: str = "") -> bool:
+    """Insert one event row into PG memory_events."""
+    try:
+        from ..storage.db import execute
+        import json as _js
+        execute(
+            """INSERT INTO memory_events (event_type, participants, content, event_ts, user_id)
+               VALUES (%s, %s::jsonb, %s, %s, %s)""",
+            (event_type, _js.dumps(participants or []), content, ts, user_id or ""),
+        )
+        return True
+    except Exception:
+        _log.exception("pg store event error")
+        return False
+
+
+def _pg_search_events(event_type: Optional[str] = None, participant: Optional[str] = None,
+                      since: Optional[str] = None, query: str = "",
+                      limit: int = 50, user_id: str = "") -> List[dict]:
+    """Search events in PG memory_events."""
+    try:
+        from ..storage.db import fetch_dict
+        clauses, params = [], []
+        if event_type:
+            clauses.append("event_type = %s"); params.append(event_type)
+        if participant:
+            clauses.append("participants::text LIKE %s"); params.append(f"%{participant}%")
+        if since:
+            clauses.append("event_ts >= %s"); params.append(since)
+        if query:
+            clauses.append("(content LIKE %s OR event_type LIKE %s)"); params.extend([f"%{query}%", f"%{query}%"])
+        if user_id:
+            clauses.append("user_id = %s"); params.append(user_id)
+        where = " AND ".join(clauses) if clauses else "TRUE"
+        rows = fetch_dict(
+            f"SELECT event_type, participants, content, event_ts, user_id FROM memory_events "
+            f"WHERE {where} ORDER BY event_ts DESC LIMIT %s",
+            tuple(params + [limit]),
+        )
+        return [{
+            "id": r["event_ts"],
+            "type": r["event_type"],
+            "participants": r.get("participants") or [],
+            "content": r.get("content", ""),
+            "timestamp": r.get("event_ts", ""),
+            "user_id": r.get("user_id", ""),
+        } for r in rows]
+    except Exception:
+        _log.exception("pg search events error")
+        return []
+
+
+def _pg_fetch_entity(eid: str, user_id: str = "") -> Optional[dict]:
+    """Fetch one entity row from PG memory_entities by name."""
+    try:
+        from ..storage.db import fetch_dict
+        if user_id:
+            rows = fetch_dict(
+                "SELECT name, entity_type, content, metadata, user_id FROM memory_entities "
+                "WHERE name = %s AND user_id = %s LIMIT 1", (eid, user_id))
+        else:
+            rows = fetch_dict(
+                "SELECT name, entity_type, content, metadata, user_id FROM memory_entities "
+                "WHERE name = %s LIMIT 1", (eid,))
+        if not rows:
+            return None
+        r = rows[0]
+        return {
+            "id": r["name"],
+            "key": r["name"],
+            "type": r.get("entity_type", "concept"),
+            "value": r.get("content", ""),
+            "tags": (r.get("metadata") or {}).get("tags", []),
+            "attributes": (r.get("metadata") or {}).get("attributes", {}),
+            "user_id": r.get("user_id", ""),
+        }
+    except Exception:
+        _log.exception("pg fetch entity error")
+        return None
+
+
+def _pg_search_entities(query: str, etype: Optional[str] = None,
+                        limit: int = 20, user_id: str = "") -> List[dict]:
+    """Search entities in PG memory_entities (name/content LIKE)."""
+    try:
+        from ..storage.db import fetch_dict
+        clauses, params = [], []
+        if query:
+            q = f"%{query}%"
+            clauses.append("(name LIKE %s OR content LIKE %s)")
+            params.extend([q, q])
+        if etype:
+            clauses.append("entity_type = %s"); params.append(etype)
+        if user_id:
+            clauses.append("user_id = %s"); params.append(user_id)
+        where = " AND ".join(clauses) if clauses else "TRUE"
+        rows = fetch_dict(
+            f"SELECT name, entity_type, content, metadata, user_id FROM memory_entities "
+            f"WHERE {where} ORDER BY updated_at DESC LIMIT %s",
+            tuple(params + [limit]),
+        )
+        return [{
+            "id": r["name"],
+            "key": r["name"],
+            "type": r.get("entity_type", "concept"),
+            "value": r.get("content", ""),
+            "tags": (r.get("metadata") or {}).get("tags", []),
+            "attributes": (r.get("metadata") or {}).get("attributes", {}),
+            "user_id": r.get("user_id", ""),
+        } for r in rows]
+    except Exception:
+        _log.exception("pg search entities error")
+        return []
+
+
+def _pg_store_relation(rel_id: str, source: str, target: str, rel_type: str,
+                       attributes: Optional[Dict] = None) -> bool:
+    """Insert a relation row into PG memory_relations (by entity names)."""
+    try:
+        from ..storage.db import execute
+        import json as _js
+        execute(
+            """INSERT INTO memory_relations (source_name, target_name, relation_type, weight)
+               VALUES (%s, %s, %s, %s)""",
+            (source[:200], target[:200], rel_type,
+             float((attributes or {}).get("_strength", 0.5))),
+        )
+        return True
+    except Exception:
+        _log.exception("pg store relation error")
+        return False
+
+
+def _pg_get_relations(entity_id: Optional[str] = None,
+                      rel_type: Optional[str] = None,
+                      direction: str = "both") -> List[dict]:
+    """Fetch relations from PG memory_relations by entity name."""
+    try:
+        from ..storage.db import fetch_dict
+        clauses, params = [], []
+        if entity_id:
+            if direction == "out":
+                clauses.append("source_name = %s"); params.append(entity_id)
+            elif direction == "in":
+                clauses.append("target_name = %s"); params.append(entity_id)
+            else:
+                clauses.append("(source_name = %s OR target_name = %s)")
+                params.extend([entity_id, entity_id])
+        if rel_type:
+            clauses.append("relation_type = %s"); params.append(rel_type)
+        where = " AND ".join(clauses) if clauses else "TRUE"
+        rows = fetch_dict(
+            f"SELECT source_name, target_name, relation_type, weight, created_at "
+            f"FROM memory_relations WHERE {where} ORDER BY created_at DESC",
+            tuple(params),
+        )
+        return [{
+            "id": f"{r.get('source_name','')}-{r.get('target_name','')}",
+            "source": r.get("source_name", ""),
+            "target": r.get("target_name", ""),
+            "type": r.get("relation_type", "related"),
+            "attributes": {"_strength": r.get("weight", 0.5)},
+            "created_at": str(r.get("created_at", "") or ""),
+        } for r in rows]
+    except Exception:
+        _log.exception("pg get relations error")
+        return []
 
 
 def _read_from_layers(key: str) -> Optional[MemoryEntry]:
@@ -218,7 +450,8 @@ def _migrate_from_json():
             )
             # Also populate fusion layers
             entry = MemoryEntry(key=eid, value=value, tags=entity.get("tags", []),
-                                importance=0.5, timestamp=now, source="migration")
+                                importance=0.5, timestamp=now, source="migration",
+                                user_id=user_id)
             _store_to_fusion(entry)
         except Exception:
             _log.exception("__init__ error")
@@ -253,28 +486,95 @@ def _migrate_from_json():
 
 
 def _load_fusion_from_db():
-    """Load all entities from SQLite into fusion layers on startup."""
+    """Load entities into fusion layers on startup.
+
+    PG-first: loads from PostgreSQL when available, else SQLite.
+    Restores importance (from confidence_metadata.overall), strength, status
+    and TTL from attributes so restart does not lose memory state.
+    """
+    if _pg_active():
+        try:
+            from ..storage.db import fetch_dict
+            rows = fetch_dict(
+                "SELECT name, entity_type, content, metadata, user_id FROM memory_entities "
+                "ORDER BY updated_at DESC")
+            loaded = 0
+            for row in rows:
+                eid = row["name"]
+                value = row.get("content") or ""
+                _meta = row.get("metadata") or {}
+                tags_list = _meta.get("tags", []) or []
+                attrs = _meta.get("attributes", {}) or {}
+                _cm = attrs.get("confidence_metadata") if isinstance(attrs, dict) else None
+                if isinstance(_cm, dict) and isinstance(_cm.get("overall"), (int, float)):
+                    importance = float(_cm["overall"])
+                else:
+                    importance = 0.5
+                    if "person" in tags_list or "preference" in tags_list:
+                        importance = 0.7
+                entry = MemoryEntry(
+                    key=eid, value=value or "", tags=tags_list,
+                    importance=importance,
+                    timestamp=row.get("updated_at") or "",
+                    source="db_reload", entities=[eid],
+                    user_id=row.get("user_id") or "")
+                _store_to_fusion(entry)
+                loaded += 1
+            if loaded > 0:
+                _fusion.rebuild_index()
+                _log.info("🧠 PG 加载 %d 条实体到融合层，索引 %d 词条", loaded, len(_fusion._inverted_index))
+            return
+        except Exception:
+            _log.exception("pg load fusion error; falling back to SQLite")
     db = _get_db()
-    rows = db.execute("SELECT id, value, tags, created_at FROM entities ORDER BY created_at DESC LIMIT 500").fetchall()
+    rows = db.execute(
+        "SELECT id, value, tags, attributes, user_id, created_at FROM entities ORDER BY created_at DESC"
+    ).fetchall()
     loaded = 0
     for row in rows:
         eid = row["id"]
         value = row["value"]
         tags_list = json.loads(row["tags"] or "[]")
-        importance = 0.5
-        if "extracted" in tags_list:
-            importance = 0.6
-        if "person" in tags_list or "preference" in tags_list:
-            importance = 0.7
+        attrs = {}
+        try:
+            attrs = json.loads(row["attributes"] or "{}")
+        except Exception:
+            _log.warning("db_reload: invalid attributes JSON for %s", eid)
+        # Importance: prefer persisted confidence_metadata.overall, else tag-based default
+        _cm = attrs.get("confidence_metadata")
+        if isinstance(_cm, dict) and isinstance(_cm.get("overall"), (int, float)):
+            importance = float(_cm["overall"])
+        else:
+            importance = 0.5
+            if "extracted" in tags_list:
+                importance = 0.6
+            if "person" in tags_list or "preference" in tags_list:
+                importance = 0.7
+        # Strength / status written by decay.py
+        _strength = attrs.get("strength", 1.0)
+        try:
+            _strength = float(_strength)
+        except (TypeError, ValueError):
+            _strength = 1.0
+        _status = attrs.get("status", "active")
+        if _status not in ("active", "pending", "dormant", "archived"):
+            _status = "active"
+        # TTL: _ttl is in days (0 / -1 / absent = permanent)
+        _ttl_days = attrs.get("_ttl")
+        _ttl_seconds = None
+        if isinstance(_ttl_days, (int, float)) and _ttl_days > 0:
+            _ttl_seconds = int(_ttl_days) * 86400
         entry = MemoryEntry(key=eid, value=value or "", tags=tags_list,
                             importance=importance, timestamp=row["created_at"],
-                            source="db_reload", entities=[eid])
+                            source="db_reload", entities=[eid],
+                            user_id=row["user_id"] or "",
+                            strength=_strength, conflict_status=_status,
+                            ttl_seconds=_ttl_seconds)
         _store_to_fusion(entry)
         loaded += 1
     if loaded > 0:
-        import logging as _log
         _fusion.rebuild_index()
-        _log.getLogger("memory").info("🧠 已加载 %d 条实体到融合层，索引 %d 词条", loaded, len(_fusion._inverted_index))
+        _log.info("🧠 已加载 %d 条实体到融合层，索引 %d 词条", loaded, len(_fusion._inverted_index))
 
 
 _init_db()
@@ -305,8 +605,7 @@ def _migrate_confidence_metadata():
                 tags_list = json.loads(row["tags"] or "[]")
                 attrs = json.loads(row["attributes"] or "{}")
             except Exception as _mig_e:
-                import logging as _log3
-                _log3.getLogger("memory").warning("Migration: skip entity %s: %s", row["id"], _mig_e)
+                _log.warning("Migration: skip entity %s: %s", row["id"], _mig_e)
                 continue
             if "confidence_metadata" in attrs:
                 continue
@@ -326,8 +625,7 @@ def _migrate_confidence_metadata():
             updated += 1
         if updated:
             db.commit()
-            import logging as _log2
-            _log2.getLogger("memory").info("Backfilled %d entities with confidence metadata", updated)
+            _log.info("Backfilled %d entities with confidence metadata", updated)
     except Exception:
         _log.exception("__init__ error")
 
@@ -346,6 +644,24 @@ def store_entity(eid: str, etype: str, attributes: dict,
                  tags: Optional[List[str]] = None,
                  user_id: str = "") -> bool:
     """Store or update an entity (3-layer aware)."""
+    # PG-first: when PostgreSQL is available, persist there; fusion layers
+    # (in-memory) are still updated below via _store_to_fusion.
+    if _pg_active():
+        _value = str(attributes.get("name") or attributes.get("value") or "")[:500]
+        _ok = _pg_upsert_entity(eid, etype, _value, tags or [], attributes, user_id)
+        if not _ok:
+            return False
+        try:
+            _pentry = MemoryEntry(
+                key=eid, value=_value, tags=tags or [],
+                importance=0.5, timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                source="chat", entities=[eid], user_id=user_id,
+                base_importance=0.5, access_count=1)
+            _store_to_fusion(_pentry)
+        except Exception:
+            _log.exception("pg store_entity fusion sync error")
+        _audit_memory("memory_write", eid, user_id, {"type": etype})
+        return True
     db = _get_db()
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     tags_json = json.dumps(tags or [], ensure_ascii=False)
@@ -381,6 +697,20 @@ def store_entity(eid: str, etype: str, attributes: dict,
                     _oa = _js.loads(_old_attrs[0] or "{}") if isinstance(_old_attrs[0], str) else (_old_attrs[0] or {})
                     if _oa.get("_confidence", 0) >= 0.9:
                         return True  # skip modification
+        # ── Cross-session mention count: read BEFORE INSERT (id is PRIMARY KEY,
+        #    so COUNT(*) after INSERT is always 1 — old code always yielded 2) ──
+        _prev_mention = 0
+        _old_attrs_row = db.execute(
+            "SELECT attributes FROM entities WHERE id = ? AND user_id = ?",
+            (eid, user_id),
+        ).fetchone()
+        if _old_attrs_row and _old_attrs_row[0]:
+            try:
+                _prev_attrs = json.loads(_old_attrs_row[0])
+                _prev_mention = int(_prev_attrs.get("_mention_count", 0))
+            except Exception:
+                _prev_mention = 0
+        _mention_count = _prev_mention + 1
         db.execute(
             """INSERT OR REPLACE INTO entities
                (id, type, value, tags, attributes, user_id, created_at, locked)
@@ -395,12 +725,8 @@ def store_entity(eid: str, etype: str, attributes: dict,
         try:
             from .scorer import compute_confidence, detect_ttl
             from datetime import timedelta
-            # Get mention count from DB (counted before INSERT: id IS PRIMARY KEY, so after INSERT it's always 1)
-            _mc = db.execute(
-                "SELECT COUNT(*) FROM entities WHERE id = ? AND user_id = ?",
-                (eid, user_id)
-            ).fetchone()
-            _mention_count = (_mc[0] if _mc else 0) + 1  # +1 = count the current mention
+            # _mention_count was computed BEFORE the INSERT above (id is PRIMARY
+            # KEY, so a COUNT(*) here would always be 1 — see the pre-INSERT block)
             # Check if previous value exists (conflict detection)
             _prev = db.execute(
                 "SELECT value FROM entities WHERE id = ? AND user_id = ?",
@@ -449,22 +775,28 @@ def store_entity(eid: str, etype: str, attributes: dict,
                 attributes["confidence_metadata"] = _c5d_result
             except Exception:
                 _log.exception("__init__ error")
+            # Persist cross-session mention count so the next store() can
+            # read it back (the pre-INSERT block above re-reads this key)
+            attributes["_mention_count"] = _mention_count
             # Update DB with attributes (TTL, superseded, etc.)
             _attrs_j2 = json.dumps(attributes, ensure_ascii=False)
             db.execute("UPDATE entities SET attributes = ? WHERE id = ? AND user_id = ?",
                        (_attrs_j2, eid, user_id))
             db.commit()
         except Exception:
-            pass  # fallback to hardcoded importance below
+            # Adaptive scoring failed — fall back to tag-based importance.
+            # Only reached when the scoring block above raised; on success
+            # `importance` already holds the computed confidence score.
+            _log.exception("adaptive scoring failed; using tag-based fallback")
+            importance = 0.5
+            if tags:
+                if "extracted" in tags:
+                    importance = 0.6
+                if "person" in tags or "preference" in tags:
+                    importance = 0.8  # semantic-level
+                if "location" in tags:
+                    importance = 0.7  # episodic-level
         # Also update fusion layer
-        importance = 0.5
-        if tags:
-            if "extracted" in tags:
-                importance = 0.6
-            if "person" in tags or "preference" in tags:
-                importance = 0.8  # semantic-level
-            if "location" in tags:
-                importance = 0.7  # episodic-level
         # Check if this key already exists with higher importance (upgrade path)
         existing = _fusion.get_layer(LAYER_SEMANTIC)._entries.get(eid)
         if not existing:
@@ -485,7 +817,10 @@ def store_entity(eid: str, etype: str, attributes: dict,
                 _fusion.semantic._entries[entry.key] = entry
                 # Write to SQLite too
                 _tags_j = json.dumps(entry.tags, ensure_ascii=False)
-                _attrs_j = json.dumps({"name": value}, ensure_ascii=False)
+                # Merge (not overwrite): preserve confidence_metadata,
+                # _mention_count, _ttl, _superseded etc. already computed
+                # in the adaptive-scoring block above.
+                _attrs_j = json.dumps({**attributes, "name": value}, ensure_ascii=False)
                 db.execute(
                     "INSERT OR REPLACE INTO entities (id, type, value, tags, attributes, user_id, created_at, locked) VALUES (?,?,?,?,?,?,COALESCE((SELECT created_at FROM entities WHERE id = ?), ?), COALESCE((SELECT locked FROM entities WHERE id = ?), 0))",
                     (entry.key, etype, str(value)[:500], _tags_j, _attrs_j, user_id, entry.key, now, entry.key),
@@ -507,7 +842,7 @@ def store_entity(eid: str, etype: str, attributes: dict,
                 return True
         entry = MemoryEntry(key=eid, value=value, tags=tags or [],
                             importance=importance, timestamp=now,
-                            source="chat", entities=[eid],
+                            source="chat", entities=[eid], user_id=user_id,
                             base_importance=importance, access_count=1,
                             decay_rate=0.02 if importance >= 0.8 else 0.05)
         _store_to_fusion(entry)
@@ -526,6 +861,17 @@ def lock_entity(eid: str, user_id: str = "") -> bool:
     Locked entities go into 'confirmed info' (permanent layer)
     and are not removed by session cache cleanup.
     """
+    if _pg_active():
+        try:
+            from ..storage.db import execute
+            execute(
+                "UPDATE memory_entities SET metadata = jsonb_set(COALESCE(metadata,'{}'), '{locked}', 'true'::jsonb) WHERE name = %s",
+                (eid,))
+            _audit_memory("memory_lock", eid, user_id or "", None)
+            return True
+        except Exception:
+            _log.exception("pg lock entity error")
+            return False
     db = _get_db()
     try:
         _uid = user_id or ""
@@ -542,6 +888,17 @@ def lock_entity(eid: str, user_id: str = "") -> bool:
 
 def unlock_entity(eid: str, user_id: str = "") -> bool:
     """Unlock a previously locked entity."""
+    if _pg_active():
+        try:
+            from ..storage.db import execute
+            execute(
+                "UPDATE memory_entities SET metadata = jsonb_set(COALESCE(metadata,'{}'), '{locked}', 'false'::jsonb) WHERE name = %s",
+                (eid,))
+            _audit_memory("memory_unlock", eid, user_id or "", None)
+            return True
+        except Exception:
+            _log.exception("pg unlock entity error")
+            return False
     db = _get_db()
     try:
         _uid = user_id or ""
@@ -558,6 +915,17 @@ def unlock_entity(eid: str, user_id: str = "") -> bool:
 
 def is_locked(eid: str) -> bool:
     """Check whether an entity is locked."""
+    if _pg_active():
+        try:
+            from ..storage.db import fetch_dict
+            rows = fetch_dict(
+                "SELECT metadata FROM memory_entities WHERE name = %s LIMIT 1", (eid,))
+            if rows:
+                return bool((rows[0].get("metadata") or {}).get("locked"))
+            return False
+        except Exception:
+            _log.exception("pg is_locked error")
+            return False
     db = _get_db()
     try:
         row = db.execute(
@@ -577,9 +945,19 @@ def cleanup_events(before_days: int = 30) -> int:
     Only removes events of type 'chat_inquiry' (conversation logs).
     Returns count of deleted rows.
     """
-    db = _get_db()
     from datetime import timedelta as _td
     _cutoff = (datetime.now() - _td(days=before_days)).strftime("%Y-%m-%d %H:%M:%S")
+    if _pg_active():
+        try:
+            from ..storage.db import execute
+            execute(
+                "DELETE FROM memory_events WHERE event_type = 'chat_inquiry' AND event_ts < %s",
+                (_cutoff,))
+            return 1
+        except Exception:
+            _log.exception("pg cleanup events error")
+            return 0
+    db = _get_db()
     try:
         _cur = db.execute(
             "DELETE FROM events WHERE type = 'chat_inquiry' AND timestamp < ?",
@@ -591,20 +969,36 @@ def cleanup_events(before_days: int = 30) -> int:
         return 0
 
 
-def cleanup_unlocked_entities(before_days: int = 30) -> int:
+def cleanup_unlocked_entities(before_days: int = 30, user_id: str = "") -> int:
     """Delete unlocked entities created before before_days.
 
     Preserves locked (confirmed) entities.
+    When user_id is given, only that user's entities are deleted.
     Returns count of deleted rows.
     """
-    db = _get_db()
     from datetime import timedelta as _td
     _cutoff = (datetime.now() - _td(days=before_days)).strftime("%Y-%m-%d %H:%M:%S")
+    if _pg_active():
+        try:
+            from ..storage.db import execute
+            _sql = "DELETE FROM memory_entities WHERE created_at < %s"
+            _params = [_cutoff]
+            if user_id:
+                _sql += " AND user_id = %s"
+                _params.append(user_id)
+            execute(_sql, tuple(_params))
+            return 1
+        except Exception:
+            _log.exception("pg cleanup entities error")
+            return 0
+    db = _get_db()
     try:
-        _cur = db.execute(
-            "DELETE FROM entities WHERE locked = 0 AND created_at < ?",
-            (_cutoff,),
-        )
+        _sql = "DELETE FROM entities WHERE locked = 0 AND created_at < ?"
+        _params = [_cutoff]
+        if user_id:
+            _sql += " AND user_id = ?"
+            _params.append(user_id)
+        _cur = db.execute(_sql, _params)
         db.commit()
         return _cur.rowcount
     except Exception:
@@ -616,13 +1010,13 @@ def cleanup_unlocked_entities(before_days: int = 30) -> int:
 
 def search_entities(query: str, etype: Optional[str] = None,
                     limit: int = 20, user_id: str = "") -> List[dict]:
-    """Search entities (now uses fusion + SQLite fallback)."""
+    """Search entities (fusion cache first, then PG or SQLite)."""
     # First try fusion (3-layer in-memory)
     fusion_results = _fusion.search(query=query, limit=limit * 2)
     if fusion_results:
         result_dicts = []
         for e in fusion_results:
-            if user_id and user_id not in str(getattr(e, 'source', '')):
+            if user_id and getattr(e, "user_id", "") != user_id:
                 continue
             result_dicts.append({
                 "id": e.key,
@@ -631,12 +1025,18 @@ def search_entities(query: str, etype: Optional[str] = None,
                 "value": str(e.value),
                 "tags": e.tags,
                 "attributes": {"name": str(e.value)},
-                "user_id": "",
+                "user_id": getattr(e, "user_id", ""),
             })
             if len(result_dicts) >= limit:
                 break
         if result_dicts:
             return result_dicts
+
+    # PG fallback (no-PG environments keep using SQLite below)
+    if _pg_active():
+        _pg_results = _pg_search_entities(query, etype=etype, limit=limit, user_id=user_id)
+        if _pg_results:
+            return _pg_results
 
     # Fallback to SQLite
     db = _get_db()
@@ -731,10 +1131,21 @@ def search_entities(query: str, etype: Optional[str] = None,
     return results
 
 
-def delete_entity(eid: str) -> bool:
+def delete_entity(eid: str, user_id: str = "") -> bool:
+    if _pg_active():
+        _ok = _pg_delete_entity(eid, user_id)
+        if _ok:
+            _fusion.remove_from_index(eid)
+            for _l in [_fusion.working, _fusion.episodic, _fusion.semantic, _fusion.procedural]:
+                if eid in _l._entries:
+                    del _l._entries[eid]
+        return _ok
     db = _get_db()
     try:
-        db.execute("DELETE FROM entities WHERE id = ?", (eid,))
+        if user_id:
+            db.execute("DELETE FROM entities WHERE id = ? AND user_id = ?", (eid, user_id))
+        else:
+            db.execute("DELETE FROM entities WHERE id = ?", (eid,))
         db.commit()
         return True
     except Exception:
@@ -746,6 +1157,8 @@ def delete_entity(eid: str) -> bool:
 
 def store_relation(rel_id: str, source: str, target: str, rel_type: str,
                    attributes: Optional[Dict] = None) -> bool:
+    if _pg_active():
+        return _pg_store_relation(rel_id, source, target, rel_type, attributes)
     db = _get_db()
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     attrs_json = json.dumps(attributes or {}, ensure_ascii=False)
@@ -767,6 +1180,8 @@ def store_relation(rel_id: str, source: str, target: str, rel_type: str,
 def get_relations(entity_id: Optional[str] = None,
                   rel_type: Optional[str] = None,
                   direction: str = "both") -> List[dict]:
+    if _pg_active():
+        return _pg_get_relations(entity_id, rel_type, direction)
     db = _get_db()
     clauses: List[str] = []
     params: List[str] = []
@@ -792,8 +1207,10 @@ def get_relations(entity_id: Optional[str] = None,
 def store_event(eid: str, event_type: str, participants: List[str],
                 content: str, timestamp: Optional[str] = None,
                 user_id: str = "") -> bool:
-    db = _get_db()
     ts = timestamp or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    if _pg_active():
+        return _pg_store_event(eid, event_type, participants, content, ts, user_id)
+    db = _get_db()
     try:
         db.execute(
             "INSERT OR REPLACE INTO events (id, type, participants, content, timestamp, user_id) VALUES (?,?,?,?,?,?)",
@@ -810,6 +1227,9 @@ def search_events(query: str = "", event_type: Optional[str] = None,
                   participant: Optional[str] = None,
                   since: Optional[str] = None,
                   limit: int = 50) -> List[dict]:
+    if _pg_active():
+        return _pg_search_events(event_type=event_type, participant=participant,
+                                 since=since, query=query, limit=limit)
     db = _get_db()
     clauses: List[str] = []
     params: List[str] = []
@@ -876,31 +1296,56 @@ def memory_read(key: str) -> Optional[dict]:
 
 def memory_store(key: str, value: str, tags: Optional[List[str]] = None,
                  etype: str = "memory", user_id: str = "") -> bool:
-    # PG mode: store in PG with embedding
-    from ..storage.db import execute, use_pg
-    if use_pg():
-        try:
-            from ..storage.embedding import get_embedding
-            import json, uuid as _uid
-            emb = get_embedding(value)
-            execute("""
-                INSERT INTO memory_entities (id, name, entity_type, content, embedding, source, metadata)
-                VALUES (%s, %s, %s, %s, %s::vector, %s, %s::jsonb)
-                ON CONFLICT (name, entity_type) DO UPDATE SET
-                    content = EXCLUDED.content,
-                    embedding = EXCLUDED.embedding,
-                    metadata = EXCLUDED.metadata,
-                    updated_at = NOW()
-            """, (str(_uid.uuid4()), key[:200], etype, value, str(emb), "chat",
-                  json.dumps({"tags": tags or []})))
-        except Exception:
-            _log.exception("__init__ error")
+    # PG-first: store in PG with embedding, then sync fusion layers.
+    if _pg_active():
+        _ok = _pg_upsert_entity(key, etype, value, tags or [], {"value": value}, user_id)
+        if _ok:
+            try:
+                _pentry = MemoryEntry(
+                    key=key, value=value, tags=tags or [],
+                    importance=0.5, timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    source="chat", entities=[key], user_id=user_id,
+                    base_importance=0.5, access_count=1)
+                _store_to_fusion(_pentry)
+            except Exception:
+                _log.exception("memory_store fusion sync error")
+        return _ok
     return store_entity(key, etype, {"value": value}, tags=tags, user_id=user_id)
 
 
-def memory_search(query: str, limit: int = 10) -> List[dict]:
-    # Fallback: skip PG vector search (embedding API timeout risk)
-    return search_entities(query, limit=limit)
+def memory_search(query: str, limit: int = 10, user_id: str = "") -> List[dict]:
+    """Search memory entries.
+
+    PG vector search (semantic) is used only when explicitly enabled via
+    AELVOXIM_VECTOR_SEARCH=1 (embedding API latency/cost is off by default).
+    Any failure falls back to the local keyword/fusion search.
+    """
+    import os as _os
+    if _os.environ.get("AELVOXIM_VECTOR_SEARCH") == "1":
+        try:
+            from ..storage.embedding import get_embedding
+            from ..storage.db import fetch_dict, use_pg
+            if use_pg():
+                _emb = get_embedding(query)
+                _rows = fetch_dict(
+                    "SELECT name, entity_type, content, metadata FROM memory_entities "
+                    "WHERE embedding <=> %s::vector < 0.8 "
+                    "ORDER BY embedding <=> %s::vector LIMIT %s",
+                    (str(_emb), str(_emb), limit),
+                )
+                if _rows:
+                    return [{
+                        "key": r["name"],
+                        "id": r["name"],
+                        "type": r.get("entity_type", "memory"),
+                        "value": r.get("content", ""),
+                        "tags": r.get("metadata", {}).get("tags", []) if r.get("metadata") else [],
+                        "attributes": r.get("metadata", {}),
+                        "user_id": user_id,
+                    } for r in _rows]
+        except Exception:
+            _log.exception("PG vector search failed; falling back to local search")
+    return search_entities(query, limit=limit, user_id=user_id)
 
 
 def memory_timeline(entity_id: str, limit: int = 30) -> List[dict]:

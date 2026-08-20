@@ -200,20 +200,32 @@ def get_pending_reminders(user_id: str) -> List[str]:
 
 
 def _extract_topics(text: str) -> List[str]:
-    """Extract topic keywords from conversation text (rule-based)."""
+    """Extract topic keywords from conversation text (rule-based).
+
+    English: split on whitespace. Chinese: 2-4 char sliding windows
+    (Chinese has no spaces, so a plain split() would yield one giant
+    token per sentence and frequency stats would never fire).
+    """
     if not text:
         return []
-    words = text.lower().split()
-    # Simple frequency-based extraction
+    import re as _re
     from collections import Counter
+    # English words / identifiers (len >= 2)
+    en_words = _re.findall(r'[a-z0-9+#._/-]{2,}', text.lower())
+    # Chinese: bigrams (2-char windows). Chinese has no spaces, so a plain
+    # split() would yield one giant token per sentence and frequency stats
+    # would never fire. Bigrams capture repeated concepts ("面试" in
+    # "面试准备/面试很重要") that arbitrary-length windows miss.
+    _chars = _re.findall(r'[\u4e00-\u9fff]', text)
+    _bigrams = [_chars[i] + _chars[i + 1] for i in range(len(_chars) - 1)]
+    all_tokens = en_words + _bigrams
     stopwords = {"的", "了", "是", "在", "我", "有", "和", "就", "不", "人", "都", "一",
                  "一个", "上", "也", "很", "到", "说", "要", "去", "你", "会", "着",
                  "没有", "看", "好", "自己", "这", "the", "a", "an", "is", "are",
                  "was", "were", "be", "been", "have", "has", "had", "do", "does",
                  "did", "will", "would", "can", "could", "may", "might", "shall",
                  "should", "to", "of", "in", "for", "on", "with", "at", "by", "from"}
-    # Also filter very short tokens
-    filtered = [w for w in words if len(w) > 2 and w not in stopwords]
+    filtered = [w for w in all_tokens if w not in stopwords]
     common = Counter(filtered).most_common(10)
     return [w for w, c in common if c >= 2][:5]
 

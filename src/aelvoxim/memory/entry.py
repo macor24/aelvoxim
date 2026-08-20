@@ -40,6 +40,7 @@ class MemoryEntry:
     last_access: str = ""
     ttl_seconds: Optional[int] = None
     source: str = ""
+    user_id: str = ""
     importance: float = 0.5
     strength: float = 1.0
     entities: List[str] = field(default_factory=list)

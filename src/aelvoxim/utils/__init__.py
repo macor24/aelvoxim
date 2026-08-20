@@ -18,7 +18,9 @@ _log = logging.getLogger("aelvoxim.utils.__init__")
 
 # ── Paths ──
 
-DATA_DIR = Path.home() / ".aelvoxim"
+# Data directory: AELVOXIM_DATA_DIR overrides the default ~/.aelvoxim.
+# This matters for multi-environment deployments and isolated tests.
+DATA_DIR = Path(os.environ.get("AELVOXIM_DATA_DIR") or (Path.home() / ".aelvoxim"))
 CONFIG_FILE = DATA_DIR / "config.json"
 LLM_CONFIG_FILE = DATA_DIR / "llm-config.json"
 SEARCH_CONFIG_FILE = DATA_DIR / "search-config.json"

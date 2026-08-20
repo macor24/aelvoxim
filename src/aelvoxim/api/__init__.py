@@ -186,10 +186,10 @@ def memory_read(key: str) -> Optional[Dict]:
     return _read(key)
 
 
-def memory_search(query: str, limit: int = 10) -> List[Dict]:
+def memory_search(query: str, limit: int = 10, user_id: str = "") -> List[Dict]:
     """Search memory entries."""
     from ..memory import memory_search as _search
-    return _search(query, limit=limit)
+    return _search(query, limit=limit, user_id=user_id)
 
 
 def memory_timeline(entity_id: str, limit: int = 30) -> List:

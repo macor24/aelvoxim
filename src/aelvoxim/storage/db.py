@@ -312,21 +312,42 @@ def _init_tables():
                 confidence FLOAT DEFAULT 1.0,
                 source VARCHAR(50) DEFAULT 'chat',
                 metadata JSONB DEFAULT '{}',
+                user_id VARCHAR(200) DEFAULT '',
                 created_at TIMESTAMP DEFAULT NOW(),
                 updated_at TIMESTAMP DEFAULT NOW(),
                 UNIQUE (name, entity_type)
             )""")
+        _safe_execute(cur, "ALTER TABLE memory_entities ADD COLUMN IF NOT EXISTS user_id VARCHAR(200) DEFAULT ''")
         _safe_execute(cur, "CREATE INDEX IF NOT EXISTS idx_memory_entity_name ON memory_entities(name)")
         _safe_execute(cur, "CREATE INDEX IF NOT EXISTS idx_memory_entity_type ON memory_entities(entity_type)")
+        _safe_execute(cur, "CREATE INDEX IF NOT EXISTS idx_memory_entity_user ON memory_entities(user_id)")
         _safe_execute(cur, "CREATE INDEX IF NOT EXISTS idx_memory_type_time ON memory_entities(entity_type, created_at DESC)")
         _safe_execute(cur, """CREATE TABLE IF NOT EXISTS memory_relations (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                 source_id UUID REFERENCES memory_entities(id) ON DELETE CASCADE,
                 target_id UUID REFERENCES memory_entities(id) ON DELETE CASCADE,
+                source_name VARCHAR(200) DEFAULT '',
+                target_name VARCHAR(200) DEFAULT '',
                 relation_type VARCHAR(50) NOT NULL,
                 weight FLOAT DEFAULT 1.0,
                 created_at TIMESTAMP DEFAULT NOW()
             )""")
+        _safe_execute(cur, "ALTER TABLE memory_relations ADD COLUMN IF NOT EXISTS source_name VARCHAR(200) DEFAULT ''")
+        _safe_execute(cur, "ALTER TABLE memory_relations ADD COLUMN IF NOT EXISTS target_name VARCHAR(200) DEFAULT ''")
+        _safe_execute(cur, "CREATE INDEX IF NOT EXISTS idx_memory_rel_source_name ON memory_relations(source_name)")
+        _safe_execute(cur, "CREATE INDEX IF NOT EXISTS idx_memory_rel_target_name ON memory_relations(target_name)")
+        _safe_execute(cur, """CREATE TABLE IF NOT EXISTS memory_events (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                event_type VARCHAR(50) DEFAULT 'event',
+                participants JSONB DEFAULT '[]',
+                content TEXT DEFAULT '',
+                event_ts VARCHAR(40) DEFAULT '',
+                user_id VARCHAR(200) DEFAULT '',
+                created_at TIMESTAMP DEFAULT NOW()
+            )""")
+        _safe_execute(cur, "CREATE INDEX IF NOT EXISTS idx_memory_events_type ON memory_events(event_type)")
+        _safe_execute(cur, "CREATE INDEX IF NOT EXISTS idx_memory_events_ts ON memory_events(event_ts)")
+        _safe_execute(cur, "CREATE INDEX IF NOT EXISTS idx_memory_events_user ON memory_events(user_id)")
         _safe_execute(cur, """CREATE TABLE IF NOT EXISTS knowledge_entries (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                 topic VARCHAR(200) NOT NULL,
