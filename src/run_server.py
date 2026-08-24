@@ -1,6 +1,6 @@
 """Start MetaCore FastAPI SaaS server on port 9701."""
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -11,12 +11,12 @@ except ImportError:
     print("This server requires uvicorn. Install with: pip install uvicorn")
     sys.exit(1)
 
-from aelvoxim.server import create_app
-from pathlib import Path
-
 # Set up logging with rotation
 import logging
 from logging.handlers import RotatingFileHandler
+from pathlib import Path
+
+from aelvoxim.server import create_app
 
 _log_dir = Path.home() / ".aelvoxim" / "logs"
 _log_dir.mkdir(parents=True, exist_ok=True)
@@ -41,7 +41,7 @@ def _checkpoint_db():
         conn = _get_db()
         conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         conn.close()
-    except Exception:
+    except Exception:  # noqa: S110, BLE001 — best-effort WAL checkpoint on exit
         pass  # Best-effort on exit
 
 
@@ -55,6 +55,6 @@ if __name__ == "__main__":
     print(f"{'🔄 ' if reload_enabled else ''}MetaCore API Server: http://127.0.0.1:{port}")
     print(f"  Register: http://127.0.0.1:{port}/register")
     print(f"  API docs: http://127.0.0.1:{port}/docs")
-    print(f"  Press Ctrl+C to stop.")
+    print("  Press Ctrl+C to stop.")
     host = os.environ.get("AELVOXIM_HOST", "127.0.0.1")
     uvicorn.run(app, host=host, port=port, reload=reload_enabled)

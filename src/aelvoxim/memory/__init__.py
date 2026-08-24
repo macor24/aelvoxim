@@ -801,9 +801,15 @@ def store_entity(eid: str, etype: str, attributes: dict,
                     importance = 0.7  # episodic-level
         # Also update fusion layer
         # Check if this key already exists with higher importance (upgrade path)
+        # Note: must include the *working* layer — entries stored moments ago
+        # live there, and without it the upgrade check never ran for them
+        # (test_l4_promotion failed on clean runners; only stale local DBs
+        # happened to have the entity in semantic/episodic).
         existing = _fusion.get_layer(LAYER_SEMANTIC)._entries.get(eid)
         if not existing:
             existing = _fusion.get_layer(LAYER_EPISODIC)._entries.get(eid)
+        if not existing:
+            existing = _fusion.get_layer(LAYER_WORKING)._entries.get(eid)
         if existing:
             existing.touch()
             entry = existing

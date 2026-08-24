@@ -36,12 +36,20 @@ def test_multi_user_isolation():
 
 def test_l4_promotion():
     """Entity with access_count >= 5 should be promoted to procedural layer."""
-    from aelvoxim.memory import _fusion
+    from aelvoxim.memory import _fusion, delete_entity
     eid = "test:l4_test"
+    # Clean any stale state from previous runs — the fusion layers are a
+    # process-global singleton, so this test must be self-contained (it
+    # failed on clean CI runners: a fresh entry lives in the *working* layer,
+    # but the touch loop only looked in episodic/semantic).
+    delete_entity(eid)
+    for _layer in (_fusion.working, _fusion.episodic, _fusion.semantic, _fusion.procedural):
+        _layer._entries.pop(eid, None)
     # Store once then manually touch to build access_count
     store_entity(eid, "concept", {"name": "L4Test"}, tags=["test"], user_id="test_l4")
-    # Touch 5 times to reach procedural threshold
-    for layer_name in ["episodic", "semantic"]:
+    # Touch 5 times to reach procedural threshold (entry sits in working layer
+    # right after store)
+    for layer_name in ["working", "episodic", "semantic"]:
         layer = getattr(_fusion, layer_name, None)
         if layer and eid in layer._entries:
             for _ in range(5):
