@@ -149,8 +149,13 @@ class MetaCogTrigger:
         ).value if levels else TriggerLevel.MILD.value
 
         evolve_threshold = self._cw("evolve_threshold", default=0.03)
-        # Skip recording if overall score is too low (filters noise)
-        if overall < evolve_threshold:
+        # Recording gate — deliberately decoupled from evolve_threshold.
+        # auto_tune raises evolve_threshold when evolution hit-rate is low;
+        # if recording shared that threshold, tuning silently starved the
+        # metacog history + self-review chain (2026-08-24: threshold was 0.3,
+        # steady-state overall≈0.198 → every evaluation skipped recording).
+        _record_threshold = self._cw("record_threshold", default=0.05)
+        if overall < _record_threshold:
             return MetaCogReport(
                 timestamp=now, should_evolve=False,
                 max_level=TriggerLevel.MILD.value, overall_score=overall,

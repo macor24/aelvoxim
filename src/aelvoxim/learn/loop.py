@@ -798,6 +798,11 @@ class Learner:
                 except Exception:
                     _log.exception("loop error")
             except Exception:
+                # Diagnose the silent metacog chain break (2026-08-24): the
+                # evaluate() call above stopped persisting metacog_history and
+                # Cognition degraded to triggers=1/1; log the real exception
+                # instead of swallowing it.
+                _log.exception("loop error (metacog trigger chain)")
                 _mc_report = None
             # ── Memory maintenance (every cognition tick) ──
             try:
