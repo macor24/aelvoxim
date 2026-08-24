@@ -99,7 +99,7 @@ export async function sendChatMessage(
   // token arrives for this long (genuinely stuck). Declared outside try so
   // the catch block can also clear it.
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
-  const IDLE_TIMEOUT_MS = 60000;
+  const IDLE_TIMEOUT_MS = 120000;
 
   try {
     const tenant = useAuthStore.getState().getActiveTenant();

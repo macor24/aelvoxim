@@ -222,7 +222,9 @@ def _cpu_percent() -> float:
         with open("/proc/stat") as f:
             parts = f.readline().split()
         vals = [int(v) for v in parts[1:]]
-        return sum(vals), sum(vals[:8])  # total, active
+        # busy = total - idle - iowait. The old `sum(vals[:8])` included idle
+        # (index 3), so usage read ~100% on idle machines (P3, 9.txt audit).
+        return sum(vals), sum(vals) - vals[3] - vals[4]  # total, active
     total_1, active_1 = _read()
     time.sleep(0.3)
     total_2, active_2 = _read()

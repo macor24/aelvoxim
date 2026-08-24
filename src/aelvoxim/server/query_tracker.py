@@ -95,8 +95,12 @@ def record_query(query: str, user_id: str = "") -> str:
     return topic
 
 
-def get_recent_topics(hours: int = 24, limit: int = 50) -> List[Dict]:
-    """Get topics from the last N hours."""
+def get_recent_topics(hours: int = 24, limit: int = 50, user_id: str = "") -> List[Dict]:
+    """Get topics from the last N hours.
+
+    user_id: optional — when given, only that user's query records are
+        returned (prevents cross-user topic leakage, P0-13, 9.txt audit).
+    """
     cutoff = (datetime.now() - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
     results = []
     for f in sorted(_ensure_dir().glob("*.jsonl"), reverse=True):
@@ -105,6 +109,8 @@ def get_recent_topics(hours: int = 24, limit: int = 50) -> List[Dict]:
                 if not line:
                     continue
                 entry = json.loads(line)
+                if user_id and entry.get("user_id", "") != user_id:
+                    continue
                 if entry.get("ts", "") >= cutoff:
                     results.append(entry)
                 if len(results) >= limit:
@@ -116,8 +122,13 @@ def get_recent_topics(hours: int = 24, limit: int = 50) -> List[Dict]:
     return results
 
 
-def predict_next_topics(hours: int = 48) -> Dict[str, Any]:
+def predict_next_topics(hours: int = 48, user_id: str = "") -> Dict[str, Any]:
     """Predict topics the user might need next.
+
+    Args:
+        hours: look-back window
+        user_id: optional — scope predictions to one user's query history
+            (P0-13, 9.txt audit).
 
     Returns:
         {
@@ -126,7 +137,7 @@ def predict_next_topics(hours: int = 48) -> Dict[str, Any]:
             "predictions": ["topic1", "topic2", ...]  # most likely next
         }
     """
-    entries = get_recent_topics(hours=hours, limit=200)
+    entries = get_recent_topics(hours=hours, limit=200, user_id=user_id)
 
     # 1. Count topic frequency
     topic_counts: Dict[str, int] = Counter(e.get("topic", "general") for e in entries)

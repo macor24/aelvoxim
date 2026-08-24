@@ -66,6 +66,25 @@ def _load_feedback() -> List[dict]:
         return []
 
 
+def _rewrite_feedback(records: List[dict]) -> None:
+    """Rewrite the feedback queue with the given remaining records.
+
+    Used by MetaLearner.tick() so only the processed batch is dropped and the
+    backlog beyond MAX_BATCH survives (B15, 9.txt audit).
+    """
+    try:
+        _ensure_dir()
+        if not records:
+            if _FEEDBACK_FILE.exists():
+                _FEEDBACK_FILE.unlink()
+            return
+        with open(_FEEDBACK_FILE, "w") as f:
+            for rec in records:
+                f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except Exception:
+        _log.exception("meta_learner error")
+
+
 def _clear_feedback() -> None:
     """Clear the pending feedback file."""
     try:
@@ -131,7 +150,8 @@ class MetaLearner:
 
         actions: List[str] = []
         processed = 0
-        for rec in records[:self.MAX_BATCH]:
+        _batch = records[:self.MAX_BATCH]
+        for rec in _batch:
             signals = rec.get("signals", {})
             if not signals:
                 continue
@@ -143,7 +163,10 @@ class MetaLearner:
             except Exception:
                 _log.exception("meta_learner error")
 
-        _clear_feedback()
+        # Drop only the batch actually attempted; keep the backlog. The old
+        # _clear_feedback() wiped the whole queue, so records beyond
+        # MAX_BATCH were silently lost (B15, 9.txt audit).
+        _rewrite_feedback(records[len(_batch):])
         if processed > 0:
             actions.append(f"processed {processed} feedback record(s)")
         return actions

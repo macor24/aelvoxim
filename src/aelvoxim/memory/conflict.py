@@ -135,12 +135,26 @@ def resolve_conflict(
     if db_connection:
         try:
             import json as _js
-            _attrs = {"_conflict": False, "_conflict_resolved": True,
-                      "_resolved_at": now, "_resolution": user_choice,
-                      "_strength": round(entry.strength, 3)}
+            # Merge into existing attributes instead of replacing the whole
+            # column — the old UPDATE wiped tags/_mention_count/etc. (B6,
+            # 9.txt audit).
+            _row = db_connection.execute(
+                "SELECT attributes FROM entities WHERE id = ?", (entry_key,)).fetchone()
+            _old = {}
+            if _row and _row[0]:
+                try:
+                    _old = _js.loads(_row[0])
+                except (ValueError, TypeError):
+                    _old = {}
+            if not isinstance(_old, dict):
+                _old = {}
+            _old.update({
+                "_conflict": False, "_conflict_resolved": True,
+                "_resolved_at": now, "_resolution": user_choice,
+                "_strength": round(entry.strength, 3)})
             db_connection.execute(
                 "UPDATE entities SET attributes = ? WHERE id = ?",
-                (_js.dumps(_attrs, ensure_ascii=False), entry_key)
+                (_js.dumps(_old, ensure_ascii=False), entry_key)
             )
             db_connection.commit()
         except Exception:

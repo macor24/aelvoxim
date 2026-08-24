@@ -12,8 +12,10 @@ Routes:
 
 from __future__ import annotations
 
+import json
+
 from fastapi import APIRouter, Depends, HTTPException
-from .routes import _verify_key
+from .routes import _verify_key, _require_admin
 
 router = APIRouter()
 
@@ -51,17 +53,19 @@ async def set_config_value(
 
 
 @router.get("/llm/config")
-async def get_llm_config(user: dict = Depends(_verify_key)):
-    """Get current LLM configuration."""
+async def get_llm_config(admin: dict = Depends(_require_admin)):
+    """Get current LLM configuration. Admin only (contains provider keys)."""
     from ..utils import read_json, LLM_CONFIG_FILE
     return read_json(LLM_CONFIG_FILE) or {}
 
 
 @router.post("/llm/config")
-async def set_llm_config(body: dict, user: dict = Depends(_verify_key)):
-    """Set LLM configuration."""
+async def set_llm_config(body: dict, admin: dict = Depends(_require_admin)):
+    """Set LLM configuration. Admin only."""
     from ..client.security_gate import check_config_change
-    result = check_config_change(body)
+    # check_config_change(key, value, user_id) — body is the full config dict;
+    # gate on the raw payload as a config-set operation.
+    result = check_config_change("llm_config", json.dumps(body, ensure_ascii=False), str(admin.get("id") or admin.get("user_id") or ""))
     if not result.get("allowed", True):
         raise HTTPException(403, detail=result.get("reason", "Blocked by safety rules"))
     from ..utils import write_json, LLM_CONFIG_FILE

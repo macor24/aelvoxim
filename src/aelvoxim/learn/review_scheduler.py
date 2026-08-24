@@ -158,7 +158,11 @@ def run_review_cycle(log_func=None) -> Dict[str, Any]:
     for item in due:
         try:
             from ..learn.knowledge import KnowledgeBase
-            entries = list(KnowledgeBase.search(query=item["entry_id"], limit=1))
+            # Fetch by id directly — searching with the entry_id as a text
+            # query always returned 0 rows, so re-verification never ran
+            # (B14, 9.txt audit).
+            _entry = KnowledgeBase.get_by_id(item["entry_id"])
+            entries = [_entry] if _entry else []
             if entries:
                 from ..learn.validator import AutoValidator
                 result = AutoValidator().verify(entries[0])

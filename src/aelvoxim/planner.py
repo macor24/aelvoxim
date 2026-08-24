@@ -23,6 +23,10 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+# log was referenced (log.exception at planner error sites) but never defined
+# → NameError each time an exception path ran (C3, 9.txt audit).
+log = logging.getLogger("aelvoxim.planner")
+
 from .utils import DATA_DIR
 
 PLANS_DIR = DATA_DIR / "plans"

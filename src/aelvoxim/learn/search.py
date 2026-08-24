@@ -471,7 +471,11 @@ def _mock_search(query: str, max_results: int = 5) -> List[Dict[str, str]]:
             "url": f"https://dev.example.com/{topic.lower().replace(' ', '-')}/advanced",
         },
     ]
-    # Remove `这是Search结果` marker that extract.py uses to detect mock
+    # Mark mock results so extract.py can detect and discard them — without
+    # the marker, fabricated "knowledge" was ingested as real search results
+    # and polluted the KB (C4, 9.txt audit).
+    for _t in templates[:max_results]:
+        _t["snippet"] = "这是搜索结果（模拟数据，请勿用于知识入库） " + _t.get("snippet", "")
     return templates[:max_results]
 
 

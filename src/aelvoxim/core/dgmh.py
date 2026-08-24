@@ -92,10 +92,12 @@ class SafetyShield:
 
     def check(self, action: str = "", target: str = "") -> Optional[str]:
         """Safety check, returns None=pass, str=block reason."""
-        # M1: Do not modify safety rules
+        # M1: Do not modify safety rules — unconditional red line. The old
+        # `level <= 1` guard only blocked the least-strict level, so higher
+        # (stricter) levels actually allowed safety-rule modification — the
+        # condition was inverted (P3, 9.txt audit).
         if "safety_guard" in target or "safety-guard" in target or "safety" in target.lower():
-            if self.level <= 1:
-                return f"[M1] safety rule modification blocked: {target}"
+            return f"[M1] safety rule modification blocked: {target}"
 
         # M3: Do not escalate permissions
         if action in ("chmod", "sudo", "chown", "adduser", "usermod"):

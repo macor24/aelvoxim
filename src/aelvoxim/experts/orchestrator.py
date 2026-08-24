@@ -474,7 +474,7 @@ class ExpertOrchestrator:
                 continue  # exclude skipped experts from arbitration
             if r.expert_name == "ethics" and r.error and "ETHICAL BLOCK" in str(r.error):
                 blocked = True
-            if r.expert_name == "safety" and r.error and "SAFETY BLOCK" in str(r.error):
+            if r.expert_name == "safety" and r.error and "Safety block" in str(r.error):
                 blocked = True
             active_results.append(r)
 
@@ -597,7 +597,7 @@ class ExpertOrchestrator:
             "confidence": conf,
             "blocked": any(
                 (r.expert_name == "ethics" and r.error and "ETHICAL BLOCK" in str(r.error))
-                or (r.expert_name == "safety" and r.error and "SAFETY BLOCK" in str(r.error))
+                or (r.expert_name == "safety" and r.error and "Safety block" in str(r.error))
                 for r in results
             ),
             "mode": "fast",

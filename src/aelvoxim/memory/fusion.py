@@ -279,11 +279,12 @@ class MemoryFusion:
     def stats(self) -> Dict:
         return {
             "total_active": sum(l.count() for l in [
-                self.working, self.episodic, self.semantic]),
+                self.working, self.episodic, self.semantic, self.procedural]),
             "by_layer": {
                 "working": self.working.count(),
                 "episodic": self.episodic.count(),
                 "semantic": self.semantic.count(),
+                "procedural": self.procedural.count(),
             },
             "index_entries": len(self._inverted_index),
         }
@@ -291,7 +292,7 @@ class MemoryFusion:
     def cleanup_all(self) -> int:
         """Remove expired entries from all layers and rebuild the index."""
         total = 0
-        for l in [self.working, self.episodic, self.semantic]:
+        for l in [self.working, self.episodic, self.semantic, self.procedural]:
             total += l.cleanup()
         if total > 0:
             self.mark_dirty()

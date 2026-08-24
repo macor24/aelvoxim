@@ -174,11 +174,13 @@ def resolve_path(path: str) -> Path:
         if p_str.startswith(blocked):
             raise PermissionError(f"Access denied: {path} (system path blocked)")
 
-    # Auto-authorize: allow the parent directory
-    parent = str(p.parent)
-    _add_allowed(parent)
-    log.info("Auto-authorized path: %s → parent: %s", path, parent)
-    return p
+    # Outside ~/, /tmp/ and the persisted allowlist — refuse instead of
+    # auto-authorizing. Auto-authorizing any non-system path on first use let
+    # the chat tool read/write arbitrary locations without consent (P0-8,
+    # 9.txt audit); explicit authorization via tool_allowed.json is required.
+    raise PermissionError(
+        f"Access denied: {path} (not in allowed paths; add it to tool_allowed.json to authorize)"
+    )
 
 
 # ── Built-in tools ──

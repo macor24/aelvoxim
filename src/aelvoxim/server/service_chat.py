@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+import threading
 import time as _time
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Callable
@@ -841,10 +842,24 @@ def verify_response_facts(text: str, user_msg: str, user: dict) -> str:
 def run_post_chat_tasks(user_msg: str, text: str, user: dict,
                         kb_results: list, t0: float, user_id: str) -> None:
     try:
-        # Meta-learning: ingest feedback if user corrected the AI
-        if text and "wrong" in text.lower() or "no" in text.lower()[:50]:
-            from ..learn.meta_learner import MetaLearner
-            MetaLearner().ingest_feedback(user_msg, text, user)
+        # Meta-learning: ingest feedback if user corrected the AI.
+        # Parentheses matter: without them, `and` binds tighter than `or`, so
+        # any reply containing "no" in its first 50 chars triggered the
+        # MetaLearner regardless of the "wrong" condition (B1, 9.txt audit).
+        # ingest_feedback is a MODULE function — MetaLearner() has no such
+        # method (B15, 9.txt audit).
+        if text and ("wrong" in text.lower() or "no" in text.lower()[:50]):
+            from ..learn.meta_learner import ingest_feedback as _ingest_feedback
+            _ingest_feedback({
+                "kind": "correction",
+                "user_msg": user_msg,
+                "assistant_reply": text,
+                "user": (user or {}).get("email", ""),
+                "signals": {
+                    "wrong": "wrong" in text.lower(),
+                    "no": "no" in text.lower()[:50],
+                },
+            })
     except Exception:
         _log.exception("service_chat error")
 
@@ -1314,21 +1329,45 @@ def chat_pipeline(
             except Exception:
                 _log.exception("service_chat error")
 
-        # Self-reflection (async, doesn't block return)
+        # Self-reflection (async, doesn't block return).
+        # Bounded: cap concurrent reflection threads with a semaphore and
+        # dedupe identical (user, query) within 5 min — every chat turn used
+        # to spawn an unbounded daemon thread (C10, 9.txt audit).
         _text_for_reflect = text
         if _text_for_reflect and mc:
             try:
                 import threading as _t
-                _t.Thread(target=_self_reflect, args=(user_msg, _text_for_reflect, mc, user), daemon=True).start()
+                _sr_key = f"{str(mc.get('email', ''))}|{str(user_msg)[:50]}"
+                _sr_now = _time.time()
+                if _sr_now - _self_reflect_recent.get(_sr_key, 0) >= _SELF_REFLECT_DEDUPE_SECS and _self_reflect_sem.acquire(blocking=False):
+                    _self_reflect_recent[_sr_key] = _sr_now
+                    if len(_self_reflect_recent) > 500:
+                        # Bound the dedupe map
+                        for _k in list(_self_reflect_recent.keys())[:200]:
+                            _self_reflect_recent.pop(_k, None)
+
+                    def _reflect_wrapper():
+                        try:
+                            _self_reflect(user_msg, _text_for_reflect, mc, user)
+                        finally:
+                            _self_reflect_sem.release()
+
+                    _t.Thread(target=_reflect_wrapper, daemon=True).start()
             except Exception:
                 _log.exception("service_chat error")
 
     return {"text": text, "blocked": False}
 
 
-# ── Continuous learning helpers ──
+# Continuous learning helpers — NOTE: _recent_knowledge_hits is re-assigned
+# below to a _UserScoped instance (user-isolated); the plain dict definition
+# was removed as dead code (P3, 9.txt audit).
 
-_recent_knowledge_hits: dict = {}  # {query_lower: entry_id, ...}
+# Bounded self-reflection (C10, 9.txt audit): at most 2 concurrent background
+# reflection LLM calls; identical (user, query) pairs are deduped for 5 min.
+_self_reflect_sem = threading.Semaphore(2)
+_self_reflect_recent: dict = {}
+_SELF_REFLECT_DEDUPE_SECS = 300
 
 
 def _extract_facts_from_reply(reply: str, query: str) -> list:

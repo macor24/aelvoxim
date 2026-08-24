@@ -66,7 +66,9 @@ def submit_verification_task(
             direction = directions.get(topic)
             if direction:
                 rh = json.loads(direction.review_history or "[]") if direction.review_history else []
-                intervals = [1, 3, 7, 30]
+                # Same interval ladder as the no-knowledge branch above — the
+                # two tables were inconsistent (C16, 9.txt audit).
+                intervals = [1, 3, 7, 30, 90, 180]
                 next_idx = min(len(rh), len(intervals) - 1)
                 next_days = intervals[next_idx]
                 next_time = datetime.now() + timedelta(days=next_days)

@@ -1232,6 +1232,17 @@ class Learner:
                 if check_reviews(self._directions, self._dir_mgr.save, self._log):
                     continue
 
+                # Meta-learning: process accumulated feedback signals from chat
+                # (tick was previously never called, so the feedback queue
+                # grew forever — B15, 9.txt audit).
+                try:
+                    from ..learn.meta_learner import MetaLearner
+                    _acts = MetaLearner().tick()
+                    for _a in _acts:
+                        self._log(f"  📈 {_a}")
+                except Exception:
+                    _log.exception("loop error")
+
                 # Check pending promotions
                 pmt_state = {
                     "_pending_streak": getattr(self, '_pending_streak', 0),

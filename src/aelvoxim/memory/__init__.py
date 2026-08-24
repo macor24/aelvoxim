@@ -515,7 +515,10 @@ def _load_fusion_from_db():
                 entry = MemoryEntry(
                     key=eid, value=value or "", tags=tags_list,
                     importance=importance,
-                    timestamp=row.get("updated_at") or "",
+                    # PG returns datetime for timestamps; MemoryEntry.timestamp
+                    # is a str field — datetime breaks strptime() in TTL/age
+                    # calcs (B2, 9.txt audit).
+                    timestamp=str(row.get("updated_at") or ""),
                     source="db_reload", entities=[eid],
                     user_id=row.get("user_id") or "")
                 _store_to_fusion(entry)
@@ -981,7 +984,9 @@ def cleanup_unlocked_entities(before_days: int = 30, user_id: str = "") -> int:
     if _pg_active():
         try:
             from ..storage.db import execute
-            _sql = "DELETE FROM memory_entities WHERE created_at < %s"
+            # locked=0 guard: confirmed entities must survive cleanup (B3,
+            # 9.txt audit — the DELETE previously removed locked rows too).
+            _sql = "DELETE FROM memory_entities WHERE created_at < %s AND (locked = 0 OR locked IS NULL)"
             _params = [_cutoff]
             if user_id:
                 _sql += " AND user_id = %s"
@@ -1327,11 +1332,14 @@ def memory_search(query: str, limit: int = 10, user_id: str = "") -> List[dict]:
             from ..storage.db import fetch_dict, use_pg
             if use_pg():
                 _emb = get_embedding(query)
+                # user_id scoping: without it, vector search leaked every
+                # user's entities (B4, 9.txt audit).
                 _rows = fetch_dict(
                     "SELECT name, entity_type, content, metadata FROM memory_entities "
                     "WHERE embedding <=> %s::vector < 0.8 "
+                    "AND (user_id = %s OR user_id IS NULL) "
                     "ORDER BY embedding <=> %s::vector LIMIT %s",
-                    (str(_emb), str(_emb), limit),
+                    (str(_emb), user_id, str(_emb), limit),
                 )
                 if _rows:
                     return [{
@@ -1397,27 +1405,59 @@ __all__ = [
 # ── Emotion profile (W8) ─────────────────────
 
 
+def _load_emotion_profile(user_id: str) -> Dict[str, Any]:
+    """Load the emotion profile dict from real storage.
+
+    Previously read via search_entities(), whose fusion-cache rows return a
+    fake attributes {"name": ...} and a value that is the entity *name*, not
+    the counters — so the count dict was never recovered and every update
+    reset it to zero (B5, 9.txt audit). Read the stored attributes directly.
+    """
+    eid = f"emotion:{user_id.replace(':', '_')}"
+    default = {"positive": 0, "negative": 0, "neutral": 0, "total": 0, "last_check": ""}
+    try:
+        if _pg_active():
+            from ..storage.db import fetch_dict
+            rows = fetch_dict(
+                "SELECT metadata FROM memory_entities WHERE name = %s AND entity_type = 'emotion_profile'",
+                (eid,))
+            if rows and rows[0].get("metadata"):
+                attrs = rows[0]["metadata"]
+                val = attrs.get("value", attrs.get("name"))
+                if isinstance(val, str):
+                    try:
+                        val = json.loads(val)
+                    except (json.JSONDecodeError, TypeError):
+                        val = None
+                if isinstance(val, dict):
+                    return {**default, **val}
+        else:
+            db = _get_db()
+            row = db.execute("SELECT attributes FROM entities WHERE id = ?", (eid,)).fetchone()
+            if row and row[0]:
+                attrs = json.loads(row[0])
+                val = attrs.get("value", attrs.get("name"))
+                if isinstance(val, str):
+                    try:
+                        val = json.loads(val)
+                    except (json.JSONDecodeError, TypeError):
+                        val = None
+                if isinstance(val, dict):
+                    return {**default, **val}
+    except Exception:
+        _log.exception("__init__ error")
+    return default
+
+
 def update_emotion_profile(
     user_id: str,
     sentiment: str,  # "positive", "negative", "neutral"
     strength: float = 0.5,
     message: str = "",
 ) -> None:
-    """Update a user's emotion profile via Bayesian count.
-
-    Stored as a special entity entry in the memory DB.
-    """
+    """Update a user's emotion profile via Bayesian count."""
     eid = f"emotion:{user_id.replace(':', '_')}"
-    existing = search_entities(eid, limit=1)
-    current = {"positive": 0, "negative": 0, "neutral": 0, "total": 0, "last_check": ""}
-    if existing:
-        old_val = existing[0].get("value", "")
-        try:
-            parsed = json.loads(old_val) if isinstance(old_val, str) else old_val
-            if isinstance(parsed, dict):
-                current = parsed
-        except (json.JSONDecodeError, TypeError):
-            _log.exception("__init__ error")
+    current = _load_emotion_profile(user_id)
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     current[sentiment] = current.get(sentiment, 0) + 1
     current["total"] = current.get("total", 0) + 1
@@ -1433,16 +1473,14 @@ def update_emotion_profile(
 
 def get_emotion_profile(user_id: str) -> Dict[str, Any]:
     """Get a user's emotion profile dict."""
-    eid = f"emotion:{user_id.replace(':', '_')}"
-    existing = search_entities(eid, limit=1)
-    if existing:
-        return existing[0].get("value", {})
-    return {"positive": 0, "negative": 0, "neutral": 0, "total": 0, "last_check": ""}
+    return _load_emotion_profile(user_id)
 
 
 def is_negative_streak(user_id: str, consecutive: int = 3) -> bool:
     """Check if user has N+ consecutive negative sentiments."""
     profile = get_emotion_profile(user_id)
+    if not isinstance(profile, dict):
+        return False
     return profile.get("negative", 0) >= consecutive
 
 

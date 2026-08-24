@@ -438,8 +438,18 @@ def verify_email_code(email: str, code: str) -> bool:
     return ok
 
 
+# Whitelist for update_user_field — the column name is interpolated into SQL,
+# so arbitrary field names would be an injection surface (C5, 9.txt audit).
+_ALLOWED_USER_FIELDS = {
+    "api_keys", "plan", "role", "password_hash", "email",
+    "verified", "proactive_config", "monthly_usage",
+}
+
+
 def update_user_field(email: str, field: str, value: any) -> bool:
     """Update a single field on a user. Works with both PG and JSON storage."""
+    if field not in _ALLOWED_USER_FIELDS:
+        return False
     email_lower = email.lower().strip()
     if use_pg():
         try:

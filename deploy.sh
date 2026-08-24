@@ -118,7 +118,7 @@ WorkingDirectory=/opt/aelvoxim
 Environment=PYTHONPATH=/opt/aelvoxim/src
 Environment=AELVOXIM_EDITION=enterprise
 Environment=AELVOXIM_HOST=0.0.0.0
-Environment=AELVOXIM_DATABASE_URL=host=127.0.0.1 port=5432 dbname=aelvoxim user=aelvoxim password=aelvoxim_pg_778af6539f11998d
+Environment=AELVOXIM_DATABASE_URL=host=127.0.0.1 port=5432 dbname=aelvoxim user=aelvoxim password=aelvoxim_pg_pass
 ExecStart=/opt/aelvoxim/venv/bin/python3 -B /opt/aelvoxim/src/run_server.py 9701
 Restart=always
 RestartSec=5

@@ -75,6 +75,8 @@ class BeliefUnit:
         """Batch record a set of results."""
         if total <= 0:
             return
+        # Guard: successes > total would drive beta negative (C11, 9.txt audit).
+        successes = max(0, min(int(successes), int(total)))
         self.alpha += successes
         self.beta += (total - successes)
         self.evidence_count += total

@@ -18,7 +18,10 @@ try:
     _MODEL = SentenceTransformer("all-MiniLM-L6-v2")
     _DIM = 384
     _USE_REAL = True
-except ImportError:
+except Exception:
+    # Model download can fail with network/OS errors (not just ImportError);
+    # any failure must degrade to pseudo-embeddings instead of crashing the
+    # importing process (C8, 9.txt audit).
     _DIM = 384
     _MODEL = None
     _USE_REAL = False

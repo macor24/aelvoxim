@@ -10,11 +10,11 @@ import os
 import logging
 
 from fastapi import FastAPI
-from fastapi import Request, WebSocket
+from fastapi import Depends, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
 # Import base routes first (defines _verify_key, router, public_router)
-from .routes import router, public_router
+from .routes import router, public_router, _verify_key, _require_admin
 
 # Import sub-routers and merge into the main router
 from .routes_chat import router as _chat_router
@@ -281,7 +281,7 @@ def create_app() -> FastAPI:
         return HTMLResponse(inject_theme(html, title="Aelvoxim API"))
 
     @app.get("/v1/admin/cognitive")
-    async def admin_cognitive():
+    async def admin_cognitive(admin: dict = Depends(_require_admin)):
         """Return live cognitive dashboard data (learner, selfmodel, metacog)."""
         try:
             from .admin_panel import get_cognitive_status
@@ -316,7 +316,7 @@ def create_app() -> FastAPI:
     app.mount("/static", StaticFiles(directory=_static_dir), name="static")
 
     @app.post("/v1/windows-mcp")
-    async def windows_mcp_proxy(body: dict):
+    async def windows_mcp_proxy(body: dict, user: dict = Depends(_verify_key)):
         """Proxy tool calls to Windows-MCP via Streamable HTTP."""
         import httpx, json, time, asyncio
         WINDOWS_MCP_KEY = os.environ.get("WINDOWS_MCP_KEY", "")

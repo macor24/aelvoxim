@@ -103,9 +103,10 @@ def _save_stats() -> None:
     except Exception:
         pass
 
-# Load persisted stats on module init
-_load_stats()
-
+# Stats dict must be defined BEFORE _load_stats() runs at module init —
+# previously _load_stats() was called first and hit NameError on the undefined
+# _CURIOSITY_STATS, which was swallowed, so persisted stats never loaded
+# (C15, 9.txt audit).
 _CURIOSITY_STATS: Dict[str, float] = {
     "total_picks": 0.0,
     "seed_picks": 0.0,
@@ -116,6 +117,9 @@ _CURIOSITY_STATS: Dict[str, float] = {
     "last_topic": "",
     "branch_depth": 0.0,
 }  # accessible via get_curiosity_stats()
+
+# Load persisted stats on module init (AFTER the dict is defined — C15).
+_load_stats()
 
 def get_curiosity_stats() -> Dict[str, float]:
     """Return current curiosity diversity metrics for dashboard display."""

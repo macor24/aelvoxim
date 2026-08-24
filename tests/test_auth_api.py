@@ -84,7 +84,9 @@ class TestLlmConfig:
         if not auth_header:
             pytest.skip("No valid auth token")
         resp = client.get("/v1/llm/config", headers=auth_header)
-        assert resp.status_code in (200, 500)  # 500 = no LLM configured yet
+        # LLM config contains provider API keys — non-admin users must get 403
+        # (P0-7, 9.txt audit fix; previously any logged-in user could read keys).
+        assert resp.status_code == 403
 
     def test_get_models_without_auth(self, client):
         resp = client.get("/v1/llm/models")

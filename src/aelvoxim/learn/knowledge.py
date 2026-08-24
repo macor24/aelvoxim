@@ -30,7 +30,10 @@ from typing import Any, Dict, List, Optional
 
 _log = logging.getLogger("aelvoxim.knowledge")
 
-KNOWLEDGE_DIR = Path.home() / ".aelvoxim" / "knowledge"
+# Data root: AELVOXIM_DATA_DIR env wins (used by containers/tests), else
+# ~/.aelvoxim — never hardcode a path that ignores the env (P0-12, 9.txt).
+_DATA_ROOT = Path(os.environ["AELVOXIM_DATA_DIR"]) if os.environ.get("AELVOXIM_DATA_DIR") else Path.home() / ".aelvoxim"
+KNOWLEDGE_DIR = _DATA_ROOT / "knowledge"
 INDEX_FILE = KNOWLEDGE_DIR / "index.json"
 ENTRIES_DIR = KNOWLEDGE_DIR / "entries"
 PENDING_FILE = KNOWLEDGE_DIR / "pending.json"
@@ -260,8 +263,12 @@ def _check_content_sanity(topic: str, text: str) -> Optional[str]:
     # Percentage / multiplier
     pct = re.findall(r'\d+\s*%', text)
     for p in pct:
-        if int(p) > 5000:
-            return f"Percentage raised: {int(p)}% (over 5000%, unreasonable)"
+        try:
+            _pct_val = int(re.sub(r"[^0-9]", "", p))
+        except ValueError:
+            continue
+        if _pct_val > 5000:
+            return f"Percentage raised: {_pct_val}% (over 5000%, unreasonable)"
     times = re.findall(r'(\d+)\s*倍', text)
     for t in times:
         if int(t) > 50000:
@@ -591,12 +598,11 @@ class KnowledgeBase:
             existing_active["content"] = content or existing_active["content"]
             existing_active["source"] = source or existing_active["source"]
             existing_active["confidence"] = max(existing_active["confidence"], confidence)
-            existing_active["depth"] = max(existing_active["depth"], depth)
+            existing_active["depth"] = max(existing_active.get("depth", 1), depth)
             existing_active["tags"] = list(set(existing_active["tags"] + tags))
             existing_active["updated_at"] = now
             _write_entry(existing_active)
             _update_topic_index(topic, now)
-            _truncate_large_fields(existing_active)
             return existing_active
 
         if dup_entry and dup_score >= 0.95:
@@ -1206,12 +1212,21 @@ class KnowledgeBase:
             try:
                 vec_results = _vector_search(query, limit=limit * 2)
                 if vec_results:
-                    # PG unavailable → degraded path. Log it so silent
-                    # degradation (e.g. a PG blip during a lockup) is visible
-                    # in logs instead of surfacing as "irrelevant knowledge".
+                    # Degraded path. Distinguish the two causes: PG truly
+                    # down (use_pg False) vs PG fine but no tsquery match
+                    # (long/complex queries often match 0 rows with the
+                    # 'simple' parser). "PG unavailable" alone misled ops
+                    # into thinking PG was down when it was a no-match.
+                    _pg_down = False
+                    try:
+                        from ..storage.db import use_pg as _up_now
+                        _pg_down = not _up_now()
+                    except Exception:
+                        _pg_down = True
                     _log.warning(
-                        "knowledge search degraded to vector (PG unavailable), "
+                        "knowledge search degraded to vector (PG %s), "
                         "query=%.50s results=%d",
+                        "unavailable" if _pg_down else "no match",
                         str(query)[:50], len(vec_results),
                     )
                     # Filter vector results by confidence
@@ -1305,6 +1320,34 @@ class KnowledgeBase:
         return results[:limit]
 
     @staticmethod
+    def get_by_id(entry_id: str) -> Optional[dict]:
+        """Fetch a single entry by its id (PG first, then file store).
+
+        Used by the review scheduler — previously it searched with the entry
+        id as a text query, which always matched 0 rows so reviews never ran
+        (B14, 9.txt audit).
+        """
+        # PG fast path
+        try:
+            from ..storage.db import fetch_dict, use_pg as _up
+            if _up():
+                rows = fetch_dict(
+                    "SELECT id::text, topic, title, content, confidence, tags FROM knowledge_entries "
+                    "WHERE id = %s::uuid AND status = 'active' LIMIT 1", (entry_id,))
+                if rows:
+                    r = rows[0]
+                    return {"id": r["id"], "topic": r["topic"], "title": r["title"],
+                            "content": r["content"], "confidence": float(r.get("confidence", 0.5)),
+                            "tags": r.get("tags", []), "depth": 1}
+        except Exception:
+            _log.exception("knowledge error")
+        # File fallback
+        try:
+            return _read_entry(entry_id)
+        except Exception:
+            return None
+
+    @staticmethod
     def get_by_title(title: str) -> Optional[dict]:
         # PG fast path
         try:
@@ -1315,7 +1358,7 @@ class KnowledgeBase:
                     r = rows[0]
                     return {"id": r["id"], "topic": r["topic"], "title": r["title"],
                             "content": r["content"], "confidence": float(r.get("confidence", 0.5)),
-                            "tags": r.get("tags", [])}
+                            "tags": r.get("tags", []), "depth": 1}
         except Exception:
             _log.exception("knowledge error")
         # File fallback

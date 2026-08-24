@@ -73,8 +73,11 @@ class ConflictDetector:
                 content_a = str(a.get("content", "") or "")
                 content_b = str(b.get("content", "") or "")
                 
-                # Skip if same topic
-                if topic_a == topic_b and topic_a:
+                # Skip only literally identical entries. Same-topic pairs must
+                # still be checked — "use X" vs "don't use X" live in the same
+                # topic and are exactly what this detector should catch (C13,
+                # 9.txt audit).
+                if topic_a == topic_b and content_a == content_b:
                     continue
                 
                 # Detect direct contradictions: one says "don't X", other says "do X"

@@ -69,7 +69,10 @@ def _user_dir(user_id: str) -> Path:
 
 
 def _snapshot_path(user_id: str, session_id: str) -> Path:
-    return _user_dir(user_id) / f"{session_id}.json"
+    # session_id is user-influenced — sanitize it so "../" cannot traverse
+    # out of the user's snapshot dir (C2, 9.txt audit).
+    _safe_sid = re.sub(r"[^A-Za-z0-9_.-]", "_", str(session_id))
+    return _user_dir(user_id) / f"{_safe_sid}.json"
 
 
 def save_snapshot(

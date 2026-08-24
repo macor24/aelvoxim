@@ -62,16 +62,19 @@ DEFAULT_CALIBRATION: Dict[str, Any] = {
         # Belief health
         "belief_unhealthy_threshold": 0.6,       # <0.6 -> UNHEALTHY
         "belief_critical_threshold": 0.3,        # <0.3 -> CRITICAL
-        # Trigger weights (8 signals)
+        # Trigger weights (9 signals; execution_health was missing → it fell
+        # back to the 0.1 default and the 8 present keys summed to 1.0 — B9,
+        # 9.txt audit).
         "trigger_weights": {
-            "success_rate": 0.20,
-            "stagnation": 0.15,
-            "repeat_failure": 0.15,
+            "success_rate": 0.18,
+            "stagnation": 0.14,
+            "repeat_failure": 0.14,
             "external_signal": 0.05,
-            "introspection": 0.05,
-            "memory_health": 0.15,
-            "snapshot_trend": 0.10,
-            "belief_health": 0.15,
+            "introspection": 0.04,
+            "memory_health": 0.13,
+            "snapshot_trend": 0.09,
+            "belief_health": 0.13,
+            "execution_health": 0.10,
         },
         "evolve_threshold": 0.15,                # overall_score >= 0.15 triggers evolution
     },

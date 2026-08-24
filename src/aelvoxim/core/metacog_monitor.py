@@ -145,8 +145,11 @@ class MetaCogMonitor:
             actions = getattr(metacog_report, "suggested_actions", [])
             report["suggested_actions"].extend(actions)
 
-        # 3b. Heartbeat-alive positive trigger: fires when learner is running
-        if not report["triggers"] and (learner_stats or self._overload_ticks):
+        # 3b. Heartbeat-alive positive trigger: fires only when the LEARNER
+        # called evaluate() with stats. Chat-path evaluate() calls also record
+        # a tick (record_tick runs on every evaluate), so _overload_ticks alone
+        # proves nothing — it is kept fresh by chat traffic (B7, 9.txt audit).
+        if not report["triggers"] and learner_stats:
             from aelvoxim.core.metacog import TriggerResult, TriggerLevel
             _hb_age = time.time() - self._overload_ticks[-1] if self._overload_ticks else 999
             _level = TriggerLevel.MILD
@@ -157,22 +160,24 @@ class MetaCogMonitor:
                     reason=f"Learner tick {_hb_age:.0f}s ago",
                 ))
                 report["score"] = max(report["score"], 0.1)
-        # Score from SelfModel learning capability (reflects true success rate)
+        # Score from SelfModel learning capability — blend, don't replace.
+        # Overwriting score with a high success rate masked overload/low-score
+        # signals and disabled the breaker below (B8, 9.txt audit).
         if learner_stats:
             try:
                 from aelvoxim.core.selfmodel import SelfModel
                 _sm = SelfModel()
                 _lc = _sm._capabilities.get("learning")
                 if _lc and _lc.task_count > 0:
-                    report["score"] = min(1.0, _lc.success_rate)
+                    report["score"] = max(report["score"], min(1.0, _lc.success_rate) * 0.5)
                 else:
                     total = learner_stats.get("total_cycles", 1)
                     entries = learner_stats.get("total_entries", 0)
-                    report["score"] = min(1.0, entries / max(total, 1))
+                    report["score"] = max(report["score"], min(1.0, entries / max(total, 1)) * 0.5)
             except Exception:
                 total = learner_stats.get("total_cycles", 1)
                 entries = learner_stats.get("total_entries", 0)
-                report["score"] = min(1.0, entries / max(total, 1))
+                report["score"] = max(report["score"], min(1.0, entries / max(total, 1)) * 0.5)
 
         # 4. Low-confidence streak for L6 breaker
         if report["score"] < _get_low_confidence_threshold():

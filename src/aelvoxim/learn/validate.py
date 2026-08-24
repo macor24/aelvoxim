@@ -150,7 +150,27 @@ def execute_and_validate(
         confidence = max(confidence, 0.6)
         _rejection_reason = "high_quality_code_or_metric"
         log(f"  ⭐ [{topic}] Code/metric detected, conf boosted to {confidence:.2f}: {task}")
-        # Direct store: bypass ALL quality checks — code/metric content IS high quality
+        # Direct store: bypass ALL quality checks — code/metric content IS high
+        # quality, but it MUST still be persisted to the knowledge base.
+        # Previously this branch only fired on_store() (direction bookkeeping)
+        # and never stored the entry → knowledge silently lost while returning
+        # True (P0-10, 9.txt audit).
+        try:
+            _summary = f"About '{task}' ({source_type}):\n{content[:120].strip()}..."
+            KnowledgeBase.store_pending(
+                topic=topic,
+                title=title,
+                summary=_summary,
+                content=content,
+                source=source_type,
+                tags=[topic, task, source_type],
+                confidence=confidence,
+                depth=3,
+                validated=True,
+                value_level=value_level,
+            )
+        except Exception:
+            _log.exception("validate error: code/metric store_pending failed")
         # Record retrieval success
         try:
             from ..core.selfmodel import SelfModel
@@ -182,7 +202,7 @@ def execute_and_validate(
             confidence = 0.5
             combined_score = 0.5
             log(f"  ⚠️ [{topic}] No LLM available, lower confidence: {task}")
-    elif source_type == "search":
+    elif source_type in ("search", "learner_task"):
         from .. import _EDITION
         if _EDITION == "community":
             combined_score = 0.6

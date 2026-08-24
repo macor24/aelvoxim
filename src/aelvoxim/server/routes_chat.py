@@ -205,9 +205,13 @@ async def sync_session(request: dict, user: dict = Depends(_verify_key)):
     if not session.get("id"):
         raise HTTPException(400, detail="missing session.id")
     _uid = user.get("id") or user.get("user_id", "")
+    if not _uid:
+        # Empty uid would persist an owner-less session that any user could
+        # then claim (P0-6, 9.txt audit).
+        raise HTTPException(403, detail="cannot sync session without a valid user id")
     save_session_to_pg({
         "id": session["id"],
-        "user_id": str(_uid) if _uid else "",
+        "user_id": str(_uid),
         "title": session.get("title", "新对话"),
         "messages": [],
     })
@@ -220,13 +224,16 @@ async def get_session_messages(session_id: str, user: dict = Depends(_verify_key
     from ..storage.db import get_messages_from_pg, fetch_dict
     # Verify session belongs to current user
     uid = str(user.get("user_id") or user.get("id", ""))
-    if uid and uid != "None":
-        owner = fetch_dict(
-            "SELECT user_id FROM chat_sessions WHERE id = %s AND user_id = %s::uuid",
-            (session_id, uid),
-        )
-        if not owner:
-            return {"messages": []}
+    if not uid or uid == "None":
+        # Empty uid previously skipped the ownership check → cross-user read
+        # (P0-6, 9.txt audit).
+        raise HTTPException(403, detail="cannot access session without a valid user id")
+    owner = fetch_dict(
+        "SELECT user_id FROM chat_sessions WHERE id = %s AND user_id = %s::uuid",
+        (session_id, uid),
+    )
+    if not owner:
+        return {"messages": []}
     return {"messages": get_messages_from_pg(session_id)}
 
 
@@ -235,6 +242,8 @@ async def delete_session(session_id: str, user: dict = Depends(_verify_key)):
     """Delete a chat session and its messages."""
     from ..storage.db import delete_session_from_pg
     uid = user.get("id") or user.get("user_id", "")
+    if not uid:
+        raise HTTPException(403, detail="cannot delete session without a valid user id")
     ok = delete_session_from_pg(session_id, user_id=str(uid))
     return {"success": ok}
 

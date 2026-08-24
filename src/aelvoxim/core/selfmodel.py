@@ -265,27 +265,35 @@ class SelfModel:
         active_dirs = learner_stats.get("active_directions", 0)
         total_entries = learner_stats.get("total_entries", 0)
 
-        # Update capability score for "learning" task type
+        # Update capability score for "learning" task type — INCREMENTAL:
+        # accumulate into the existing Beta evidence instead of replacing the
+        # whole CapabilityScore, which zeroed prior evidence every cycle (B10,
+        # 9.txt audit).
         old = self._capabilities.get("learning", CapabilityScore())
+        _new_alpha = old.alpha + total_entries
+        _new_beta = old.beta + max(total_cycles - total_entries, 0)
         self._capabilities["learning"] = CapabilityScore(
-            success_rate=round(total_entries / max(total_cycles, 1), 2),
-            task_count=total_cycles,
+            success_rate=round(_new_alpha / max(_new_alpha + _new_beta, 1), 2),
+            task_count=old.task_count + total_cycles,
             avg_latency=f"{active_dirs}s" if active_dirs else "",
             last_success=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            alpha=total_entries + 1,
-            beta=max(total_cycles - total_entries, 0) + 1,
+            alpha=_new_alpha,
+            beta=_new_beta,
         )
 
-        # Update belief health capability
+        # Update belief health capability — same incremental treatment.
         high_conf = belief_stats.get("high_confidence", 0)
         total_belief = belief_stats.get("count", 0)
+        _old_bh = self._capabilities.get("belief_health", CapabilityScore())
+        _bh_alpha = _old_bh.alpha + high_conf
+        _bh_beta = _old_bh.beta + max(total_belief - high_conf, 0)
         self._capabilities["belief_health"] = CapabilityScore(
-            success_rate=round(high_conf / max(total_belief, 1), 2),
-            task_count=total_belief,
+            success_rate=round(_bh_alpha / max(_bh_alpha + _bh_beta, 1), 2),
+            task_count=_old_bh.task_count + total_belief,
             avg_latency="",
             last_success=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            alpha=high_conf + 1,
-            beta=max(total_belief - high_conf, 0) + 1,
+            alpha=_bh_alpha,
+            beta=_bh_beta,
         )
 
         self._save()

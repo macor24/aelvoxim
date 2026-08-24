@@ -92,11 +92,8 @@ def get_graph(user_id: str = "", limit: int = 50) -> Dict[str, list]:
             }
             added.add(eid)
 
-    # 2. Relations
-    rel_rows = db.execute(
-        "SELECT source, target, rel_type FROM relations LIMIT 200"
-    ).fetchall()
-    # Rewrite properly
+    # 2. Relations — built inside _build_graph() (which queries its own
+    #    LIMIT 500); the old rel_rows query here was dead work (P3, 9.txt).
     return _build_graph(db, nodes, added, user_id, limit)
 
 

@@ -25,10 +25,10 @@ class TopicPredictor:
         """
         topics = []
 
-        # 1. Try query_tracker predictions
+        # 1. Try query_tracker predictions (scoped to the user, P0-13)
         try:
             from ..server.query_tracker import predict_next_topics
-            pred = predict_next_topics(hours=48)
+            pred = predict_next_topics(hours=48, user_id=user_id)
             topics = pred.get("predictions", [])
         except Exception:
             _log.exception("predictor error")

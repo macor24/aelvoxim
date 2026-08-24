@@ -233,7 +233,8 @@ def _load_session(session_id: str, user_id: str = "") -> dict | None:
         r = cur.fetchone()
         if r:
             _uid = str(r[4]) if r[4] else ""
-            if user_id and _uid and _uid != user_id:
+            # Anonymous (empty user_id) must NOT see any session (P0-5).
+            if not user_id or (_uid and _uid != user_id):
                 return None
             cur.execute(
                 "SELECT role, content, created_at FROM chat_messages WHERE session_id = %s ORDER BY created_at;",
@@ -482,6 +483,11 @@ class SpaHandler(SimpleHTTPRequestHandler):
         _validate_session_id(session_id)
         key = self._get_auth_key()
         uid = _verify_and_get_user_id(key) if key else ""
+        # Reject anonymous/invalid keys — empty uid would skip the ownership
+        # check and expose any session (P0-5, 9.txt audit).
+        if not key or not uid:
+            self._json({"success": False, "error": "Unauthorized"}, 401)
+            return
         session = _load_session(session_id, user_id=uid)
         if session:
             self._json({"success": True, "data": session})
@@ -497,12 +503,18 @@ class SpaHandler(SimpleHTTPRequestHandler):
             return
         key = self._get_auth_key()
         uid = _verify_and_get_user_id(key) if key else ""
+        if not key or not uid:
+            self._json({"success": False, "error": "Unauthorized"}, 401)
+            return
         _save_session(session, user_id=uid)
         self._json({"success": True})
 
     def _handle_new_session(self):
         key = self._get_auth_key()
         uid = _verify_and_get_user_id(key) if key else ""
+        if not key or not uid:
+            self._json({"success": False, "error": "Unauthorized"}, 401)
+            return
         session = _new_session(user_id=uid)
         self._json({"success": True, "data": session})
 
@@ -530,13 +542,23 @@ class SpaHandler(SimpleHTTPRequestHandler):
 
     def _handle_windows_mcp(self):
         """Forward a tool call to Windows-MCP (running on Windows host)."""
+        # Auth: require a valid API key (same as other /api endpoints).
+        # An attacker on any webpage could otherwise drive Windows tools via
+        # this endpoint (P0-1, 9.txt audit).
+        key = self._get_auth_key()
+        if not key or not _verify_and_get_user_id(key):
+            self._json({"success": False, "error": "Unauthorized"}, 401)
+            return
         body = self._read_body()
         action = body.get("action", "")
         params = body.get("params", {})
 
-        # Windows-MCP auth key
-        WINDOWS_MCP_KEY = "sk-aelvoxim-38179e1738a8b83daaf8145e5a85f7db5200753ab2100811"
-        WINDOWS_MCP_URL = "http://172.24.80.1:8000"
+        # Windows-MCP auth key — environment only, never hardcoded (P0-1).
+        WINDOWS_MCP_KEY = os.environ.get("WINDOWS_MCP_KEY", "")
+        WINDOWS_MCP_URL = os.environ.get("WINDOWS_MCP_URL", "")
+        if not (WINDOWS_MCP_KEY and WINDOWS_MCP_URL):
+            self._json({"success": False, "error": "Windows-MCP not configured"}, 404)
+            return
 
         try:
             # First get a session from SSE endpoint

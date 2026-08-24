@@ -174,12 +174,15 @@ def get_subscription(sub_id: str) -> Optional[dict]:
 # ── Delivery ──
 
 
-def deliver_event(event_type: str, payload: dict) -> list[dict]:
+def deliver_event(event_type: str, payload: dict, sub_id: Optional[str] = None) -> list[dict]:
     """Deliver an event to all matching subscriptions.
 
     Args:
         event_type: e.g. "task.completed"
         payload: Event-specific data dict
+        sub_id: Optional — when given, only deliver to that subscription
+            (used by test-delivery; prevents one user's test from firing
+            every subscriber's webhook — P0-9, 9.txt audit).
 
     Returns:
         List of delivery results: [{sub_id, url, status, status_code}]
@@ -189,9 +192,12 @@ def deliver_event(event_type: str, payload: dict) -> list[dict]:
 
     results = []
     try:
-        subs = fetch_dict(
-            "SELECT * FROM webhook_subscriptions WHERE events @> %s::jsonb AND active = TRUE",
-            (json.dumps([event_type]),))
+        _sql = "SELECT * FROM webhook_subscriptions WHERE events @> %s::jsonb AND active = TRUE"
+        _params: list = [json.dumps([event_type])]
+        if sub_id:
+            _sql += " AND id = %s"
+            _params.append(sub_id)
+        subs = fetch_dict(_sql, tuple(_params))
     except Exception:
         _log.exception(f"webhook: failed to fetch subs for event {event_type}")
         return []

@@ -28,7 +28,9 @@ _PII_PATTERNS = [
     (re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"), "email"),  # Email
     (re.compile(r"\bsk-[a-zA-Z0-9]{20,}\b"), "api_key"),                    # API Key (sk-...)
     (re.compile(r"ghp_[a-zA-Z0-9]{36}\b"), "github_token"),                 # GitHub PAT
-    (re.compile(r"\b[A-Za-z0-9+/]{40,}={0,2}\b"), "base64_token"),          # Base64 tokens
+    # Base64 with padding. Note: cannot end with \b — '=' is not a word char,
+    # so \b after the padding never holds; use (?!\w) instead (C12).
+    (re.compile(r"\b[A-Za-z0-9+/]{20,}={1,2}(?!\w)"), "base64_token"),
 ]
 
 # ── Harmful content patterns ──
@@ -126,6 +128,9 @@ def sanitize_output(text: str) -> str:
     for pattern, name in _PII_PATTERNS:
         if name == "phone_number":
             text = pattern.sub("[PHONE]", text)
+        elif name == "credit_card":
+            # C12, 9.txt audit: credit cards were detected but never masked.
+            text = pattern.sub("[CARD]", text)
         elif name == "email":
             text = pattern.sub("[EMAIL]", text)
         elif name in ("api_key", "github_token", "base64_token"):

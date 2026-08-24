@@ -217,8 +217,12 @@ async def forgot_password(body: dict):
     user = find_by_email(email)
     if not user:
         return {"message": "If the email exists, a reset link has been sent"}
-    token = set_reset_token(email)
-    return {"message": "If the email exists, a reset link has been sent", "token": token}
+    # Generate (and persist) the reset token, but NEVER return it to the
+    # client — returning it would let anyone with the email take over the
+    # account (P0-2, 9.txt audit). Admin can reset passwords via the
+    # admin panel; a mail/verification-code channel can be added later.
+    set_reset_token(email)
+    return {"message": "If the email exists, a reset link has been sent"}
 
 @router.post("/auth/reset-password")
 async def reset_password(body: dict):
@@ -441,8 +445,8 @@ async def get_logs(source: str = Query("learner"), lines: int = Query(50), _user
 # ── Ethics endpoints ──
 
 @router.post("/ethics/update")
-async def ethics_update(body: dict, authorization: str = Header(None)):
-    """Enable or disable an ethics gate. Requires admin key."""
+async def ethics_update(body: dict, admin: dict = Depends(_require_admin)):
+    """Enable or disable an ethics gate. Admin only."""
     from ..core.metacog_monitor import set_ethics_gate, get_ethics_gate
     from ..server.auth import find_by_email
     gate = body.get("gate", "")
@@ -557,7 +561,9 @@ async def webhook_test_delivery(body: dict, current_user: dict = Depends(_verify
     sub = get_subscription(sub_id)
     if not sub:
         raise HTTPException(404, detail="subscription not found")
-    results = deliver_event("test.ping", {"test": True})
+    # Only deliver to the requested subscription — never fan out to every
+    # subscriber (P0-9, 9.txt audit).
+    results = deliver_event("test.ping", {"test": True}, sub_id=sub_id)
     return {"results": results}
 
 # ── Gateway endpoints ──
@@ -716,7 +722,7 @@ def _load_dashboard_html() -> str:
     return _DASHBOARD_HTML
 
 @router.get("/admin/overview")
-async def admin_overview(user: dict = Depends(_verify_key)):
+async def admin_overview(admin: dict = Depends(_require_admin)):
     """Return overview data (replaces standalone 9700 /api/overview)."""
     import json as _json
     from .. import __version__ as _ver
@@ -791,7 +797,7 @@ async def admin_overview(user: dict = Depends(_verify_key)):
     return _json.loads(_json.dumps(data, default=str))
 
 @router.get("/admin/data")
-async def admin_dashboard(user: dict = Depends(_verify_key)):
+async def admin_dashboard(admin: dict = Depends(_require_admin)):
     """Return dashboard data: learner status + system overview."""
     result = {"services": {}, "learner": {}, "knowledge": {}}
     from ..core.health import get_watchdog
