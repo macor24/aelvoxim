@@ -63,7 +63,12 @@ def _mask_sensitive(text: str) -> str:
 
 
 def _user_dir(user_id: str) -> Path:
-    path = _SNAPSHOT_DIR / user_id.replace(":", "_")
+    # user_id is user-influenced — sanitize so "../" or "/" cannot traverse
+    # outside the snapshot root. This is the single choke point for every
+    # user-scoped path (save/load/prune/glob), so sanitizing here covers all
+    # of them (CodeQL: uncontrolled data in path expression at 147/339/351).
+    _safe_uid = re.sub(r"[^A-Za-z0-9_.-]", "_", str(user_id))
+    path = _SNAPSHOT_DIR / _safe_uid
     path.mkdir(parents=True, exist_ok=True)
     return path
 
