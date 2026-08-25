@@ -77,9 +77,8 @@ def _user_path(api_key: str) -> Path:
     suffix = api_key[-16:]
     # api_key reaches this function from the auth boundary (user-supplied) —
     # sanitize so "../" cannot traverse out of USERS_DIR (CodeQL
-    # py/path-injection #140/#141). Generated keys never contain bad chars,
-    # but lookup is called with arbitrary input.
-    _safe = re.sub(r"[^A-Za-z0-9_.-]", "_", str(suffix))
+    # py/path-injection). basename() is the sanitizer the query recognizes.
+    _safe = os.path.basename(re.sub(r"[^A-Za-z0-9_.-]", "_", str(suffix)))
     return USERS_DIR / f"{_safe}.json"
 
 

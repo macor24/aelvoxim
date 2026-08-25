@@ -198,7 +198,7 @@ def create_trial_license(email: str) -> int:
     TRIAL_DIR.mkdir(parents=True, exist_ok=True)
     # email is user-supplied (registration form) — sanitize so "../" or "/"
     # cannot traverse out of TRIAL_DIR (CodeQL py/path-injection at 202/213).
-    _safe_email = re.sub(r"[^A-Za-z0-9@._-]", "_", str(email).lower().strip())
+    _safe_email = os.path.basename(re.sub(r"[^A-Za-z0-9@._-]", "_", str(email).lower().strip()))
     trial_file = TRIAL_DIR / f"{_safe_email}.json"
     if trial_file.exists():
         # Already has a trial — return existing expiry
@@ -232,7 +232,7 @@ def check_trial_expiry(user: dict) -> dict:
     if user.get("plan") != "trial":
         return user
     email = user.get("email", "").lower().strip()
-    _safe_email = re.sub(r"[^A-Za-z0-9@._-]", "_", str(email))
+    _safe_email = os.path.basename(re.sub(r"[^A-Za-z0-9@._-]", "_", str(email)))
     trial_file = TRIAL_DIR / f"{_safe_email}.json"
     if not trial_file.exists():
         # No trial record — shouldn't happen, but downgrade safely

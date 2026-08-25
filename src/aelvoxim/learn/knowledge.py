@@ -252,16 +252,19 @@ def _check_content_sanity(topic: str, text: str) -> Optional[str]:
             return f"Value raised: {val} years (over 200 years, unreasonable)"
     
     # Monetary amounts
-    money_match = re.findall(r'[¥$￥](\d+)\s*[万亿]?', text)
+    # Bounded quantifiers: adjacent \d+ \s* on attacker-controlled text is
+    # polynomial ReDoS (CodeQL py/polynomial-redos; 20k digits+spaces took
+    # 5-11s). Caps keep it linear — no legitimate value exceeds 20 digits.
+    money_match = re.findall(r'[¥$￥](\d{1,20})\s{0,20}[万亿]?', text)
     if not money_match:
-        money_match = re.findall(r'(\d+)\s*(?:元|美元|美金|块)', text)
+        money_match = re.findall(r'(\d{1,20})\s{0,20}(?:元|美元|美金|块)', text)
     for m in money_match:
         val = int(m) if isinstance(m, str) else int(m[0])
         if val > 1000000000:
             return f"Monetary value raised: {val} (over 1 billion, unreasonable)"
     
     # Percentage / multiplier
-    pct = re.findall(r'\d+\s*%', text)
+    pct = re.findall(r'\d{1,20}\s{0,20}%', text)
     for p in pct:
         try:
             _pct_val = int(re.sub(r"[^0-9]", "", p))
@@ -269,7 +272,7 @@ def _check_content_sanity(topic: str, text: str) -> Optional[str]:
             continue
         if _pct_val > 5000:
             return f"Percentage raised: {_pct_val}% (over 5000%, unreasonable)"
-    times = re.findall(r'(\d+)\s*倍', text)
+    times = re.findall(r'(\d{1,20})\s{0,20}倍', text)
     for t in times:
         if int(t) > 50000:
             return f"Multiplier raised: {int(t)}x (over 50000x, unreasonable)"

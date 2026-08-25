@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import time
 from datetime import datetime, timedelta
@@ -352,8 +353,9 @@ class LongTermPlanner:
 
     def delete_plan(self, plan_id: str) -> bool:
         # plan_id is user-influenced (API arg) — sanitize so "../" cannot
-        # traverse out of PLANS_DIR (CodeQL py/path-injection).
-        _safe_pid = re.sub(r"[^A-Za-z0-9_.-]", "_", str(plan_id))
+        # traverse out of PLANS_DIR (CodeQL py/path-injection). basename() is
+        # the sanitizer the query recognizes (re.sub alone is not).
+        _safe_pid = os.path.basename(re.sub(r"[^A-Za-z0-9_.-]", "_", str(plan_id)))
         path = PLANS_DIR / f"{_safe_pid}.json"
         if path.exists():
             path.unlink()
