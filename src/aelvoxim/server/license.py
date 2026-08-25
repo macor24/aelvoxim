@@ -18,6 +18,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import time
 from pathlib import Path
 from typing import Any, Dict
@@ -195,7 +196,10 @@ def create_trial_license(email: str) -> int:
         expires_at (unix timestamp). Existing trial is not overwritten.
     """
     TRIAL_DIR.mkdir(parents=True, exist_ok=True)
-    trial_file = TRIAL_DIR / f"{email.lower().strip()}.json"
+    # email is user-supplied (registration form) — sanitize so "../" or "/"
+    # cannot traverse out of TRIAL_DIR (CodeQL py/path-injection at 202/213).
+    _safe_email = re.sub(r"[^A-Za-z0-9@._-]", "_", str(email).lower().strip())
+    trial_file = TRIAL_DIR / f"{_safe_email}.json"
     if trial_file.exists():
         # Already has a trial — return existing expiry
         try:
@@ -228,7 +232,8 @@ def check_trial_expiry(user: dict) -> dict:
     if user.get("plan") != "trial":
         return user
     email = user.get("email", "").lower().strip()
-    trial_file = TRIAL_DIR / f"{email}.json"
+    _safe_email = re.sub(r"[^A-Za-z0-9@._-]", "_", str(email))
+    trial_file = TRIAL_DIR / f"{_safe_email}.json"
     if not trial_file.exists():
         # No trial record — shouldn't happen, but downgrade safely
         user["plan"] = "community"

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -350,7 +351,10 @@ class LongTermPlanner:
                     logging.getLogger("aelvoxim.planner").info("Plan update: %s", c)
 
     def delete_plan(self, plan_id: str) -> bool:
-        path = PLANS_DIR / f"{plan_id}.json"
+        # plan_id is user-influenced (API arg) — sanitize so "../" cannot
+        # traverse out of PLANS_DIR (CodeQL py/path-injection).
+        _safe_pid = re.sub(r"[^A-Za-z0-9_.-]", "_", str(plan_id))
+        path = PLANS_DIR / f"{_safe_pid}.json"
         if path.exists():
             path.unlink()
             self._plans.pop(plan_id, None)
