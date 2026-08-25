@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import secrets
 import bcrypt
 import time
@@ -74,7 +75,12 @@ def generate_api_key() -> str:
 
 def _user_path(api_key: str) -> Path:
     suffix = api_key[-16:]
-    return USERS_DIR / f"{suffix}.json"
+    # api_key reaches this function from the auth boundary (user-supplied) —
+    # sanitize so "../" cannot traverse out of USERS_DIR (CodeQL
+    # py/path-injection #140/#141). Generated keys never contain bad chars,
+    # but lookup is called with arbitrary input.
+    _safe = re.sub(r"[^A-Za-z0-9_.-]", "_", str(suffix))
+    return USERS_DIR / f"{_safe}.json"
 
 
 def _user_to_dict(row: tuple) -> dict:
