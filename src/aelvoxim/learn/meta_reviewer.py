@@ -275,10 +275,14 @@ class MetaReviewer:
                     key = s["target"]
                     value = s["value"]
                     parts = key.split(".")
+                    # Calibration.set takes value as keyword-only — passing
+                    # it positionally raised TypeError and every
+                    # parameter_tune suggestion was silently never applied
+                    # (BUG-5, 2026-08-26).
                     if len(parts) == 2:
-                        cal.set(parts[0], parts[1], value)
+                        cal.set(parts[0], parts[1], value=value)
                     elif len(parts) == 3:
-                        cal.set(parts[0], parts[1], parts[2], value)
+                        cal.set(parts[0], parts[1], parts[2], value=value)
                     _log.info("  🔧 Calibration: %s = %s", key, value)
                 elif s["type"] in ("strategy_shift", "circuit_breaker", "resource_idle", "resource_cleanup"):
                     pass
