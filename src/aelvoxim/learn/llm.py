@@ -312,6 +312,12 @@ def call_llm(
     """
     temp = temperature if temperature is not None else model.temperature
     mt = max_tokens if max_tokens is not None else model.max_tokens
+    # Reasoning models (deepseek-v4-flash etc.) spend tokens on a thinking
+    # pass before content; callers passing tiny max_tokens (10/300) got
+    # finish_reason="length" with empty content — every LLM feature silently
+    # degraded (BUG-4, 2026-08-26: practice verify, validation, chat all
+    # returned ""). Floor at 1024 so the thinking pass has room.
+    mt = max(mt, 1024)
     to = timeout if timeout is not None else model.timeout
 
     try:

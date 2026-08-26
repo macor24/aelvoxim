@@ -142,6 +142,11 @@ class MetaCogMonitor:
         if metacog_report:
             report["score"] = getattr(metacog_report, "overall_score", 0.5)
             report["triggers"] = getattr(metacog_report, "triggers", [])
+            # Carry the evolution suggestion through — it was hardcoded False
+            # here, so loop.py never ran auto_tune even when MetaCogTrigger
+            # requested evolution (bug 2026-08-26: evolve_threshold never
+            # auto-tuned, should_evolve=true every tick).
+            report["should_evolve"] = bool(getattr(metacog_report, "should_evolve", False))
             actions = getattr(metacog_report, "suggested_actions", [])
             report["suggested_actions"].extend(actions)
 
