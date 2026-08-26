@@ -836,6 +836,15 @@ function loadPlans() {
         return;
       }
       var html = '';
+      // Working view: hide completed/mastery directions (they are history —
+      // 200+ entries each with real knowledge output; shown in the stat
+      // cards). Only active/paused/archived stay in the list.
+      var _isDone = function(p){ return p.status === 'completed' || p.status === 'mastery'; };
+      var _doneCount = dirs.filter(_isDone).length;
+      var dirs = dirs.filter(function(p){ return !_isDone(p); });
+      if (_doneCount > 0) {
+        html += '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px">✅ 已完成 ' + _doneCount + ' 个方向（历史，见统计卡）</div>';
+      }
       dirs.forEach(function(p){
         var total = p.entries_created || 0;
         var done = p.status === 'completed' || p.status === 'mastery' ? (p.entries || 0) : 0;
