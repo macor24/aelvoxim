@@ -228,7 +228,7 @@ def _metacog_status() -> dict[str, Any]:
         # Count by trigger type
         type_counts: dict[str, int] = {}
         for t in triggers:
-            ttype = t.get("trigger_type", t.get("type", "unknown"))
+            ttype = t.get("trigger_type", t.get("type", t.get("signal_name", "unknown")))
             type_counts[ttype] = type_counts.get(ttype, 0) + 1
         out["triggers_by_type"] = type_counts
 
@@ -237,7 +237,7 @@ def _metacog_status() -> dict[str, Any]:
         out["recent_triggers"] = [
             {
                 "timestamp": t.get("timestamp", ""),
-                "type": t.get("trigger_type", t.get("type", "unknown")),
+                "type": t.get("trigger_type", t.get("type", t.get("signal_name", "unknown"))),
                 "reason": t.get("reason", t.get("summary", "")),
             }
             for t in recent
