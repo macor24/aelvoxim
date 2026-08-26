@@ -223,7 +223,20 @@ def check_pending_promotions(
         r_fc = result.get('failed_count', 0)
         if r_pc == 0 and r_fc == 0:
             # Entry was already removed (approved/rejected/promoted), skip silently
-            if 'error' in result or 'approved' in result or 'validated' in result:
+            if 'error' in result or 'validated' in result:
+                return True
+            if 'approved' in result:
+                if result.get('approved'):
+                    return True  # promoted — entry already moved to active
+                # Duplicate rejection: content matches an existing entry —
+                # stop burning verification attempts on it. Dedup is by
+                # design, but this used to stay silent and only get discarded
+                # after 10 attempts, starving the knowledge base (0
+                # promotions for days) while metacog reported stagnation.
+                _reason = result.get('reason', 'duplicate of existing entry')
+                _dup_of = result.get('dup_of', '?')
+                KnowledgeBase.discard_pending(eid)
+                log_func(f"  🗑️ [Pending] Rejected as duplicate of {str(_dup_of)[:12]}, discard: {title} ({_reason})")
                 return True
             KnowledgeBase.discard_pending(eid)
             log_func(f"  🗑️ [Pending] Stale result (0/0), discard: {title}")
