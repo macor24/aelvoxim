@@ -29,6 +29,12 @@ dependencies = [
     "uvicorn[standard]>=0.52.0",
 ]
 
+[tool.ruff.lint.per-file-ignores]
+# Admin panel is a defensive aggregation script: it probes many subsystems
+# and intentionally swallows per-subsystem failures (BLE001/S110) and parses
+# naive timestamps (DTZ007) from status files.
+"src/aelvoxim/server/admin_panel.py" = ["BLE001", "S110", "DTZ007"]
+
 [project.optional-dependencies]
 pg = ["psycopg2-binary>=2.9.0"]
 test = ["pytest>=9.1.1", "httpx>=0.28.1"]

@@ -7,9 +7,9 @@ expert orchestrator for the admin UI dashboard (tab: Cognitive Engine).
 
 from __future__ import annotations
 
-import os
 import json
 import logging
+import os
 import time
 from pathlib import Path
 from typing import Any
@@ -66,8 +66,9 @@ def _learner_status() -> dict[str, Any]:
         # is a file-backed mirror and never runs its own loop, so
         # learner.is_running() is always False in the API process.
         try:
-            from aelvoxim.learn.loop import STATUS_FILE as _L_STATUS
             import json as _json
+
+            from aelvoxim.learn.loop import STATUS_FILE as _L_STATUS
             if _L_STATUS.exists():
                 _st = _json.loads(_L_STATUS.read_text(encoding="utf-8"))
                 out["running"] = bool(_st.get("running", False))
@@ -287,7 +288,6 @@ def _subsystem_health() -> list[dict[str, Any]]:
 
     # MetaCog health: check if metacog module can be imported
     try:
-        from aelvoxim.core.metacog import MetaCogTrigger
 
         checks.append({"name": "MetaCognition", "status": "online", "detail": "Module loaded"})
     except Exception:
