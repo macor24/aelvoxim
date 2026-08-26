@@ -218,7 +218,17 @@ def _metacog_status() -> dict[str, Any]:
                 line = line.strip()
                 if line:
                     try:
-                        triggers.append(json.loads(line))
+                        # Each line is a MetaCogReport record containing a
+                        # triggers[] array — flatten to the individual
+                        # triggered events (records have no signal_name, which
+                        # made every event show as "unknown").
+                        _rec = json.loads(line)
+                        _ts = _rec.get("timestamp", "")
+                        for _t in _rec.get("triggers", []):
+                            if _t.get("triggered"):
+                                _t = dict(_t)
+                                _t.setdefault("timestamp", _ts)
+                                triggers.append(_t)
                     except json.JSONDecodeError:
                         pass
 
