@@ -73,13 +73,18 @@ def save_config_to_file(data: Dict) -> None:
                 if not isinstance(val, dict):
                     continue
                 execute("""
-                    INSERT INTO learning_directions (topic, status, phase_index, saturation, entries_created, config)
-                    VALUES (%s, %s, %s, %s, %s, %s::jsonb)
+                    INSERT INTO learning_directions
+                        (topic, status, phase_index, saturation, entries_created,
+                         cycles_completed, fail_streak, confidence, config)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
                     ON CONFLICT (topic) DO UPDATE SET
                         status = EXCLUDED.status,
                         phase_index = EXCLUDED.phase_index,
                         saturation = EXCLUDED.saturation,
                         entries_created = EXCLUDED.entries_created,
+                        cycles_completed = EXCLUDED.cycles_completed,
+                        fail_streak = EXCLUDED.fail_streak,
+                        confidence = EXCLUDED.confidence,
                         config = EXCLUDED.config,
                         updated_at = NOW()
                 """, (
@@ -88,6 +93,16 @@ def save_config_to_file(data: Dict) -> None:
                     val.get("phase_index", 0),
                     val.get("saturation", 0.0),
                     val.get("entries_created", 0),
+                    # cycles_completed / fail_streak were only ever kept in memory
+                    # (learn/loop.py increments them) and were missing from this
+                    # statement, so the columns stayed 0 forever while the truth
+                    # sat in the config JSON. Reader paths that go through the
+                    # COLUMNS (admin panel, routes_system, cortex scheduler,
+                    # progress checks) therefore reported 0 regardless of real
+                    # progress. Write them back explicitly.
+                    int(val.get("cycles_completed", 0) or 0),
+                    int(val.get("fail_streak", 0) or 0),
+                    float(val.get("confidence", 0.0) or 0.0),
                     json.dumps(val),
                 ))
             # Full-sync: purge PG rows no longer in memory. Without this, stale-cleanup
