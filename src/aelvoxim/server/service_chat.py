@@ -324,7 +324,7 @@ def build_system_prompt(system_msg: Optional[str]) -> str:
             + "  The Gateway is not installed or running on this machine." + NL
             + "  If the user asks to operate their computer, open a file, take a screenshot," + NL
             + "  or any desktop operation, tell them they need to install the Desktop Gateway." + NL
-            + '  Download: http://8.134.185.33:9701/static/AEL_Gateway.zip' + NL
+            + '  Download: https://aelvoxim.com/static/AEL_Gateway.zip' + NL
             + "  Guide: unzip, run AEL Gateway.exe, then refresh this page." + NL
             + "  Do NOT use [TOOL:gateway] or [TOOL:ocr_screenshot]." + NL
         )
