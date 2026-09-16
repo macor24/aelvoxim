@@ -5,13 +5,22 @@ import type { Tenant } from '../types/auth';
 // origin (chatael is served by 9702, API by 9701 on the same host), and only
 // fall back to localhost. Hardcoding localhost broke remote users with no
 // saved tenant (browser would try to reach the user's own machine).
+//
+// When the app is served from a real domain (e.g. https://aelvoxim.com), use
+// the page ORIGIN as-is: nginx terminates TLS on 443 and reverse-proxies /v1/*
+// to the API on 9701, so no port may be appended (the API port is plain HTTP
+// only — https://<domain>:9701 does not exist and fails the TLS handshake).
+// Raw IP / localhost access keeps the legacy <host>:9701 behaviour.
 function defaultApiUrl(): string {
   if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_AELVOXIM_API_URL) {
     return import.meta.env.VITE_AELVOXIM_API_URL;
   }
   try {
-    const { protocol, hostname } = window.location;
-    if (hostname) return `${protocol}//${hostname}:9701`;
+    const { protocol, hostname, origin } = window.location;
+    if (!hostname) return 'http://localhost:9701';
+    const isIpOrLocalhost = hostname === 'localhost' || /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname);
+    if (isIpOrLocalhost) return protocol + '//' + hostname + ':9701';
+    if (origin) return origin;
   } catch {}
   return 'http://localhost:9701';
 }
@@ -89,14 +98,39 @@ export function getIsolationSuffix(): string {
 }
 
 /**
+ * Legacy API-URL hosts: saved tenants from before the domain was live may still
+ * point at the raw public IP (or at the old forced :9701 port). On a real domain
+ * page those values bypass nginx/HTTPS entirely — every request would hit the
+ * public IP instead of the domain.
+ */
+const LEGACY_API_HOSTS = ['8.134.185.33'];
+
+function migrateApiUrl(url: string): string {
+  try {
+    const pageHost = window.location.hostname;
+    const pageIsDomain = !!pageHost
+      && pageHost !== 'localhost'
+      && !/^\d{1,3}(\.\d{1,3}){3}$/.test(pageHost);
+    if (!pageIsDomain) return url;
+    const parsed = new URL(url);
+    const isLegacyHost = LEGACY_API_HOSTS.indexOf(parsed.hostname) !== -1;
+    const sameHostWrongPort =
+      parsed.hostname === pageHost && parsed.port !== window.location.port;
+    if (isLegacyHost || sameHostWrongPort) return defaultApiUrl();
+  } catch {}
+  return url;
+}
+
+/**
  * Resolve the active tenant's API base URL (trailing slash stripped), with a
  * sensible fallback. Single source of truth — services previously duplicated
  * this (and some read localStorage directly, risking the wrong tenant).
+ * Stale saved values are repointed at the current origin by migrateApiUrl().
  */
 export function getApiBase(): string {
   try {
     const active = useAuthStore.getState().getActiveTenant();
-    if (active?.apiUrl) return active.apiUrl.replace(/\/+$/, '');
+    if (active?.apiUrl) return migrateApiUrl(active.apiUrl).replace(/\/+$/, '');
   } catch {}
   return DEFAULT_API_URL.replace(/\/+$/, '');
 }
