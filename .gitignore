@@ -29,6 +29,22 @@ src/aelvoxim_orchestrator/scheduler.py
 *.log.*
 *.pid
 
+# Local refactor/deploy backups (kept on disk, never versioned)
+*.bak_*
+dist.bak_*/
+
+# Alibaba Cloud certificate download — contains private keys, never commit
+26941119_www.aelvoxim.com_nginx/
+*_www.*.com_nginx/
+
+# Test/coverage artifacts
+.coverage
+.coverage.*
+htmlcov/
+
+# esbuild output compiled from src/utils/time.ts for the frozen criteria
+frontend/chatael/test/time.mjs
+
 # Old backup — contents superseded by current src/
 aelvoxim-1.0.1/
 secrets.json
@@ -84,5 +100,6 @@ Windows-MCP/docs/
 @AutomationLog.txt
 dist/
 
-# Nested repo clone
-aelvoxim/
+# Nested repo clone (anchored: a root-level ./aelvoxim/ only — the bare
+# pattern also matched src/aelvoxim/ and silently hid live source files)
+/aelvoxim/
