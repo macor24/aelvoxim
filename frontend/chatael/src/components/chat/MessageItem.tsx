@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Copy, Check, Trash2, Loader2 } from 'lucide-react';
 import type { Message } from '../../types/chat';
 import ConfirmDialog from '../common/ConfirmDialog';
+import { parseMessageTime, formatMessageTime, formatFullTime } from '../../utils/time';
 
 interface Props {
   message: Message;
@@ -18,6 +19,10 @@ function MessageItemImpl({ message, onDelete, onRetry, tenantName = '你' }: Pro
   const isUser = message.role === 'user';
   const isStreaming = message.status === 'streaming';
   const isError = message.status === 'error';
+  // Reply time of this message (shown in the viewer's local time). Empty when
+  // the timestamp is unusable — render nothing rather than "Invalid Date".
+  const replyTime = parseMessageTime(message.timestamp);
+  const replyTimeLabel = formatMessageTime(replyTime);
 
   const handleCopy = async () => {
     try {
@@ -43,7 +48,7 @@ function MessageItemImpl({ message, onDelete, onRetry, tenantName = '你' }: Pro
 
   return (
     <>
-      <div className={`group flex flex-col mb-5 px-2 md:px-8 message-enter ${isUser ? 'items-end' : 'items-start'}`}>
+      <div className={`group flex flex-col mb-4 px-2 md:px-8 message-enter ${isUser ? 'items-end' : 'items-start'}`}>
         {/* AI 标识 — 气泡外上方，靠左 */}
         {!isUser && (
           <div className="flex items-center gap-2 mb-1 ml-1">
@@ -97,21 +102,29 @@ function MessageItemImpl({ message, onDelete, onRetry, tenantName = '你' }: Pro
             </span>
           )}
           
-          {/* 底部操作条 */}
-          <div className={`
-            absolute -bottom-7 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity
-            ${isUser ? 'right-0' : 'left-0'}
-          `}>
-            <button 
-              onClick={handleCopy} 
-              className="p-1 rounded bg-gray-100 dark:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors" 
+        </div>
+
+        {/* 底部一行：回复时间(常显) + 复制/删除(悬停显示) */}
+        <div className={`flex items-center gap-2 mt-1 px-1 ${isUser ? 'self-end' : 'self-start'}`}>
+          {replyTimeLabel && (
+            <span
+              className="text-[11px] text-gray-400 dark:text-gray-500 tabular-nums select-none"
+              title={formatFullTime(replyTime)}
+            >
+              {replyTimeLabel}
+            </span>
+          )}
+          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              onClick={handleCopy}
+              className="p-1 rounded bg-gray-100 dark:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
               title={t('message.copy')}
             >
               {copied ? <Check size={11} /> : <Copy size={11} />}
             </button>
-            <button 
-              onClick={() => setShowConfirm(true)} 
-              className="p-1 rounded bg-gray-100 dark:bg-gray-700 text-gray-400 hover:text-red-500 transition-colors" 
+            <button
+              onClick={() => setShowConfirm(true)}
+              className="p-1 rounded bg-gray-100 dark:bg-gray-700 text-gray-400 hover:text-red-500 transition-colors"
               title={t('message.delete')}
             >
               <Trash2 size={11} />
