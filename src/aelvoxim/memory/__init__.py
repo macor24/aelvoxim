@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import sqlite3
 import threading
 import uuid
@@ -1215,9 +1216,20 @@ def get_relations(entity_id: Optional[str] = None,
 # ── Event operations ──────────────────────
 
 
-def store_event(eid: str, event_type: str, participants: List[str],
-                content: str, timestamp: Optional[str] = None,
+def store_event(eid: str, event_type: str = "", participants: Optional[List[str]] = None,
+                content: str = "", timestamp: Optional[str] = None,
                 user_id: str = "") -> bool:
+    """Store a conversation/agent event.
+
+    Also accepts the legacy 2-argument form store_event("<type>", payload_dict)
+    that existing callers still use (server/service_chat.py, learn/service_chat.py),
+    so adopting this layer needed no call-site changes (2026-09-18 merge step 2).
+    """
+    if isinstance(event_type, dict):
+        _payload, _etype = event_type, (str(eid) or "conversation")
+        eid = f"conv:{uuid.uuid4().hex[:12]}"
+        event_type, participants, content = _etype, [], json.dumps(_payload, ensure_ascii=False)
+    participants = participants or []
     ts = timestamp or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     if _pg_active():
         return _pg_store_event(eid, event_type, participants, content, ts, user_id)
@@ -1278,12 +1290,51 @@ def get_timeline(entity_id: str, limit: int = 30) -> List[dict]:
 # ── Read APIs (legacy compatibility) ──────
 
 
+def user_memory_list(etype: str, user_id: str, limit: int = 5) -> List[dict]:
+    """Most recent rows of one memory type for ONE user.
+
+    Reads whichever store `store_entity` writes to: Postgres when active (the
+    rows live in memory_entities with entity_type/user_id), SQLite otherwise.
+    Must never return another user's rows.
+    """
+    if not etype or not user_id:
+        return []
+    if _pg_active():
+        try:
+            from ..storage.db import fetch_dict
+            rows = fetch_dict(
+                "SELECT name, content, created_at FROM memory_entities "
+                "WHERE entity_type = %s AND user_id = %s ORDER BY updated_at DESC LIMIT %s",
+                (etype, user_id, limit))
+            if rows is not None:
+                return [{"key": r.get("name", ""), "value": r.get("content", ""),
+                         "created_at": str(r.get("created_at", ""))} for r in rows]
+        except Exception:
+            _log.exception("memory error")
+    try:
+        db = _get_db()
+        rows = db.execute(
+            "SELECT id, value, created_at FROM entities WHERE type = ? AND user_id = ? "
+            "ORDER BY created_at DESC LIMIT ?", (etype, user_id, limit)).fetchall()
+        return [{"key": r[0], "value": r[1], "created_at": r[2]} for r in rows]
+    except Exception:
+        _log.exception("memory error")
+        return []
+
+
 def memory_read(key: str) -> Optional[dict]:
     # PG first
     from ..storage.db import fetch_dict, use_pg
     if use_pg():
         try:
-            rows = fetch_dict("SELECT * FROM memory_entities WHERE id = %s::uuid OR name = %s", (key, key))
+            # Guard the uuid cast: file-style ids (16 hex / "kb:...") make
+            # `%s::uuid` raise InvalidTextRepresentation and lose the whole
+            # lookup instead of falling back to the name match (2026-09-18 merge).
+            if re.match(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-", str(key)):
+                rows = fetch_dict("SELECT * FROM memory_entities WHERE id = %s::uuid OR name = %s",
+                                  (key, key))
+            else:
+                rows = fetch_dict("SELECT * FROM memory_entities WHERE name = %s", (key,))
             if rows and len(rows) > 0:
                 r = rows[0]
                 return {"key": r.get("id", key), "type": r.get("entity_type", "memory"),
