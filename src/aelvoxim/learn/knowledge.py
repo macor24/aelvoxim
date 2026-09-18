@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import threading
 import time
 import hashlib
@@ -837,6 +838,45 @@ class KnowledgeBase:
 
             _write_entry(entry)
 
+            # Dual-mode storage (see storage/db.py): PG is the primary store
+            # whenever AELVOXIM_DATABASE_URL is set, but this promotion path only
+            # wrote the JSON file — which is how the product's knowledge base
+            # went two months without a single new row while the learner kept
+            # producing entries. Mirror the promotion into PG. Failures are
+            # logged loudly on purpose: silently swallowing this is what hid the
+            # breakage for so long.
+            try:
+                from ..storage.db import execute as _pg_exec, use_pg as _use_pg
+                if _use_pg():
+                    _pg_exec(
+                        """
+                        INSERT INTO knowledge_entries
+                            (topic, title, content, status, tags, source,
+                             confidence, validated, value_level, created_at, updated_at)
+                        VALUES (%s, %s, %s, 'active', %s::jsonb, %s, %s, %s, %s,
+                                COALESCE(%s::timestamp, now()), now())
+                        ON CONFLICT (topic, title) DO UPDATE SET
+                            content     = EXCLUDED.content,
+                            status      = 'active',
+                            tags        = EXCLUDED.tags,
+                            source      = EXCLUDED.source,
+                            confidence  = EXCLUDED.confidence,
+                            validated   = EXCLUDED.validated,
+                            value_level = EXCLUDED.value_level,
+                            updated_at  = now()
+                        """,
+                        (entry.get("topic", ""), entry.get("title", ""),
+                         entry.get("content") or entry.get("summary") or "",
+                         json.dumps(entry.get("tags") or []),
+                         entry.get("source", ""),
+                         float(entry.get("confidence", 0.5) or 0.5),
+                         bool(entry.get("validated", False)),
+                         int(entry.get("value_level", 2) or 2),
+                         entry.get("created_at") or None),
+                    )
+            except Exception:
+                _log.exception("knowledge error: PG dual-write failed on approve")
+
             index = _read_index()
             index["entries"].append(entry_id)
             topic = entry["topic"]
@@ -1330,10 +1370,17 @@ class KnowledgeBase:
         id as a text query, which always matched 0 rows so reviews never ran
         (B14, 9.txt audit).
         """
-        # PG fast path
+        # PG fast path — only for uuid-shaped ids. File-store entries use
+        # 16-hex ids (secrets.token_hex(8)), and PG's `id = %s::uuid` raises
+        # InvalidTextRepresentation for those: ~810 logged tracebacks, and the
+        # review scheduler (the caller) aborted before reaching the file
+        # fallback below, so pending entries were never promoted.
+        _uuid_like = bool(re.fullmatch(
+            r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
+            r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", (entry_id or "").strip()))
         try:
             from ..storage.db import fetch_dict, use_pg as _up
-            if _up():
+            if _up() and _uuid_like:
                 rows = fetch_dict(
                     "SELECT id::text, topic, title, content, confidence, tags FROM knowledge_entries "
                     "WHERE id = %s::uuid AND status = 'active' LIMIT 1", (entry_id,))
