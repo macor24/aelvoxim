@@ -1382,8 +1382,12 @@ def _extract_facts_from_reply(reply: str, query: str) -> list:
         s = s.strip()
         if len(s) < 15 or len(s) > 300:
             continue
-        # "X 是 Y" / "X 支持 Y" / "X Use Y" patterns
-        m = _re.search(r'^(.{5,50})(是|支持|使用|采用|提供|基于)(.{5,})', s)
+        # "X 是 Y" / "X 支持 Y" (zh) and "X is/supports/uses Y" (en). The
+        # zh-only version silently recorded nothing for English replies, and the
+        # product answers technical questions mostly in English (2026-09-18 audit).
+        m = _re.search(r'^(.{5,50})(是|支持|使用|采用|提供|基于)(.{5,})', s) or _re.search(
+            r"^([A-Z][^.!?]{4,49}?)\s+(?:is|are|was|were|supports?|uses?|adopts?|provides?"
+            r"|offers?|relies on|based on)\s+(.{5,})", s)
         if m:
             title = m.group(1).strip()[:80]
             content = s[:300]
