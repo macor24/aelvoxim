@@ -853,7 +853,7 @@ async def admin_dashboard(admin: dict = Depends(_require_admin)):
     return result
 
 @router.get("/admin/cognition")
-async def admin_cognition(user: dict = Depends(_verify_key)):
+async def admin_cognition(user: dict = Depends(_require_admin)):
     """Return cognition overview."""
     result = {
         "belief": {"count": 0, "high_confidence": 0, "low_confidence": 0, "total_evidence": 0},
@@ -873,7 +873,7 @@ async def admin_cognition(user: dict = Depends(_verify_key)):
     return result
 
 @router.get("/admin/knowledge-graph")
-async def admin_knowledge_graph(user: dict = Depends(_verify_key)):
+async def admin_knowledge_graph(user: dict = Depends(_require_admin)):
     """Return knowledge graph data."""
     try:
         from ..server.knowledge_graph import get_graph, graph_stats
@@ -882,7 +882,7 @@ async def admin_knowledge_graph(user: dict = Depends(_verify_key)):
         raise HTTPException(500, detail=f"Graph unavailable: {e}")
 
 @router.get("/admin/learner/status")
-async def admin_learner_status(user: dict = Depends(_verify_key)):
+async def admin_learner_status(user: dict = Depends(_require_admin)):
     """Return learner status."""
     try:
         from ..learn.learner import get_learner
@@ -925,7 +925,7 @@ async def admin_learner_stop(user: dict = Depends(_require_admin)):
         raise HTTPException(500, detail="Failed to read log")
 
 @router.get("/admin/skill-timeline")
-async def admin_skill_timeline(months: int = 6, user: dict = Depends(_verify_key)):
+async def admin_skill_timeline(months: int = 6, user: dict = Depends(_require_admin)):
     from datetime import datetime, timedelta
     from ..utils import read_json, LEARNER_CONFIG
     cfg = read_json(LEARNER_CONFIG) or {}

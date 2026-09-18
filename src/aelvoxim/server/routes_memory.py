@@ -10,7 +10,7 @@ Routes:
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from .routes import _verify_key
+from .routes import _verify_key, _require_admin
 
 router = APIRouter()
 
@@ -19,7 +19,7 @@ router = APIRouter()
 async def search_memory(
     q: str = Query("", description="Search query"),
     limit: int = Query(10, description="Max results"),
-    user: dict = Depends(_verify_key),
+    user: dict = Depends(_require_admin),
 ):
     """Search memory entities by query string."""
     from ..api import memory_search
@@ -30,7 +30,7 @@ async def search_memory(
 @router.get("/memory/{key}")
 async def read_memory(
     key: str,
-    user: dict = Depends(_verify_key),
+    user: dict = Depends(_require_admin),
 ):
     """Read a specific memory entity by key."""
     from ..api import memory_read
@@ -43,7 +43,7 @@ async def read_memory(
 @router.post("/memory")
 async def write_memory(
     request: dict,
-    user: dict = Depends(_verify_key),
+    user: dict = Depends(_require_admin),
 ):
     """Write a memory entity. Body: {\"key\": \"...\", \"value\": \"...\"}"""
     from ..api import memory_store

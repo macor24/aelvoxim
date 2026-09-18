@@ -21,14 +21,14 @@ router = APIRouter()
 
 
 @router.get("/config")
-async def list_all_config(user: dict = Depends(_verify_key)):
+async def list_all_config(user: dict = Depends(_require_admin)):
     """List all system configuration keys."""
     from ..api import list_config
     return {"config": list_config()}
 
 
 @router.get("/config/{key}")
-async def get_config_value(key: str, user: dict = Depends(_verify_key)):
+async def get_config_value(key: str, user: dict = Depends(_require_admin)):
     """Get a specific configuration value."""
     from ..api import get_config
     value = get_config(key)
@@ -40,7 +40,7 @@ async def get_config_value(key: str, user: dict = Depends(_verify_key)):
 @router.post("/config")
 async def set_config_value(
     body: dict,
-    user: dict = Depends(_verify_key),
+    user: dict = Depends(_require_admin),
 ):
     """Set a configuration value. Body: {\"key\": \"...\", \"value\": \"...\"}"""
     key = body.get("key", "")

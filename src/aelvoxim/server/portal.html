@@ -183,7 +183,7 @@
     <div class="header-actions">
       <div class="lang-group"><button class="lang-btn" id="langEn" onclick="setLang('en')">EN</button><button class="lang-btn" id="langZh" onclick="setLang('zh')">中文</button></div>
       <span class="user" id="headerUser"></span>
-      <a class="btn icon-btn" href="/v1/admin/panel" title="Control Panel">⚙️</a>
+      <a class="btn icon-btn" href="/v1/admin/panel" id="adminBtn" title="Control Panel" style="display:none">⚙️</a>
       <button class="btn-ghost" id="logoutBtn" onclick="doLogout()" style="display:none">@@logout@@</button>
       <button class="btn-primary" id="loginBtn" onclick="showAuth()">@@login@@</button>
     </div>
@@ -223,6 +223,21 @@ function setLang(l){_lang=l;localStorage.setItem('ael_lang',l);document.getEleme
 function applyI18n(){var w=document.createTreeWalker(document.body,4,null,false),n=[];while(w.nextNode())n.push(w.currentNode);n.forEach(function(n){if(n.nodeType===3&&n.nodeValue&&n.nodeValue.indexOf('@@')!==-1)n.nodeValue=n.nodeValue.replace(/@@(\w+)@@/g,function(m,k){return t(k)})});document.querySelectorAll('[data-i18n]').forEach(function(e){var k=e.getAttribute('data-i18n');if(k==='titleLine')e.innerHTML=t(k);else e.textContent=t(k)});document.getElementById('loginBtn').textContent=t('login');document.getElementById('logoutBtn').textContent=t('logout');var hu=document.getElementById('headerUser');if(_token&&hu&&!hu.textContent.includes('@'))hu.textContent=t('loggedIn');document.title=t('tagline')+' — Aelvoxim'}
 var API_BASE='',_token=localStorage.getItem('ael_token')||'',_email=localStorage.getItem('ael_email')||'';
 (function init(){document.getElementById('langEn').className=_lang==='en'?'lang-btn active':'lang-btn';document.getElementById('langZh').className=_lang==='zh'?'lang-btn active':'lang-btn';if(_token){document.getElementById('loginBtn').style.display='none';document.getElementById('logoutBtn').style.display='';var plan=localStorage.getItem('ael_plan')||'';var planHtml=plan?' <span class=\"plan-badge '+plan.toLowerCase()+'\">'+escHtml(plan)+'</span>':'';document.getElementById('headerUser').innerHTML=escHtml(_email)+planHtml}applyI18n()})();
+// ── Admin entry: independent (loopback-only) + role-gated ─────────────
+// Fail-closed: the gear stays hidden unless the server confirms role=admin.
+// Rendered only on a loopback origin on purpose — the public domain blocks
+// /v1/admin/* (see /etc/nginx/sites-enabled/aelvoxim), so an entry there would
+// be a dead link, and nobody else ever sees it. Access:
+//     ssh -L 8080:127.0.0.1:9701 root@8.134.185.33   ->  http://localhost:8080/
+(function initAdminEntry(){
+  var host=location.hostname;
+  if(host!=='localhost'&&host!=='127.0.0.1')return;
+  if(!_token)return;
+  fetch(API_BASE+'/v1/user/me',{headers:{'Authorization':'Bearer '+_token}})
+    .then(function(r){return r.ok?r.json():null})
+    .then(function(d){if(d&&d.role==='admin'){var b=document.getElementById('adminBtn');if(b)b.style.display=''}})
+    .catch(function(){});
+})();
 function showAuth(){_authMode='login';document.getElementById('authModal').classList.add('active');renderAuthModal()}
 function showRegister(){_authMode='register';document.getElementById('authModal').classList.add('active');renderAuthModal()}
 function closeAuth(){document.getElementById('authModal').classList.remove('active')}
