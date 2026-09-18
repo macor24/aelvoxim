@@ -722,16 +722,153 @@ def process_memory_commands(user_msg: str, user: dict, identity_prefix: str) -> 
     return identity_prefix
 
 
+# ═══ Cross-session memory ═══
+
+
+def inject_cross_session_context(user: dict, session_id: str, extra_context: str,
+                                 messages: Optional[list] = None,
+                                 n_sessions: int = 3, per_session: int = 6) -> str:
+    """Recent lines from the caller's OTHER sessions.
+
+    A new chat used to start from zero: the prompt carried only the current
+    session plus KB retrieval. Strictly user-scoped, excludes the current
+    session, bounded by AELVOXIM_CROSS_SESSION_CHARS (0 disables), and injected
+    on fresh sessions only (AELVOXIM_CROSS_SESSION_MODE=always overrides) so a
+    long conversation does not re-send ~3k chars every turn.
+    """
+    try:
+        budget = int(os.environ.get("AELVOXIM_CROSS_SESSION_CHARS", "3000"))
+    except ValueError:
+        budget = 3000
+    if budget <= 0:
+        return extra_context
+    if messages is not None and os.environ.get("AELVOXIM_CROSS_SESSION_MODE", "new") != "always":
+        if any(isinstance(m, dict) and str(m.get("role")) == "assistant" for m in messages):
+            return extra_context
+    try:
+        from ..storage.db import get_messages_from_pg, get_sessions_from_pg
+        uid = str((user or {}).get("id") or (user or {}).get("user_id") or "")
+        if not uid:
+            return extra_context
+        try:  # reuse the PII masking the snapshot module already ships
+            from .session_manager import _mask_sensitive as _mask
+        except Exception:
+            def _mask(text):
+                return text
+        lines, used = [], 0
+        for s in (get_sessions_from_pg(user_id=uid, limit=n_sessions + 2) or []):
+            sid = str(s.get("id", ""))
+            if not sid or sid == str(session_id):
+                continue
+            for m in (get_messages_from_pg(sid) or [])[-per_session:]:
+                text = _mask(str(m.get("content") or "").replace("\n", " ").strip())[:300]
+                if not text:
+                    continue
+                line = ("User: " if m.get("role") == "user" else "Assistant: ") + text
+                if used + len(line) > budget:
+                    break
+                used += len(line)
+                lines.append(line)
+            if used >= budget or len(lines) >= n_sessions * per_session:
+                break
+        if lines:
+            _log.info("cross-session recall: %d lines / %d chars (cur=%s)",
+                      len(lines), used, session_id or "-")
+            extra_context += ("\n[Previous conversations (this user's older sessions)]\n"
+                              + "\n".join(lines) + "\n")
+    except Exception:
+        _log.exception("service_chat error")
+    return extra_context
+
+
 # ═══ Memory status ═══
 
-def inject_memory_status(user_msg: str, user: dict, identity_prefix: str) -> str:
+# ═══ Per-user memory (preferences / facts) ═══
+
+_PREF_TRIGGER = (r"(?:记住|记一下|请记住|我的偏好|我喜欢|我习惯|一直用|以后都用|"
+                 r"my preference|i prefer|i like|i always|always use|remember that)")
+
+
+def _user_scope(user: dict) -> str:
+    """The user id used as the per-user key of the memory store."""
+    return str((user or {}).get("id") or (user or {}).get("user_id") or "")
+
+
+def extract_preference(user_msg: str) -> str:
+    """Return the sentence that states a preference, or '' (rule-based, no LLM)."""
+    import re as _re
+    for s in _re.split(r"(?<=[。！？.!?])\s*", user_msg or ""):
+        s = s.strip()
+        if 4 < len(s) <= 200 and _re.search(_PREF_TRIGGER, s, _re.I):
+            return s
+    return ""
+
+
+def store_preferences(user: dict, user_msg: str) -> None:
+    """Persist an explicit preference into THIS user's memory.
+
+    Goes through store_entity, which writes Postgres when available (the row
+    keeps entity_type='preference' and the user id) and SQLite otherwise.
+    """
+    uid = _user_scope(user)
+    text = extract_preference(user_msg)
+    if not uid or not text:
+        return
     try:
-        from ..memory import memory_search
-        _uid = user.get("email", "") if user else ""
-        results = memory_search("preference", limit=5, user_id=_uid)
-        if results:
-            prefs = "; ".join(str(m.get("value", ""))[:80] for m in results[:3])
-            identity_prefix += f"[Memory preferences: {prefs}]\n"
+        import hashlib
+        slug = hashlib.sha1(text.encode("utf-8")).hexdigest()[:10]
+        from ..memory import store_entity
+        store_entity(f"preference:{uid}:{slug}", "preference", {"value": text},
+                     tags=["preference"], user_id=uid)
+    except Exception:
+        _log.exception("service_chat error")
+
+
+def _user_scope_rows(user: dict, etype: str, limit: int = 5) -> list:
+    """Rows of one per-user memory type for THIS user only."""
+    try:
+        from ..memory import user_memory_list
+        return [r.get("value", "") for r in user_memory_list(etype, _user_scope(user), limit)]
+    except Exception:
+        _log.exception("service_chat error")
+        return []
+
+
+def _store_user_facts(user: dict, facts: list) -> None:
+    """Store conversation facts in THIS user's memory (never the shared KB)."""
+    uid = _user_scope(user)
+    if not uid or not facts:
+        return
+    try:
+        import hashlib as _hl
+        from ..memory import store_entity as _se
+        for _t, _c in facts[:3]:
+            _slug = _hl.sha1(str(_t).encode("utf-8")).hexdigest()[:10]
+            _se(f"chatfact:{uid}:{_slug}", "chat_fact",
+                {"value": f"{_t}: {_c}"[:500]}, tags=["chat_fact"], user_id=uid)
+    except Exception:
+        _log.exception("service_chat error")
+
+
+def record_conversation_memory(user: dict, user_msg: str, reply: str) -> list:
+    """Record preferences + extracted facts from one exchange; returns the facts.
+
+    Called from both chat paths; the streaming endpoint is the only one
+    production traffic uses, so this is where conversation memory is written.
+    """
+    store_preferences(user, user_msg)
+    facts = _extract_facts_from_reply(reply, user_msg) if reply else []
+    _store_user_facts(user, facts)
+    return facts
+
+
+def inject_memory_status(user_msg: str, user: dict, identity_prefix: str) -> str:
+    """Inject THIS user's stored preferences."""
+    try:
+        prefs = _user_scope_rows(user, "preference")
+        if prefs:
+            identity_prefix += ("[Memory: user preferences]\n"
+                                + "\n".join(f"  · {p[:200]}" for p in prefs) + "\n")
     except Exception:
         _log.exception("service_chat error")
     return identity_prefix
@@ -905,6 +1042,7 @@ def chat_pipeline(
     skip_experts: bool = False,
     skip_memory: bool = False,
     mode: str = "simple",
+    session_id: str = "",
 ) -> dict:
     global _LAST_PLAN_CHECK
     t0 = _time.time()
@@ -1003,6 +1141,7 @@ def chat_pipeline(
     # Phase 3: Memory
     if not skip_memory:
         extra_context = inject_memory_context(user_msg, user, extra_context)
+        extra_context = inject_cross_session_context(user, session_id, extra_context, messages)
 
     # Cross-session context restore (latest snapshot from a previous session)
     try:
@@ -1288,16 +1427,10 @@ def chat_pipeline(
                 from .chat_monitor import extract_feedback_signals
                 signals = extract_feedback_signals(user_msg, text)
 
-                # ── 1a. Fact extraction from AI response ──
-                _facts = _extract_facts_from_reply(text, user_msg)
-                for _fact_title, _fact_content in _facts[:3]:
-                    from ..learn.knowledge import KnowledgeBase as _kb
-                    _kb.store_pending(
-                        topic=signals.get("raw_topic", "conversation")[:80],
-                        title=_fact_title[:80],
-                        content=_fact_content[:500],
-                        source="chat_fact",
-                    )
+                # ── 1a. Conversation memory: preferences + facts → THIS user ──
+                # (facts stay in the user's own memory, never the shared KB:
+                # they are chatter-level recall, not curated knowledge)
+                for _fact_title, _ in record_conversation_memory(user, user_msg, text)[:3]:
                     # Record in belief pool
                     _record_belief(_fact_title, success=True)
 

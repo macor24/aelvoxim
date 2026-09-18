@@ -282,6 +282,7 @@ async def llm_chat_stream(
         inject_topic_anchor, build_identity_prefix, process_memory_commands,
         inject_memory_status, inject_safety_and_metacog, enhance_with_knowledge,
         inject_memory_context, inject_security_context, run_safety_check,
+        inject_cross_session_context, record_conversation_memory,
         _is_reference_phrase, _get_search_query, _needs_real_time, _real_time_search,
     )
     from fastapi.responses import StreamingResponse
@@ -296,6 +297,9 @@ async def llm_chat_stream(
     temperature = request.get("temperature", 0.7)
     max_tokens = request.get("max_tokens", 4096)
     mode = request.get("mode", "simple")
+    # The SPA sends session_id; it keeps the cross-session recall block from
+    # re-injecting the conversation the caller is already in.
+    session_id = request.get("session_id", "")
     if not messages:
         raise HTTPException(400, detail="missing messages")
 
@@ -400,6 +404,9 @@ async def llm_chat_stream(
 
     # Phase 3: Memory
     extra_context = inject_memory_context(user_msg, user, extra_context)
+    # Cross-session recall (fresh sessions only). This streaming endpoint is the
+    # one production traffic uses.
+    extra_context = inject_cross_session_context(user, session_id, extra_context, messages)
 
     # Phase 4: Security
     extra_context = inject_security_context(extra_context)
@@ -656,6 +663,11 @@ async def llm_chat_stream(
 
             _full_text = "".join(_pg_collected)
             if _full_text:
+                # ── Conversation memory: preferences + facts → THIS user ──
+                try:
+                    record_conversation_memory(user, user_msg, _full_text)
+                except Exception:
+                    _log.exception("routes_chat error")
                 # ── Windows-MCP tool execution ──
                 _win_match = _re.search(r'\[WIN:(\w+)\]\s*(\{.*?\})', _full_text, _re.DOTALL)
                 if _win_match:
