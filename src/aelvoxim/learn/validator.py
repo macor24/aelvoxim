@@ -330,7 +330,15 @@ class DebateVerifier:
 
     def _llm_debate(self, model, title: str, content: str) -> Dict:
         """Call LLM for pro/con debate."""
-        from aelvoxim.learn.llm import call_llm
+        from aelvoxim.learn.llm import call_llm, _BG_LLM_TIMEOUT
+        # Background budgets. The configured model (deepseek-v4-flash) reasons
+        # before it emits content, so a substantive claim makes the reasoning
+        # phase consume the whole 1024-token budget and the answer comes back
+        # empty (reproduced 3/3 with a ~700-char claim; production showed the
+        # same `finish_reason=length reasoning_tokens=1024` shape). The review
+        # then silently fell back to rules — found by censusing the "empty
+        # content" warnings (2026-09-20).
+        from aelvoxim.learn.extract import _BG_MAX_TOKENS
 
         system_prompt = """You are a knowledge review expert. Strictly evaluate the following knowledge claim.
 
@@ -346,7 +354,8 @@ Output strict JSON format, no extra text:
 
         try:
             response = call_llm(model, system_prompt, user_prompt,
-                               temperature=0.3, max_tokens=1024, timeout=15)
+                               temperature=0.3, max_tokens=_BG_MAX_TOKENS,
+                               timeout=_BG_LLM_TIMEOUT)
             result = self._parse_debate_response(response)
             result["model"] = model.name
             return result

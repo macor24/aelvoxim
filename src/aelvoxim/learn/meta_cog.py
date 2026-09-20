@@ -80,7 +80,12 @@ def analyze_with_hypotheses(report, directions: dict, log_func: Callable, learne
                 # Try generating new seeds from curiosity engine
                 try:
                     from ..learn.curiosity import pick_next_topic
-                    fallback = pick_next_topic(topics)
+                    # pick_next_topic wants the directions mapping (it diffs against
+                    # existing keys) plus a log callback. The old call passed the
+                    # topic LIST and no log_func, so it raised TypeError inside this
+                    # try block and the curiosity fallback silently never produced a
+                    # seed (2026-09-20).
+                    fallback = pick_next_topic(directions, log_func)
                     if fallback:
                         log_func(f"  🌱 Curiosity seed: {fallback[:80]}")
                         analysis["fallback_seed"] = fallback

@@ -907,7 +907,11 @@ class Learner:
             if _current_focus == "cleanup":
                 _memory_cleanup()
                 try:
-                    _cleaned = KnowledgeBase.cleanup_low_value_knowledge(max_age_days=3, min_access=0)
+                    # cleanup_low_value_knowledge is a MODULE function, not a class
+                    # method: calling it via KnowledgeBase raised AttributeError and
+                    # the cleanup silently never ran (found in the logs 2026-09-20).
+                    from .knowledge import cleanup_low_value_knowledge
+                    _cleaned = cleanup_low_value_knowledge(max_age_days=3, min_access=0)
                     if _cleaned:
                         self._log(f"  🧹 [Focus:cleanup] Cleaned {_cleaned} low-value entries")
                 except Exception:
@@ -1006,7 +1010,8 @@ class Learner:
                     else:
                         _days = 7
                     try:
-                        cleaned = KnowledgeBase.cleanup_low_value_knowledge(max_age_days=_days, min_access=1)
+                        from .knowledge import cleanup_low_value_knowledge
+                        cleaned = cleanup_low_value_knowledge(max_age_days=_days, min_access=1)
                         if cleaned:
                             self._log(f"  🧹 Cognition: cleaned up {cleaned} low-value entries")
                     except Exception:
