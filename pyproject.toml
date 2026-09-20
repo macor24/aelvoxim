@@ -24,7 +24,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Application Frameworks",
 ]
 dependencies = [
-    "bcrypt>=4.0.0",
+    "bcrypt>=5.0.0",
     "fastapi>=0.141.1",
     "uvicorn[standard]>=0.52.0",
 ]
