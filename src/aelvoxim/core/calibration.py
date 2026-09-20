@@ -12,6 +12,7 @@ Architecture:
 from __future__ import annotations
 
 import json
+import os
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
@@ -55,7 +56,7 @@ DEFAULT_CALIBRATION: Dict[str, Any] = {
         "memory_backup_max_count": 20,           # backup files >20 -> Warning
         "memory_health_min_score": 0.30,         # memory health score >0.3 triggers
         # Snapshot trend
-        "snapshot_trend_trigger": 0.2,            # score >0.2 -> Trigger
+        "snapshot_trend_trigger": 2,             # consecutive decline >=2 -> Trigger
         "snapshot_trend_moderate": 3,            # >=3 -> MODERATE
         "snapshot_trend_critical": 5,            # >=5 -> CRITICAL
         "snapshot_trend_score_rate": 3.0,        # score = min(1, streak / N)
@@ -380,22 +381,28 @@ class Calibration:
 
         changes: List[Dict] = []
 
-        # 0. Self-check: if evolve_threshold drifted unreasonably high, reset
+        # 0. Self-check: keep the threshold inside the range the score can reach.
+        # An evolve threshold above the reachable band means the gate can never
+        # open: auto-tune walked it up to exactly 0.5 while the highest score
+        # ever recorded was 0.371, and the old `> 0.5` test could never catch a
+        # value sitting on the boundary (2026-09-19: gate stuck shut for weeks).
+        _ceiling = float(os.environ.get("AELVOXIM_EVOLVE_CEILING", "0.35"))
         _ev = mc.get("evolve_threshold", 0.10)
-        if _ev > 0.5:
+        if _ev > _ceiling:
             mc["evolve_threshold"] = 0.10
             changes.append({
                 "target": "metacog.evolve_threshold",
                 "old": _ev, "new": 0.10,
-                "reason": f"Auto-reset: drifted to {_ev}, reset to default 0.10",
+                "reason": f"Auto-reset: {_ev} above reachable ceiling {_ceiling}, reset to 0.10",
             })
 
-        # 1. If hit rate is too low, raise metacog evolve_threshold
+        # 1. If hit rate is too low, raise metacog evolve_threshold (never above
+        #    the ceiling, so the raise itself cannot make the gate unreachable)
         hit_rate = metaevolve_analysis.get("hit_rate", 0.5) or 0
         if hit_rate <= me.get("hit_rate_threshold", 0.5):
             old = mc.get("evolve_threshold", 0.10)
             step = me.get("threshold_tune_step", 0.1)
-            new_val = min(me.get("threshold_max", 0.9), old + step)
+            new_val = min(me.get("threshold_max", 0.9), old + step, _ceiling)
             mc["evolve_threshold"] = new_val
             changes.append({
                 "target": "metacog.evolve_threshold",
