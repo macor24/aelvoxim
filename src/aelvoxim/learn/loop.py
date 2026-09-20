@@ -643,11 +643,30 @@ class Learner:
 
     # ── Cognition tick (delegated to sub-modules) ──
 
+    def _cognition_tick_due(self) -> bool:
+        """True when the cognition tick's minimum gap has elapsed.
+
+        The tick is reachable from two places: the tail of a *successful* cycle
+        and the per-round heartbeat. The gap keeps those from doubling the work
+        and bounds how often the expensive parts run.
+        """
+        _min_gap = float(os.environ.get("AELVOXIM_COGNITION_MIN_GAP_SEC", "1800"))
+        return (time.time() - getattr(self, "_last_cognition_tick_ts", 0.0)) >= _min_gap
+
     def _cognition_tick(self) -> None:
         """Run meta-cognition checks and self-improvement actions.
 
         Orchestrates memory cleanup, auto-tune, reflection, goals, reports.
+
+        Rate-limited (see _cognition_tick_due) and deliberately reachable
+        without a successful learning cycle: when production stalls, the learner
+        must still observe itself (2026-09-19: the metacog chain went dark for
+        two days because the only call site sat after a cycle that returns early
+        on every quality skip).
         """
+        if not self._cognition_tick_due():
+            return
+        self._last_cognition_tick_ts = time.time()
         t0 = time.time()
         try:
             from ..core.metacog_monitor import MetaCogMonitor
@@ -1382,6 +1401,15 @@ class Learner:
                     self._save_status()
                 except Exception:
                     pass
+
+                # Self-assessment heartbeat: the cognition tick (metacog
+                # evaluate + self-model sync + memory maintenance) must not
+                # depend on a cycle succeeding — a stalled learner still has to
+                # observe itself. Self-limited by _cognition_tick_due().
+                try:
+                    self._cognition_tick()
+                except Exception:
+                    _log.exception("loop error")
 
                 # ── Round rest: pause before the next full pass so the
                 # background loop stays out of the model channel for most of
