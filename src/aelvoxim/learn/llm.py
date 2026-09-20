@@ -28,7 +28,10 @@ _log = logging.getLogger("aelvoxim.learn.llm")
 # process and never pass through this gate (they are isolated by process).
 import threading as _threading
 _BG_LLM_SEM = _threading.Semaphore(1)
-_BG_LLM_TIMEOUT = 15  # seconds — background calls give up fast; chat must not wait
+# Seconds a background call may take before the gate abandons it. A reasoning
+# model needs far more than the original 15s to emit visible content (measured
+# 17-90s on production prompts), so 15s silently dropped every call.
+_BG_LLM_TIMEOUT = int(os.environ.get("AELVOXIM_BG_LLM_TIMEOUT", "180"))
 
 def bg_llm_call(fn, *args, **kwargs):
     """Run a background LLM call under the global concurrency gate.
@@ -649,7 +652,21 @@ def _call_openai_compat(
     if not choices:
         raise LLMError("API returned empty choices")
 
-    return choices[0].get("message", {}).get("content", "")
+    content = choices[0].get("message", {}).get("content", "")
+    if not content:
+        # A reasoning model (e.g. deepseek-v4-flash) spends the completion budget
+        # on reasoning_content first. With too small a max_tokens the visible
+        # content comes back empty and callers silently read it as "no content"
+        # — the learner produced nothing for days this way (2026-09-19).
+        _usage = result.get("usage") or {}
+        _rt = (_usage.get("completion_tokens_details") or {}).get("reasoning_tokens")
+        _log.warning(
+            "empty content: %s/%s finish_reason=%s reasoning_tokens=%s completion_tokens=%s max_tokens=%s",
+            getattr(model, "provider", "?"), getattr(model, "name", "?"),
+            choices[0].get("finish_reason"), _rt,
+            _usage.get("completion_tokens"), max_tokens,
+        )
+    return content
 
 
 def _call_anthropic(

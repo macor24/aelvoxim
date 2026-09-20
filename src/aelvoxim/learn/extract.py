@@ -11,6 +11,7 @@ All functions are pure — no side effects, no storage writes.
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -21,6 +22,12 @@ from ..utils import read_json, LLM_CONFIG_FILE
 
 import logging
 _log = logging.getLogger("aelvoxim.learn.extract")
+
+# Background LLM budget. The configured model is a reasoning model: it spends
+# the completion budget on hidden reasoning before emitting any visible content,
+# so asking for 1024 tokens returned empty content for every task and the
+# learner produced nothing (2026-09-19). Override with AELVOXIM_BG_LLM_MAX_TOKENS.
+_BG_MAX_TOKENS = int(os.environ.get("AELVOXIM_BG_LLM_MAX_TOKENS", "8192"))
 
 # ── Content quality checks ────────────────
 
@@ -247,7 +254,7 @@ def llm_distill(query: str, phase_name: str) -> Optional[str]:
             model=model,
             system_prompt="",
             user_message=prompt,
-            max_tokens=1024,
+            max_tokens=_BG_MAX_TOKENS,
         )
         if not text or "UNKNOWN_TOPIC" in text:
             return None
@@ -283,7 +290,7 @@ def llm_refine_search_with_hypothesis(query, phase_name, hypothesis, results):
             model=model,
             system_prompt="",
             user_message=prompt,
-            max_tokens=1024,
+            max_tokens=_BG_MAX_TOKENS,
         )
         if not text:
             return None
@@ -314,7 +321,7 @@ def llm_refine_search(query: str, phase_name: str, results: list) -> Optional[st
             model=model,
             system_prompt="",
             user_message=prompt,
-            max_tokens=1024,
+            max_tokens=_BG_MAX_TOKENS,
         )
         if not text:
             return None
