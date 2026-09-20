@@ -9,7 +9,7 @@ Usage: called at the start of _cognition_tick() before creating instances.
 from __future__ import annotations
 
 import time
-from typing import Any, Optional
+from typing import Any
 
 _SM_CACHE_TTL = 300.0  # 5 minutes
 _POOL_CACHE_TTL = 300.0

@@ -10,13 +10,11 @@ from __future__ import annotations
 import logging
 import json
 import threading
-import time
-from datetime import datetime, timedelta
 from typing import Optional
 
 _log = logging.getLogger("aelvoxim.proactive.engine")
 
-from ..storage.db import fetch_dict, execute, use_pg
+from ..storage.db import use_pg
 
 class ProactiveEngine:
     """Background engine that pushes proactive messages to users."""

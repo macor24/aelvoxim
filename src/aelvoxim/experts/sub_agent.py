@@ -21,7 +21,10 @@ import subprocess
 import sys
 import threading
 import tempfile
-from typing import Any, Dict, List, Optional, Set, Tuple, Type
+from typing import List, Optional, Type
+
+import logging
+_log = logging.getLogger("aelvoxim.experts.sub_agent")
 
 from .base import BaseExpert, ExpertInput, ExpertOutput
 
@@ -293,7 +296,7 @@ class SubAgentManager:
         except json.JSONDecodeError as e:
             return ExpertOutput(
                 expert_name=class_name,
-                opinion=f"Subprocess output was not valid JSON.",
+                opinion="Subprocess output was not valid JSON.",
                 confidence=0.0,
                 error=f"json_decode: {e}",
             )

@@ -10,13 +10,11 @@ All functions are pure — no side effects, no storage writes.
 
 from __future__ import annotations
 
-import json
 import os
 import re
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional, Tuple
 
-from .search import search as _search, search_with_variants
+from .search import search_with_variants
 from ..utils import read_json, LLM_CONFIG_FILE
 
 

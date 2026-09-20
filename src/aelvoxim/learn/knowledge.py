@@ -27,7 +27,7 @@ except ImportError:
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 _log = logging.getLogger("aelvoxim.knowledge")
 
@@ -813,7 +813,6 @@ class KnowledgeBase:
             # Conflict detection: find active entries with same topic but opposite sentiment
             try:
                 conflicts = []
-                title = entry.get("title", "").lower()
                 content = entry.get("content", "") or entry.get("summary", "")
                 positive_kw = ["优势", "好处", "有效", "提高", "增长", "Success", "正确", "推荐", "支持", "促进"]
                 negative_kw = ["风险", "问题", "缺陷", "限制", "不足", "Failure", "Error", "反对", "危害", "降低"]
@@ -1035,6 +1034,7 @@ class KnowledgeBase:
         Returns:
             True if feedback was recorded.
         """
+        from ..utils import METACORE_DIR as _kb_dir
         feedback_path = _kb_dir / "knowledge" / "feedback.json"
         feedback: List[Dict] = []
         if feedback_path.exists():
@@ -1724,7 +1724,6 @@ def periodic_review() -> dict:
     if not _acquire_review_lock():
         return {"skipped": True, "reason": "During cooldown, skip"}
 
-    from aelvoxim.learn.knowledge import KnowledgeBase
 
     index = _read_index()
     now = datetime.now()
@@ -1803,7 +1802,7 @@ def periodic_review() -> dict:
                 flagged_item["reasons"] = reasons
                 details.append(flagged_item)
 
-        except Exception as e:
+        except Exception:
             errors += 1
             continue
 

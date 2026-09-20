@@ -15,8 +15,7 @@ from __future__ import annotations
 import json
 import time
 import sqlite3
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
 
 def _get_entities(db) -> List[Dict[str, Any]]:
@@ -162,7 +161,6 @@ def run_consolidation() -> Dict[str, Any]:
 
 
 if __name__ == "__main__":
-    import tempfile
     # Test with in-memory database
     db = sqlite3.connect(":memory:")
     db.execute("""
@@ -177,19 +175,19 @@ if __name__ == "__main__":
         db.execute(
             "INSERT INTO entities (id, value, attributes) VALUES (?, ?, ?)",
             (f"entity:welvoket_{i}", f"Welvoket AGI v{i+1}",
-             json.dumps({"tags": f"test,ai", "confidence": 0.5 + i * 0.2,
+             json.dumps({"tags": "test,ai", "confidence": 0.5 + i * 0.2,
                          "source_event": f"chat_{i}"}))
         )
     db.commit()
 
     result = consolidate_entities(db)
-    print(f"=== Consolidation test ===")
+    print("=== Consolidation test ===")
     print(f"  Groups found: {result['groups_found']}")
     print(f"  Merged count: {result['merged_count']}")
 
     # Verify
     rows = db.execute("SELECT id, attributes FROM entities ORDER BY id").fetchall()
-    print(f"\n  Entities after merge:")
+    print("\n  Entities after merge:")
     for r in rows:
         attrs = json.loads(r[1])
         print(f"    {r[0]}: superseded={attrs.get('_superseded', False)}, "

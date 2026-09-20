@@ -149,7 +149,6 @@ class IntentParser:
     @staticmethod
     def _detect_task_type(sub_query: str) -> str:
         """Classify a sub-query as code / analysis / query."""
-        words = set(sub_query.lower().split())
         # Count keyword overlap
         code_score = sum(1 for k in _CODE_KEYWORDS if k in sub_query)
         analysis_score = sum(1 for k in _ANALYSIS_KEYWORDS if k in sub_query)

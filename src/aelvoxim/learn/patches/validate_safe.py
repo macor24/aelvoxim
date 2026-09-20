@@ -40,7 +40,6 @@ def patch_execute_and_validate():
     Replaces the ENTIRE function with a corrected version that uses
     safe_is_validated() instead of the inline ternary expression.
     """
-    import sys
     import os
     
     # Read the original file
@@ -52,7 +51,6 @@ def patch_execute_and_validate():
         return False
     
     import ast
-    import textwrap
     
     try:
         with open(validate_path, "r", encoding="utf-8") as f:

@@ -13,11 +13,10 @@ Data stored in ~/.metacore/query_tracker/<date>.jsonl
 from __future__ import annotations
 
 import json
-import os
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
 from ..utils import METACORE_DIR
 

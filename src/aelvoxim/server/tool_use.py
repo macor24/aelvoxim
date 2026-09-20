@@ -20,16 +20,14 @@ Default allowed: ~/, /tmp/ always.
 """
 from __future__ import annotations
 
-import io
 import json
 import logging
 import os
 import re
 import subprocess
 import sys
-import time
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional
 
 log = logging.getLogger("aelvoxim.tool_use")
 
@@ -139,7 +137,6 @@ def _add_allowed(path: str):
 
 def _is_allowed(path: Path) -> bool:
     """Check if a resolved path is within any allowed directory."""
-    p_str = str(path.resolve())
     # Check default always-allowed directories
     for d in _DEFAULT_ALLOWED:
         try:
@@ -413,7 +410,6 @@ def execute_command(
     if os.environ.get("AELVOXIM_DISABLE_CODE_EXEC", "0") == "1":
         return {"success": False, "error": "Code execution is disabled (AELVOXIM_DISABLE_CODE_EXEC=1)"}
     import subprocess as _sp
-    import shlex as _shlex
 
     timeout = min(timeout, 120)
     cmd = [command]
@@ -530,7 +526,7 @@ def execute_tool_calls(text: str) -> str:
                     import re as _p_re
                     _m = _p_re.match(r'^([A-Za-z]):\\\\(.*)', _path)
                     if _m:
-                        _path = "/mnt/{}/{}{}".format(
+                        _path = "/mnt/{}/{}".format(
                             _m.group(1).lower(),
                             _m.group(2).replace("\\", "/"),
                         )

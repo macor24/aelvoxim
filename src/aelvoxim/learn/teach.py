@@ -22,12 +22,10 @@ Integration:
 """
 from __future__ import annotations
 
-import json
-import random
 import re
 from typing import Any, Callable, Dict, List, Optional
 
-from .presets import produce_knowledge_from_preset, get_presets, get_preset_titles
+from .presets import produce_knowledge_from_preset, get_presets
 
 # ── Confidence constants ──
 TEACH_CONFIDENCE_CAP = 0.6
@@ -58,7 +56,6 @@ KEYWORD_TAG_MAP: Dict[str, List[str]] = {
     "git": ["devops", "vcs"],
     "linux": ["os", "devops"],
     "aws": ["cloud", "aws"],
-    "docker": ["container", "devops"],
     "kubernetes": ["container", "k8s", "devops"],
     "grpc": ["api", "rpc"],
     "graphql": ["api", "graphql"],

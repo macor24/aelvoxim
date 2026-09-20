@@ -12,11 +12,9 @@ Zero LLM calls, pure rules + regex matching.
 from __future__ import annotations
 
 import json
-import re
 import time
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from ..utils import METACORE_DIR
 

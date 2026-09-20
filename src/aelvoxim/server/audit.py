@@ -12,7 +12,7 @@ import json
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 # Audit log directory
 _AUDIT_DIR = Path(os.environ.get("AELVOXIM_DATA_DIR", str(Path.home() / ".aelvoxim"))) / "audit"

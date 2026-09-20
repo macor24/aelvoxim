@@ -7,11 +7,10 @@ Pipeline: execute → validate → store → log
 from __future__ import annotations
 
 import re
-from typing import Callable, Optional
+from typing import Callable, Dict, Optional
 
-from .knowledge import KnowledgeBase
 from .execute import try_execute_task
-from .extract import extract_knowledge, is_valid_content, content_has_real_value, _bg_llm
+from .extract import extract_knowledge, content_has_real_value, _bg_llm
 from .patches.validate_safe import safe_is_validated
 
 
@@ -63,7 +62,6 @@ def execute_and_validate(
     Returns True if knowledge was produced and stored.
     """
     import time
-    from datetime import datetime
 
     # ── Safety check ──
     try:
@@ -319,7 +317,7 @@ def execute_and_validate(
 
     # Step 5: Store to pending quarantine (requires 5 practice verifications)
     summary = f"About '{task}' ({source_type}):\n{content[:120].strip()}..."
-    entry = KnowledgeBase.store_pending(
+    KnowledgeBase.store_pending(
         topic=topic,
         title=title,
         summary=summary,

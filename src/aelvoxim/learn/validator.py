@@ -20,12 +20,10 @@ Integration:
 from __future__ import annotations
 
 import json
-import os
 import re
 import time
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 
 # ── L1: Search Verifier ──────────────────────────────
@@ -647,8 +645,6 @@ class AutoValidator:
         start = time.time()
 
         # Extract topic from entry (needed for P0 search optimization)
-        topic = entry.get("topic", "")
-        title = entry.get("title", "")
 
         # Time decay
         knowledge_date = entry.get("_knowledge_date", "") or entry.get("knowledge_date", "")

@@ -7,7 +7,6 @@ Responsibility: discover new directions from KB, auto-discover from knowledge ba
 from __future__ import annotations
 
 import time
-from typing import Callable, Dict, Optional, Set
 
 
 def try_discover_new_directions(

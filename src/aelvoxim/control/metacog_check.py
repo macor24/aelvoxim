@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 log = logging.getLogger("aelvoxim.metacog")
 
@@ -118,7 +118,7 @@ def evaluate(
     if repeat_matches:
         issues.append({
             "type": "repetition",
-            "detail": f"检测到内容重复，同一句子出现了多次",
+            "detail": "检测到内容重复，同一句子出现了多次",
         })
         severity = _max_severity(severity, "SEVERE")
 

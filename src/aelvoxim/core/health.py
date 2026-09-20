@@ -16,8 +16,7 @@ import threading
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-from urllib.error import URLError
+from typing import Any, Dict, Optional
 from urllib.request import Request, urlopen
 
 from ..utils import METACORE_DIR
@@ -86,12 +85,11 @@ class Watchdog:
         while not self._stop.is_set():
             try:
                 self._tick()
-            except Exception as e:
+            except Exception:
                 _log.exception("health error")
             self._stop.wait(self._interval)
 
     def _tick(self, skip_self: bool = False):
-        now = time.time()
         for name, cfg in SERVICES.items():
             if skip_self and name == "api":
                 # Skip self-check during startup to avoid deadlock

@@ -17,7 +17,7 @@ Stored as confidence_metadata dict inside entity attributes JSON.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List
 
 
 # ── Weights ──
@@ -202,7 +202,6 @@ def spread_confidence(overall: float) -> float:
         return overall  # already clearly high
     # Middle band: spread from center (0.65)
     center = 0.65
-    spread = 0.15  # how far to spread
     if overall <= center:
         # Pull toward 0.50
         ratio = (overall - 0.50) / (center - 0.50) if center > 0.50 else 0

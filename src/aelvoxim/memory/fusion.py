@@ -15,9 +15,9 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Set, Tuple
 
-from .entry import MemoryEntry, ALL_LAYERS
+from .entry import MemoryEntry
 from .layers import WorkingMemory, EpisodicMemory, SemanticMemory, ProceduralMemory
 
 
@@ -300,7 +300,7 @@ class MemoryFusion:
 
     def store(self, entry: MemoryEntry) -> MemoryEntry:
         """Store entry to the appropriate layer (compat with old callers) and update index incrementally."""
-        from ..memory import _determine_layer, _store_to_fusion
+        from ..memory import _determine_layer
         layer = _determine_layer(entry)
         target = self.get_layer(layer)
         if target:

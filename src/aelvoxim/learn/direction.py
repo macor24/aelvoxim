@@ -9,15 +9,12 @@ from __future__ import annotations
 import json
 import logging
 import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from ..utils import METACORE_DIR, ensure_dir
-from .knowledge import KnowledgeBase
 
-import logging
 _log = logging.getLogger("aelvoxim.learn.direction")
 
 # ── Data paths ──

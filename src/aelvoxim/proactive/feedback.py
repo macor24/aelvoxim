@@ -6,7 +6,6 @@ Tracks whether users respond to proactive pushes and adjusts strategy.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
 
 from ..storage.db import execute, fetch_one, fetch_dict
 

@@ -15,13 +15,11 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Header, Query
+from fastapi import APIRouter, Depends, HTTPException, Header
 
-from ..api import submit_task, get_task_status, memory_store, memory_read, memory_search, memory_timeline
-from ..api import get_config, set_config, list_config
-from .auth import find_user, check_quota, increment_usage, PLANS, create_user, _all_users, ADMIN_KEY
+from .auth import find_user, check_quota
 
 _log = logging.getLogger("aelvoxim.routes")
 _API_KEY_PATTERN = re.compile(r"sk-[a-zA-Z0-9.*]{3,}")

@@ -11,10 +11,7 @@ Standalone version, no external dependencies.
 
 from __future__ import annotations
 
-import json
-import time
-from dataclasses import dataclass, field, asdict
-from datetime import datetime
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -106,7 +103,7 @@ class SafetyShield:
         # M5: No new rules allowed
         if action in ("create_safety_rule", "new_rule"):
             if self.level >= 5:
-                return f"[M5] new rule creation blocked"
+                return "[M5] new rule creation blocked"
 
         # M6: Limit modifications per evolution cycle
         if action == "modify":

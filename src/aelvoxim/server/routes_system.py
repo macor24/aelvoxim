@@ -46,16 +46,15 @@ Routes:
 from __future__ import annotations
 
 import json
-import os
-import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
 from urllib.error import URLError
-from urllib.request import Request as UrlLibRequest, urlopen
+from urllib.request import urlopen
 
-from fastapi import APIRouter, Depends, HTTPException, Header, Query, Request
-from pathlib import Path
+import logging
+_log = logging.getLogger("aelvoxim.server.routes_system")
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 PLANS = {
     "community":  {"tasks_per_month": 1000,   "max_directions": 1,   "max_kb_entries": 500,    "max_api_keys": 1,   "memory_mb": 10},
@@ -142,11 +141,10 @@ async def register(body: dict):
     New users automatically get a 30-day full-feature trial.
     """
     from .auth import create_user, hash_password, find_by_email, generate_api_key, TRIAL_DAYS
-    from .license import create_trial_license, check_trial_expiry
+    from .license import create_trial_license
     email = body.get("email", "").strip().lower()
     password = body.get("password", "")
     username = body.get("username", "")
-    plan = body.get("plan", "community")
     if not email or not password:
         raise HTTPException(400, detail="email and password are required")
     if find_by_email(email):
@@ -165,7 +163,7 @@ async def register(body: dict):
         "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
     try:
-        created = create_user(user)
+        create_user(user)
     except Exception as e:
         from .audit import log as _audit_log
         _audit_log("user.register", user=email, status="failure", detail={"reason": str(e)})
@@ -379,7 +377,7 @@ def _health_response():
         ec = db.execute("SELECT COUNT(*) FROM entities").fetchone()[0]
         result["dependencies"]["sqlite"] = {"status": "ok", "entities": ec}
         result["dependencies"]["memory_layers"] = get_layer_stats()
-    except Exception as e:
+    except Exception:
         result["dependencies"]["sqlite"] = {"status": "error", "detail": "db_error"}
         result["status"] = "degraded"
     # SentriKit removed — it is an independent project with its own API.
@@ -439,7 +437,7 @@ async def get_logs(source: str = Query("learner"), lines: int = Query(50), _user
         text = path.read_text(errors="replace")
         all_lines = text.strip().split("\n")
         return {"lines": all_lines[-lines:]}
-    except Exception as e:
+    except Exception:
         raise HTTPException(500, detail="Failed to read log")
 
 # ── Ethics endpoints ──
@@ -448,7 +446,6 @@ async def get_logs(source: str = Query("learner"), lines: int = Query(50), _user
 async def ethics_update(body: dict, admin: dict = Depends(_require_admin)):
     """Enable or disable an ethics gate. Admin only."""
     from ..core.metacog_monitor import set_ethics_gate, get_ethics_gate
-    from ..server.auth import find_by_email
     gate = body.get("gate", "")
     enabled = body.get("enabled", True)
     reason = body.get("reason", "")
@@ -571,12 +568,10 @@ async def webhook_test_delivery(body: dict, current_user: dict = Depends(_verify
 @router.post("/gateway/execute")
 async def gateway_execute(body: dict, user: dict = Depends(_verify_key)):
     """Execute a Desktop Gateway operation."""
-    action = body.get("action", "")
-    target = body.get("target", "")
     plan = body.get("plan", "")
     try:
         req = Request(
-            f"http://127.0.0.1:9705/api/execute-plan" if plan else f"http://127.0.0.1:9705/api/execute",
+            "http://127.0.0.1:9705/api/execute-plan" if plan else "http://127.0.0.1:9705/api/execute",
             data=json.dumps(body).encode(),
             headers={"Content-Type": "application/json"},
             method="POST",
@@ -647,8 +642,6 @@ async def migrate_users(body: dict, admin: dict = Depends(_require_admin)):
     if not use_pg():
         raise HTTPException(400, detail="PostgreSQL not available")
     from ..utils import DATA_DIR
-    from .auth import hash_password
-    import glob as _glob
     users_dir = DATA_DIR / "users"
     migrated = 0
     errors = []
@@ -793,7 +786,6 @@ async def admin_overview(admin: dict = Depends(_require_admin)):
     except Exception:
         _log.exception("routes_system error")
 
-    import json as _json
     return _json.loads(_json.dumps(data, default=str))
 
 @router.get("/admin/data")
@@ -895,7 +887,7 @@ async def admin_learner_status(user: dict = Depends(_require_admin)):
             "direction_count": len(cfg),
             "updated_at": st.get("updated_at", ""),
         }
-    except Exception as e:
+    except Exception:
         raise HTTPException(500, detail="Failed to read log")
 
 @router.post("/admin/learner/start")
@@ -911,7 +903,7 @@ async def admin_learner_start(user: dict = Depends(_require_admin)):
         return {"success": True, "message": "Learning loop started"}
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         raise HTTPException(500, detail="Failed to read log")
 
 @router.post("/admin/learner/stop")
@@ -921,7 +913,7 @@ async def admin_learner_stop(user: dict = Depends(_require_admin)):
         from ..learn.learner import get_learner
         get_learner().stop()
         return {"success": True, "message": "Learning loop stopped"}
-    except Exception as e:
+    except Exception:
         raise HTTPException(500, detail="Failed to read log")
 
 @router.get("/admin/skill-timeline")
@@ -974,7 +966,7 @@ async def admin_skill_timeline(months: int = 6, user: dict = Depends(_require_ad
 @router.post("/admin/learn-directory")
 async def learn_directory(body: dict, admin: dict = Depends(_require_admin)):
     """Configure and trigger a knowledge directory scan."""
-    from ..learn.directory_learner import scan_directory, save_config, load_config, get_config
+    from ..learn.directory_learner import scan_directory, save_config, get_config
 
     path = body.get("path", "").strip()
     action = body.get("action", "scan")  # scan, config, status

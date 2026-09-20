@@ -10,10 +10,9 @@ This module provides a standalone ReviewScheduler for external use.
 from __future__ import annotations
 
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-from ..utils import METACORE_DIR, read_json
+from ..utils import METACORE_DIR
 
 
 class ReviewScheduler:

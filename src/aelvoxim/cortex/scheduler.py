@@ -11,12 +11,10 @@ No HTTP calls — runs inside 9701 process, calls functions directly.
 """
 from __future__ import annotations
 
-import json
 import logging
-import os
 import threading
 import time
-from typing import Any, Dict, Optional
+from typing import Optional
 
 log = logging.getLogger("aelvoxim.cortex.scheduler")
 

@@ -6,8 +6,8 @@ Usage:
     python -m metacore status
 """
 
-import sys
 import argparse
+import json
 
 from .utils.i18n import set_lang, _
 

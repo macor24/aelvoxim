@@ -8,7 +8,7 @@ with graceful fallback to rule-based template generation.
 from __future__ import annotations
 
 import random
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional
 
 from .base import BaseExpert, ExpertInput, ExpertOutput, register
 

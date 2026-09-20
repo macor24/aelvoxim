@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 import threading
 import time
-from typing import Any, Optional
+from typing import Optional
 
 # ── Lazy psycopg2 import (try binary first, then source) ──
 _PSYCOPG2: any = None  # type: ignore[valid-type]
@@ -507,7 +507,7 @@ def save_session_to_pg(session: dict) -> None:
         """, (session["id"], _uid, _title, len(session.get("messages", []))))
         conn.commit()
         conn.close()
-    except Exception as e:
+    except Exception:
         pass  # logged above
 
 
@@ -551,7 +551,7 @@ def save_message_to_pg(session_id: str, role: str, content: str, user_id: str = 
         conn.close()
     except PermissionError:
         raise
-    except Exception as e:
+    except Exception:
         pass  # logged above
 
 
@@ -655,7 +655,7 @@ def get_sessions_from_pg(user_id: str = "", email: str = "", limit: int = 50) ->
         } for r in cur.fetchall()]
         conn.close()
         return rows
-    except Exception as e:
+    except Exception:
         pass  # logged above
         return []
 
@@ -678,7 +678,7 @@ def get_messages_from_pg(session_id: str) -> list[dict]:
         } for r in cur.fetchall()]
         conn.close()
         return rows
-    except Exception as e:
+    except Exception:
         pass  # logged above
         return []
 
@@ -709,7 +709,7 @@ def delete_session_from_pg(session_id: str, user_id: str = "") -> bool:
         return deleted
     except PermissionError:
         raise
-    except Exception as e:
+    except Exception:
         pass  # logged above
         return False
 

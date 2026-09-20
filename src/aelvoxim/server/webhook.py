@@ -18,10 +18,10 @@ import time
 import urllib.request
 import urllib.error
 from datetime import datetime
-from typing import Any, Callable, Optional
+from typing import Optional
 from uuid import uuid4
 
-from ..storage.db import execute, fetch_dict, fetch_one, use_pg
+from ..storage.db import execute, fetch_dict, use_pg
 
 _log = logging.getLogger("aelvoxim.webhook")
 

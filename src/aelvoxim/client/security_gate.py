@@ -4,8 +4,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timedelta
-from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict
 
 from ..utils import DATA_DIR
 

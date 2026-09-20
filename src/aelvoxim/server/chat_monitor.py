@@ -11,7 +11,6 @@ Zero external dependencies. Zero LLM calls. Does NOT import any old package code
 Data stored in: ~/.metacore/chat_monitor/YYYY-MM-DD.jsonl
 """
 import json
-import os
 import re
 import time
 from datetime import datetime, timedelta

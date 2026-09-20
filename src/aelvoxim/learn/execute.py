@@ -189,7 +189,6 @@ def try_execute_task(topic: str, task: str) -> Optional[str]:
     Returns stdout content on success, None on failure (caller falls back
     to search + LLM extraction). Never executes arbitrary code.
     """
-    task_lower = task.lower()
 
     # Only execute tasks that match a preset template
     tpl = _get_template_for_task(task)

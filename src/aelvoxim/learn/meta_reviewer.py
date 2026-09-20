@@ -62,7 +62,7 @@ class MetaReviewer:
                     "kb_entry_count": 0, "learner_cycles": 0,
                     "execution_health": {}}
         try:
-            from ..learn.knowledge import KnowledgeBase, get_all_active_cached
+            from ..learn.knowledge import get_all_active_cached
             # get_all_active_cached is a module-level function — calling it
             # as KnowledgeBase.get_all_active_cached() raised AttributeError
             # that the except below swallowed, so kb_entry_count was always 0.
@@ -70,7 +70,7 @@ class MetaReviewer:
         except Exception:
             pass
         try:
-            from ..utils import METACORE_DIR, LEARNER_STATUS
+            from ..utils import LEARNER_STATUS
             if LEARNER_STATUS.exists():
                 st = json.loads(LEARNER_STATUS.read_text())
                 metrics["learner_cycles"] = st.get("cycles", 0)

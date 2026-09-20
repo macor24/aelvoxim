@@ -6,7 +6,7 @@ events, and confidence metadata for the user's query.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from .base import BaseExpert, ExpertInput, ExpertOutput, register
 

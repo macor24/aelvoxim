@@ -23,7 +23,7 @@ import urllib.parse
 import urllib.request
 import urllib.error
 import random
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 import logging
 _log = logging.getLogger("aelvoxim.learn.search")

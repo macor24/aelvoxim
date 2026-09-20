@@ -10,7 +10,7 @@ Routes:
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from .routes import _verify_key, _require_admin
+from .routes import _require_admin
 
 router = APIRouter()
 

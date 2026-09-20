@@ -6,8 +6,6 @@ Decides what type of proactive push to send and generates content.
 
 from __future__ import annotations
 
-from typing import Any, Optional
-from datetime import datetime
 
 from ..storage.db import fetch_dict
 

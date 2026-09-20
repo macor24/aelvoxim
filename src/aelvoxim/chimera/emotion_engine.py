@@ -13,8 +13,7 @@ based on:
 
 from __future__ import annotations
 
-import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional
 
 from .models import EmotionProfile, TTSVoiceParams, Expression
 

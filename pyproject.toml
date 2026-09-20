@@ -29,7 +29,19 @@ dependencies = [
     "uvicorn[standard]>=0.52.0",
 ]
 
+[tool.ruff]
+# 显式声明规则集：ruff 的默认集随版本扩张（0.16 默认已含 UP/BLE/S/DTZ/SIM/C4/RUF…），
+# 不声明就会让 CI 门禁随依赖漂移而变红/变绿（master 已因此红了一周）。
+# 这里只保留【正确性】规则：F(pyflakes: 未定义名/未用导入/未用变量/重复定义) + E9(语法/IO)。
+# 风格迁移(pyupgrade UP006 List→list 等 1600+ 处)与 pycodestyle 风格类(E4/E7)属独立工程，
+# 不在本门禁内 —— 需要时另开一次批量整改，不要混进功能提交。
+[tool.ruff.lint]
+select = ["E9", "F"]
+
 [tool.ruff.lint.per-file-ignores]
+# Package __init__ files are the package API surface: a name may be imported only
+# to be re-exported, so "unused import" is not actionable there.
+"**/__init__.py" = ["F401"]
 # Admin panel is a defensive aggregation script: it probes many subsystems
 # and intentionally swallows per-subsystem failures (BLE001/S110) and parses
 # naive timestamps (DTZ007) from status files.

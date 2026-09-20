@@ -8,8 +8,6 @@ All functions are pure — learner.py calls these with its own state.
 """
 from __future__ import annotations
 
-import json
-import os
 import re
 import urllib.request
 import urllib.error
@@ -286,7 +284,6 @@ def generate_simulated_tasks(
         if not t or t in seen:
             continue
         conf = e.get("confidence", 0)
-        vl = e.get("value_level", 0)
         if conf < 0.5:
             candidates[t] = candidates.get(t, 0) + (1 - conf)
     # Sort by gap severity

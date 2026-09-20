@@ -34,7 +34,6 @@ async def llm_chat(
     """
     from ..learn.extract import call_llm_if_available
     from ..learn.llm import ModelConfig
-    from .service_chat import chat_pipeline
 
     llm = call_llm_if_available()
     if not llm:
@@ -76,7 +75,7 @@ def _safe_chat_handler(call_fn, mc, messages, user, temperature, max_tokens,
                              skip_experts=skip_experts, skip_memory=skip_memory, mode=mode)
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         _log.exception("chat_pipeline failed")
         return {"blocked": True, "reason": "Internal processing error"}
 
@@ -100,7 +99,7 @@ async def test_llm(body: dict, user: dict = Depends(_verify_key)):
             )
             provider = model.get("provider", "deepseek") if isinstance(model, dict) else "configured"
             return {"status": "ok", "response": (text or "")[:100], "provider": provider}
-        except Exception as e:
+        except Exception:
             raise HTTPException(502, detail="LLM call failed")
 
     api_key = body.get("api_key", "").strip()
@@ -169,7 +168,8 @@ async def _handle_orchestrate(request: dict) -> dict:
         raise HTTPException(400, detail="missing messages")
 
     result = chat_pipeline(call_fn, mc, messages, user, temperature, max_tokens,
-                           skip_experts=False, skip_memory=False, mode=mode)
+                           skip_experts=False, skip_memory=False, mode=mode,
+                           session_id=session_id)
 
     if result.get("blocked"):
         raise HTTPException(403, detail=str(result.get("reason", "Blocked by safety rules")))
@@ -294,8 +294,6 @@ async def llm_chat_stream(
     _, model = llm
     mc = model if isinstance(model, ModelConfig) else ModelConfig()
     messages = request.get("messages", [])
-    temperature = request.get("temperature", 0.7)
-    max_tokens = request.get("max_tokens", 4096)
     mode = request.get("mode", "simple")
     # The SPA sends session_id; it keeps the cross-session recall block from
     # re-injecting the conversation the caller is already in.
@@ -610,10 +608,14 @@ async def llm_chat_stream(
     except LLMError as _llm_err:
         # Surface a readable message instead of a 500 or a silent empty
         # stream. The generator below turns this into an SSE token.
+        # NOTE: the except binding is deleted when the block exits, so capture
+        # it now — referencing _llm_err inside the nested generator raised
+        # NameError before (ruff F821, 2026-09-20).
+        _llm_err_msg = str(_llm_err)
         _log.error("LLM stream init failed: %s", _llm_err)
 
         def _err_stream():
-            yield f"data: {json.dumps({'token': f'（模型暂时不可用：{_llm_err}）'})}\n\n"
+            yield f"data: {json.dumps({'token': f'（模型暂时不可用：{_llm_err_msg}）'})}\n\n"
             yield "data: [DONE]\n\n"
         stream = _err_stream()
 
@@ -755,7 +757,7 @@ async def llm_chat_stream(
             _log.error("LLM stream mid-stream error: %s", _llm_err)
             yield f"data: {json.dumps({'token': f'（模型响应中断：{_llm_err}）'})}\n\n"
             yield "data: [DONE]\n\n"
-        except Exception as e:
+        except Exception:
             _log.exception("routes_chat stream error")  # log real error
             yield f"data: {json.dumps({'error': 'Internal error'})}\n\n"
         # Save assistant response after stream finishes (best-effort)

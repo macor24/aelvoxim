@@ -8,15 +8,12 @@ from __future__ import annotations
 
 import json
 import os
-import signal
-import sys
 import time
 import threading
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
-from ..utils import METACORE_DIR, ensure_dir, read_json, write_json, LLM_CONFIG_FILE
+from ..utils import METACORE_DIR, ensure_dir
 
 _RATE_LIMIT_MAX = 5  # Max cognition ticks per 24 hours (per direction)
 _RATE_LIMIT_MIN_INTERVAL = 300  # Min seconds between cognition ticks per direction (5 min — was 60s; fewer, slower ticks)
@@ -41,13 +38,12 @@ TASK_DECOMPOSE_CATEGORIES = [
 ]
 
 # ── Imports from split modules ──
-from .direction import LearningDirection, DirectionManager, load_config_from_file
+from .direction import LearningDirection, DirectionManager
 from .knowledge import KnowledgeBase
 from .search import search as _search
-from .decompose import decompose_direction, detect_lang
+from .decompose import decompose_direction
 from .validate import execute_and_validate
 from .discover import suggest_directions_from_knowledge
-from .extract import call_llm_if_available as _call_llm_if_available
 from .report import log as _report_log, update_daily_brain_report as _update_daily_report
 from .goals import search_and_learn as _goals_search_and_learn
 from .goals import set_active_goals as _goals_set_active
@@ -57,8 +53,8 @@ from .cleanup import cleanup_knowledge_base as _kb_cleanup
 from .discovery import try_discover_new_directions as _try_discover
 from .discovery import auto_add_direction as _auto_add
 from .scheduler import submit_verification_task, schedule_review, check_reviews
-from .scheduler import check_pending_promotions, llm_verify_practice
-from .meta_cog import analyze_triggers, analyze_with_hypotheses
+from .scheduler import check_pending_promotions
+from .meta_cog import analyze_with_hypotheses
 from .meta_cog import execute_reflection, verify_repair, update_selfmodel_from_repair
 
 import logging
@@ -219,9 +215,9 @@ class Learner:
 
         if self._llm_status == "degraded":
             if self._search_mock:
-                self._log(f"  📡 LLM degraded + search mock → teach mode")
+                self._log("  📡 LLM degraded + search mock → teach mode")
             else:
-                self._log(f"  📡 LLM degraded, search available → rule-based fallback")
+                self._log("  📡 LLM degraded, search available → rule-based fallback")
 
         return self._llm_status
 
@@ -569,7 +565,6 @@ class Learner:
             return True
         # ── Saturation estimate (v3): weighted validation quality + task completion + difficulty ──
         conf_avg = sum(e.get("confidence", 0.5) for e in entries) / max(len(entries), 1)
-        entry_ratio = min(direction.entries_created / 5.0, 1.0)
         # validation pass rate
         done_tasks = json.loads(direction.completed_tasks or "[]")
         total_tasks = len(done_tasks) + (len(json.loads(direction.task_queue or "[]")) if direction.task_queue and direction.task_queue != "[]" else 0)
@@ -637,7 +632,6 @@ class Learner:
             total = len(entries)
             if total == 0:
                 return
-            verified_high = sum(1 for e in entries if e.get("confidence", 0) >= 0.7)
         except Exception:
             _log.exception("loop error")
 
@@ -671,7 +665,7 @@ class Learner:
         try:
             from ..core.metacog_monitor import MetaCogMonitor
             from ..core.metacog import MetaCogTrigger
-            from ..core.selfmodel import SelfModel, CapabilityScore
+            from ..core.selfmodel import SelfModel
             from ..core.dgmh import DGOrchestrator as _DGOrch
             # Optional: patches module may not exist in all editions
             _cached_sm = None
@@ -1059,7 +1053,7 @@ class Learner:
             # 10. Curiosity-driven autonomous learning (every 15 cycles)
             try:
                 if getattr(self, '_curiosity_tick', 0) % 15 == 0:
-                    from ..server.service_chat import _pop_curiosity_topic, _get_recently_learned_topics
+                    from ..server.service_chat import _pop_curiosity_topic
                     _topic = _pop_curiosity_topic()
                     if _topic:
                         self._log(f"  🔍 Curiosity: Auto-learning about '{_topic}'")
@@ -1250,7 +1244,7 @@ class Learner:
                         self._log(f'  🗑️ Removed stale direction (cap) + soft-blacklisted (15min): {t}')
                     if stale:
                         self._dir_mgr.save()
-                        self._log(f'  💾 Direction config saved after cleanup')
+                        self._log('  💾 Direction config saved after cleanup')
 
                 # Check reviews
                 if check_reviews(self._directions, self._dir_mgr.save, self._log):
@@ -1301,7 +1295,7 @@ class Learner:
                         self._log(f'  🗑️ Removed stuck paused direction + blacklisted (1h): {t}')
                     if stale or stuck_paused:
                         self._dir_mgr.save()
-                        self._log(f'  💾 Direction config saved after cleanup')
+                        self._log('  💾 Direction config saved after cleanup')
 
                 # ── Archive high-saturation completed directions ──
                 if len(self._directions) >= 12:

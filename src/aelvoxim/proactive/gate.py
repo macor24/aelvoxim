@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from ..storage.db import fetch_one, execute
+from ..storage.db import execute
 
 
 PUSH_COOLDOWN_HOURS = {

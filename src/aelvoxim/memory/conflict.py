@@ -9,9 +9,8 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
-from .entry import MemoryEntry, LAYER_SEMANTIC, LAYER_EPISODIC
 from .fusion import MemoryFusion
 
 

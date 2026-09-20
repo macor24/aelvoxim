@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import time as _t
 from datetime import datetime
-from typing import Any, Dict, List, Optional
 
 
 def search_and_learn(directions: dict, log_func, search_rr: int = 0) -> int:
@@ -46,7 +45,6 @@ def search_and_learn(directions: dict, log_func, search_rr: int = 0) -> int:
     for r in results[:3]:
         title = (r.get("title") or "")[:80]
         snippet = (r.get("snippet") or "")[:200]
-        url = (r.get("url") or "")[:200]
         if not title.strip() or not snippet.strip():
             continue
         existing = KnowledgeBase.search(query=title[:30], min_confidence=0.3, limit=1)
@@ -78,7 +76,7 @@ def set_active_goals(existing_goals: list, log_func) -> list:
     - Max 3 active goals at once
     """
     try:
-        from ..core.selfmodel import SelfModel, CapabilityScore, Goal
+        from ..core.selfmodel import SelfModel, Goal
 
         sm = SelfModel()
         caps = sm._capabilities
@@ -168,7 +166,7 @@ def progress_goals(existing_goals: list, log_func) -> list:
     rotates to the next focus in _FOCUS_CYCLE.
     """
     try:
-        from ..core.selfmodel import SelfModel, Goal
+        from ..core.selfmodel import SelfModel
 
         existing = existing_goals
         if not existing:

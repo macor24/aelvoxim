@@ -16,7 +16,6 @@ from typing import Callable, Dict, List, Set
 
 from .knowledge import KnowledgeBase
 
-import logging
 _log = logging.getLogger("aelvoxim.learn.unknown_discovery")
 
 # ── English / Chinese stop lists ──
@@ -113,7 +112,6 @@ def _dedup_path() -> str:
     global _DEDUP_FILE
     if _DEDUP_FILE is None:
         try:
-            from pathlib import Path
             from ..utils import DATA_DIR
             _DEDUP_FILE = str(DATA_DIR / "unknown_dedup_cache.json")
         except Exception:

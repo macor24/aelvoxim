@@ -12,8 +12,7 @@ from __future__ import annotations
 
 import json
 import time
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
 from ..utils import METACORE_DIR
 
@@ -51,8 +50,7 @@ def _get_direction_metrics(learner) -> List[Dict]:
     try:
         from ..core.selfmodel import SelfModel
 
-        sm = SelfModel()
-        caps = sm._capabilities
+        SelfModel()
     except Exception:
         return []
 
@@ -172,7 +170,6 @@ def _decide_adjustments(metrics: List[Dict], learner,
 
     # Rule 6: If too many paused/completed, auto-add a fresh direction
     paused_count = len([d for d in learner._directions.values() if d.status == "paused"])
-    completed_count = len([d for d in learner._directions.values() if d.status == "completed"])
     if paused_count >= 3 and active_count < 3:
         # Skip directions with disable_auto_resume flag
         _skip_resume = {t for t, d in learner._directions.items()

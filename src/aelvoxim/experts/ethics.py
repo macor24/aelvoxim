@@ -8,7 +8,7 @@ Pure rule-based — local safety checks only.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from .base import BaseExpert, ExpertInput, ExpertOutput, register
 

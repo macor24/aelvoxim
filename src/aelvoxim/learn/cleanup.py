@@ -63,7 +63,6 @@ def cleanup_knowledge_base(log_func) -> None:
                 continue  # high-confidence entries (≥0.7) are whitelisted
             elif conf < 0.5 and age_days > 7:
                 # Auto-archive stale low-confidence entries (7 days → archive)
-                eid = e.get("id", "")
                 try:
                     e["_status"] = "archived"
                     e["_archived_reason"] = f"auto: low confidence ({conf:.2f}, {age_days}d old)"

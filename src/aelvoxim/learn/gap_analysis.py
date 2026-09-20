@@ -12,14 +12,11 @@ Outputs gap recommendations that the Learner can act on.
 """
 from __future__ import annotations
 
-import json
-import time
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
-from ..utils import METACORE_DIR
 
 
 import logging
@@ -146,7 +143,6 @@ def get_blind_spots_for_user(
         List of dicts: [{key, value, overall, label}, ...]
     """
     import json as _js, sqlite3 as _sq
-    from pathlib import Path
 
     if not db_path:
         from ..utils import METACORE_DIR as _md

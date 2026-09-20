@@ -7,7 +7,7 @@ import os
 import re
 import time as _time
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Callable
+from typing import List, Optional
 
 _log = logging.getLogger("aelvoxim.routes")
 
@@ -559,7 +559,7 @@ def inject_memory_context(user_msg: str, user: dict, extra_context: str) -> str:
 
 def inject_security_context(extra_context: str) -> str:
     try:
-        extra_context += f"\n[Security]\nLocal check: active\n"
+        extra_context += "\n[Security]\nLocal check: active\n"
     except Exception:
         _log.exception("service_chat error")
     return extra_context

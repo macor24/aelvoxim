@@ -13,9 +13,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import os
-import time
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -202,7 +199,7 @@ def scan_directory(
     Returns:
         dict with keys: scanned, new, skipped, errors, entries
     """
-    from ..storage.db import execute, fetch_dict, fetch_one, use_pg
+    from ..storage.db import fetch_dict, use_pg
 
     if not use_pg():
         return {"error": "PostgreSQL not available", "scanned": 0, "new": 0, "skipped": 0, "errors": 0}

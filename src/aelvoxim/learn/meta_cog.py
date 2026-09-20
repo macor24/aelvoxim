@@ -7,7 +7,7 @@ Responsibility: analyze triggers, execute reflection actions, verify repair effe
 from __future__ import annotations
 
 import time
-from typing import Any, Callable, Dict, Optional
+from typing import Callable, Optional
 
 import logging
 _log = logging.getLogger("aelvoxim.meta_cog")
@@ -200,7 +200,6 @@ def execute_reflection(
 
     # Verify any pending hypotheses
     try:
-        from dataclasses import asdict
         hypotheses_dicts = analysis.get("hypotheses", [])
         if hypotheses_dicts:
             from ..learn.hypothesis import Hypothesis, HypothesisVerifier

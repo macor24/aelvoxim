@@ -11,7 +11,7 @@ Pure rule-based, no LLM calls.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 from .base import BaseExpert, ExpertInput, ExpertOutput, register
 

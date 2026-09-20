@@ -8,10 +8,8 @@ Topic decomposition strategies:
 
 from __future__ import annotations
 
-import re
 from typing import Dict, List, Optional
 
-from .search import search as _search
 from .llm import bg_llm_call as _bg_llm
 
 

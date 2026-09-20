@@ -11,10 +11,9 @@ import json
 import os
 import re
 import time
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from dataclasses import dataclass
+from typing import Dict, List, Optional
 from urllib.request import Request, urlopen
-from urllib.error import URLError
 
 
 import logging
@@ -279,7 +278,6 @@ def call_llm_with_fallback(
 
 def _mask_api_key(text: str) -> str:
     """Mask API keys in error messages."""
-    import re
     return re.sub(r'(sk-[a-zA-Z0-9]{8})[a-zA-Z0-9]+', r'\1...', text)
 
 

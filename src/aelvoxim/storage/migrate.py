@@ -266,7 +266,7 @@ def migrate_sessions():
                     VALUES (%s, %s, %s)
                 """, (sid, m.get("role", "user"), m.get("content", "")))
                 msg_count += 1
-        except Exception as e:
+        except Exception:
             _log.exception("migrate error")
     print(f"  Sessions: {session_count}, Messages: {msg_count}")
 

@@ -7,10 +7,9 @@ Responsibility: schedule reviews (spaced repetition), pending entry promotion (L
 from __future__ import annotations
 
 import json
-import os
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Callable
 
 
 import logging

@@ -8,7 +8,7 @@ All thresholds read dynamically from calibration.json.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
@@ -275,10 +275,8 @@ def score_knowledge_entry(entry: KnowledgeProposal) -> "JudgeResult":
     4. Information density — code vs text ratio
     """
     from .calibration import get_calibration
-    jc = {}
     try:
-        cal = get_calibration()
-        jc = cal.get("judge", default={}) or {}
+        get_calibration()
     except Exception:
         pass  # non-critical, continue
 
@@ -327,7 +325,6 @@ def score_knowledge_entry(entry: KnowledgeProposal) -> "JudgeResult":
     final_score = weighted_sum / total_weight if total_weight > 0 else 0.0
     dims = [DimensionScore(name=k, score=v[0], weight=weights.get(k, 0.25), reason=v[1]) for k, v in scores.items()]
 
-    thresholds = {"S": 0.85, "A": 0.7, "B": 0.5, "C": 0.4}
     if final_score >= 0.85:
         grade = JudgeGrade.S
     elif final_score >= 0.7:

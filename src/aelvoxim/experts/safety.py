@@ -7,7 +7,7 @@ Auto-degrades gracefully when the local check cannot evaluate.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from .base import BaseExpert, ExpertInput, ExpertOutput, register
 

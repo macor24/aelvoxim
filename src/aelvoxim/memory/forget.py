@@ -9,10 +9,9 @@ curve decay in learner.py (which handles Belief decay).
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from datetime import datetime
+from typing import Dict
 
-from .entry import MemoryEntry, LAYER_WORKING, LAYER_EPISODIC, LAYER_SEMANTIC
 from .layers import WorkingMemory, EpisodicMemory, SemanticMemory
 
 

@@ -7,7 +7,6 @@ based on query_tracker history.
 
 from __future__ import annotations
 
-from typing import Any
 
 from ..storage.db import fetch_dict
 

@@ -16,9 +16,8 @@ from __future__ import annotations
 
 import json
 import sqlite3
-import threading
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List
 
 from ..utils import METACORE_DIR
 
@@ -66,7 +65,6 @@ def get_graph(user_id: str = "", limit: int = 50) -> Dict[str, list]:
     """
     db = _get_db()
     nodes: Dict[str, dict] = {}
-    links: List[dict] = []
     added: set = set()
 
     # 1. Entities with 'extracted' tag
@@ -219,7 +217,6 @@ def add_knowledge_entry(topic: str, title: str) -> None:
             (node_id, "knowledge", title[:200], '["extracted","knowledge_entry"]', json.dumps({"topic": topic}), now),
         )
         # Add relation: entry -> belongs_to -> topic
-        rel_id = f"rel:kb:{topic[:20]}:{title[:20]}"
         db.execute(
             "INSERT OR IGNORE INTO relations (source, target, rel_type, attributes, created_at) VALUES (?, ?, ?, ?, ?)",
             (node_id, topic_id, "belongs_to", json.dumps({"source": "learner"}), now),
@@ -259,7 +256,6 @@ def sync_all_entries_to_graph() -> dict:
                 (node_id, "knowledge", title[:200], '["extracted","knowledge_entry"]', json.dumps({"topic": topic}), now),
             )
             # relation
-            rel_id = f"rel:kb:{topic[:20]}:{title[:20]}"
             db.execute(
                 "INSERT OR IGNORE INTO relations (source, target, rel_type, attributes, created_at) VALUES (?, ?, ?, ?, ?)",
                 (node_id, topic_id, "belongs_to", json.dumps({"source": "kb_sync"}), now),

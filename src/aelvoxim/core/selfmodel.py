@@ -11,7 +11,7 @@ import json
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from ..utils import get_data_dir
 
@@ -191,7 +191,6 @@ class SelfModel:
 
     def update_capabilities_from_history(self, history: List[Dict]) -> None:
         from collections import defaultdict
-        from datetime import datetime
         tasks_by_type: Dict[str, List[Dict]] = defaultdict(list)
         
         # Also sync belief_health from BeliefPool
@@ -335,8 +334,6 @@ class SelfModel:
         # Checks recent KnowledgeBase entries for access count
         try:
             from ..learn.knowledge import KnowledgeBase
-            from datetime import datetime, timedelta
-            cutoff = datetime.now() - timedelta(days=30)
             all_entries = list(KnowledgeBase.get_all_active())
             if all_entries:
                 recent = [
@@ -526,10 +523,8 @@ class SelfModel:
 
     def dimension_scores(self) -> Dict[str, float]:
         """Return weighted scores for five dimensions (0-100)."""
-        rate = self._calc_overall_success_rate()
+        self._calc_overall_success_rate()
         # Extract dimension data from capabilities
-        caps = self._capabilities
-        total_tasks = sum(c.task_count for c in caps.values())
         # 5D base score: success rate + task count + decisions + calibration + risk
         dims = {
             "方向性": self._calc_direction_score(),
@@ -649,7 +644,6 @@ class SelfModel:
 
     def weekly_comparison(self) -> dict:
         """Compare this week vs last week. Returns structured diff."""
-        from collections import defaultdict
         now = datetime.now()
         recent_entries = []
         older_entries = []

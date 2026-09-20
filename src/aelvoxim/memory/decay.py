@@ -14,12 +14,12 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from datetime import datetime
+from typing import Any, Dict, List
 
 from .entry import (
     MemoryEntry, LAYER_WORKING, LAYER_EPISODIC,
-    LAYER_SEMANTIC, LAYER_PROCEDURAL, DEFAULT_TTL,
+    LAYER_SEMANTIC, LAYER_PROCEDURAL,
 )
 from .fusion import MemoryFusion
 
@@ -92,7 +92,6 @@ def wake_up(entry: MemoryEntry) -> MemoryEntry:
 
 def batch_decay(fusion: MemoryFusion, db_path: str = "") -> Dict[str, Any]:
     """Scan all layers, apply decay, return statistics."""
-    now = datetime.now()
     stats = {
         "scanned": 0, "decayed": 0, "dormant": 0,
         "archived": 0, "woken": 0,

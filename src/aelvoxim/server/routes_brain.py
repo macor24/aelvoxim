@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import List
 
 from fastapi import APIRouter, Query
 
@@ -17,7 +16,7 @@ router = APIRouter(tags=["brain"])
 
 _REPORTS_DIR = Path.home() / ".aelvoxim" / "reports" / "daily"
 
-from .routes import _verify_key, _require_admin
+from .routes import _verify_key
 from fastapi import Depends
 
 

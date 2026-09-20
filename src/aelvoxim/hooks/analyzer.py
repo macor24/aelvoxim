@@ -12,10 +12,8 @@ from __future__ import annotations
 
 import json
 import re
-import time
 from collections import Counter
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from ..utils import METACORE_DIR
 

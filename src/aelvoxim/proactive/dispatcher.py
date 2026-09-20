@@ -7,10 +7,6 @@ Currently supports: chat (through ChatAEL API).
 
 from __future__ import annotations
 
-import json
-import urllib.request
-import urllib.error
-from datetime import datetime
 
 from ..storage.db import execute, use_pg
 

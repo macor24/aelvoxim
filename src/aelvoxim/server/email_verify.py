@@ -12,8 +12,6 @@ from __future__ import annotations
 import json
 import secrets
 import time
-from pathlib import Path
-from typing import Optional
 
 from ..utils import DATA_DIR
 

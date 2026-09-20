@@ -11,12 +11,10 @@ Design principle: no LLM calls, pure rule-based validation.
 from __future__ import annotations
 
 import json
-import time
 import uuid
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import List
 
 from ..utils import METACORE_DIR
 
@@ -124,7 +122,7 @@ class HypothesisGenerator:
                     id=_new_id(),
                     triggered_by="stagnation",
                     cause=f"Direction '{target}' is too broad and covers multiple subtopics",
-                    prediction=f"Splitting into sub-directions will produce focused results",
+                    prediction="Splitting into sub-directions will produce focused results",
                     test_method="split_direction",
                     status="pending",
                     created_at=now,
@@ -136,7 +134,7 @@ class HypothesisGenerator:
                 id=_new_id(),
                 triggered_by="repeat_failure",
                 cause=f"Current search engine is ineffective for '{target}'",
-                prediction=f"Switching search engine will find better sources",
+                prediction="Switching search engine will find better sources",
                 test_method="switch_engine",
                 status="pending",
                 created_at=now,
@@ -146,7 +144,7 @@ class HypothesisGenerator:
                 id=_new_id(),
                 triggered_by="repeat_failure",
                 cause=f"Topic '{target}' is too complex for direct search",
-                prediction=f"Decomposing into subtopics before searching will improve results",
+                prediction="Decomposing into subtopics before searching will improve results",
                 test_method="decompose_first",
                 status="pending",
                 created_at=now,

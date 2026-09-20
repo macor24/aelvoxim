@@ -11,6 +11,9 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import logging
+_log = logging.getLogger("aelvoxim.hooks")
+
 from ..utils import METACORE_DIR
 
 # ── Outcome tracking ───────────────────────

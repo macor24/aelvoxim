@@ -13,16 +13,14 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
-from fastapi.responses import JSONResponse
 
 from .models import (
-    IntentRequest, IntentResponse, Expression, Action,
+    IntentResponse, Expression, Action,
     EmotionProfile, TTSVoiceParams, ActionStreamMessage,
 )
 from .intent_classifier import IntentClassifier
@@ -84,7 +82,6 @@ async def handle_intent(request: Dict[str, Any]) -> Dict[str, Any]:
     ```
     """
     intent_id = f"intent_{uuid.uuid4().hex[:12]}"
-    now = datetime.now().isoformat()
 
     # Parse request — support both flat and nested formats
     raw_content: Any = request.get("content")
@@ -113,7 +110,6 @@ async def handle_intent(request: Dict[str, Any]) -> Dict[str, Any]:
         if action:
             # Execute via Desktop Gateway (replaces legacy Serpent API)
             import urllib.request as _ur
-            import urllib.error as _ue
 
             _win_host = "127.0.0.1"
             try:
@@ -218,7 +214,6 @@ async def handle_intent_mock(request: Dict[str, Any]) -> Dict[str, Any]:
     """
     content: str = request.get("content", "")
     session_id: str = request.get("session_id", "")
-    language: str = request.get("language", "zh")
     intent_id = f"intent_{uuid.uuid4().hex[:12]}"
 
     # Simplified keyword → response mapping

@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import logging
 import time
-import threading
 
 _log = logging.getLogger("aelvoxim.patches.db_pool")
 

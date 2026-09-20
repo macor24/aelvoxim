@@ -28,6 +28,12 @@ from fastapi.routing import APIRoute, APIWebSocketRoute  # noqa: E402
 
 from aelvoxim.server import create_app  # noqa: E402
 
+# /chatael is mounted only when the built SPA is present (server/__init__.py checks
+# frontend/chatael/dist). A clean checkout — CI included — has no dist, so those
+# two routes legitimately do not exist there.
+_REPO = Path(__file__).resolve().parents[1]
+_FRONTEND_MOUNTED = (_REPO / "frontend" / "chatael" / "dist").exists()
+
 # Paths that must never be reachable with a plain customer key. Guards the
 # specific historical failure mode: an operator-looking route wired to
 # _verify_key (or to nothing at all).
@@ -167,6 +173,8 @@ def test_every_route_is_classified():
             problems.append(f"分级漂移: {key} TABLE={TABLE[key]} 实测={got[key]}")
     for key in sorted(TABLE):
         if key not in got:
+            if key[1].startswith("/chatael") and not _FRONTEND_MOUNTED:
+                continue  # conditional mount: absent without a built SPA (CI)
             problems.append(f"表中有陈旧项(路由已删或改名?): {key}")
     assert not problems, "路由授权分级异常:\n" + "\n".join(problems)
 

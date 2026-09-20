@@ -6,10 +6,7 @@ Responsibility: learner log rotation, daily brain markdown report.
 
 from __future__ import annotations
 
-import json
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict, List, Optional
 
 from ..utils import METACORE_DIR, DATA_DIR
 

@@ -8,7 +8,6 @@ Usage:
     html = inject_theme(Path("page.html").read_text(), title="Page")
 """
 
-from html import escape
 
 # ── Brand Color Palette (matches tailwind brand) ──
 # Blue-purple gradient

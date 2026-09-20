@@ -12,8 +12,7 @@ import json
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from enum import Enum
-from pathlib import Path
-from typing import Dict, List, Optional, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 import logging
 _log = logging.getLogger("aelvoxim.core.metacog")
@@ -274,7 +273,7 @@ class MetaCogTrigger:
 
         # Auto-read from SQLite DB directly
         try:
-            import json as _js, sqlite3 as _sq
+            import sqlite3 as _sq
             from ..utils import METACORE_DIR as _md
             _db_path = str(_md / "memory.db")
             _db = _sq.connect(_db_path)

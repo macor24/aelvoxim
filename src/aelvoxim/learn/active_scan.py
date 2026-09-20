@@ -14,7 +14,6 @@ Writes health reports to ~/.metacore/health/<date>.jsonl
 from __future__ import annotations
 
 import json
-import os
 import time
 from datetime import datetime
 from pathlib import Path
@@ -92,7 +91,7 @@ def run_scan(log_fn: Optional[callable] = None) -> Dict[str, Any]:
         # Time-based decay: re-score entities from DB
         try:
             import json as _js, sqlite3 as _sq
-            from datetime import datetime as _dt, timedelta
+            from datetime import datetime as _dt
             from ..memory.scorer import apply_decay
             from ..utils import METACORE_DIR as _md
             _db = _sq.connect(str(_md / "memory.db"))

@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Optional
 
 from ..utils import METACORE_DIR, ensure_dir
-from ..storage.db import execute, fetch_one, fetch_all, use_pg, get_pool
+from ..storage.db import execute, use_pg
 
 import logging
 _log = logging.getLogger("aelvoxim.auth")

@@ -20,13 +20,12 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import time
 from collections import Counter
 from dataclasses import dataclass, asdict, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 logger = logging.getLogger("aelvoxim.monitor")
 
@@ -435,7 +434,7 @@ class HealthMonitor:
             issues.append(Diagnosis(
                 symptom="search_engine_is_mock",
                 severity=SEVERITY_MEDIUM,
-                detail=f"Search is configured as mock, auto-discovery will return fake data",
+                detail="Search is configured as mock, auto-discovery will return fake data",
                 fix_action="fix_search_engine",
                 fix_params={"target_engine": "bing_cn"},
             ))

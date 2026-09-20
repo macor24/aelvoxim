@@ -10,9 +10,9 @@ Rule-based (no LLM cost):
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Optional, Set
+from typing import List, Set
 
-from .entry import MemoryEntry, LAYER_SEMANTIC, LAYER_EPISODIC, LAYER_WORKING
+from .entry import MemoryEntry
 
 
 # ── Chinese char utils ──

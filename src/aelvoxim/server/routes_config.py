@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 
 from fastapi import APIRouter, Depends, HTTPException
-from .routes import _verify_key, _require_admin
+from .routes import _require_admin
 
 router = APIRouter()
 
