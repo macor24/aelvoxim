@@ -144,6 +144,38 @@ def create_app() -> FastAPI:
             _log.exception("server error")
         return response
 
+    @app.middleware("http")
+    async def _admin_surface_audit(request: Request, call_next):
+        """Audit every access to the admin surface, allowed or refused (2026-10-17).
+
+        The admin route prefix is reachable on the public domain again, so each
+        visit must leave a trail: key tail (never the key), ip, path, method,
+        status. Denied attempts (401/403/429) are logged as failures.
+        """
+        response = await call_next(request)
+        path = request.url.path
+        if path.startswith("/v1/admin/") or path in ("/v1/logs", "/v1/llm/config"):
+            try:
+                from .audit import log as _audit_log
+                from .ratelimit import client_ip as _client_ip
+
+                auth = request.headers.get("authorization", "")
+                tail = auth[7:][-8:] if auth.lower().startswith("bearer ") else ""
+                _audit_log(
+                    "admin.access",
+                    user=tail,
+                    status="success" if response.status_code < 400 else "failure",
+                    detail={
+                        "path": path,
+                        "method": request.method,
+                        "status": response.status_code,
+                        "ip": _client_ip(request),
+                    },
+                )
+            except Exception:
+                _log.exception("admin access audit failed")
+        return response
+
     # Forward-compat: /orchestrate without /v1 prefix (for ChatAEL-v2 frontend)
     @app.post("/orchestrate")
     async def orchestrate_root(request: dict):
@@ -301,10 +333,12 @@ def create_app() -> FastAPI:
 
     @app.get("/v1/admin/dash-full")
     async def admin_dash_full(token: str = ""):
-        # Dashboard merged into admin_panel at /v1/admin/panel
+        # Dashboard merged into admin_panel at /v1/admin/panel.
+        # 2026-10-17: `token` stays accepted for backward compatibility but is
+        # never echoed into the redirect — a key in a URL leaks through access
+        # logs, browser history and Referer headers. The panel now logs in via
+        # the form and keeps the key in localStorage only.
         from fastapi.responses import RedirectResponse
-        if token:
-            return RedirectResponse(url=f"/v1/admin/panel?token={token}")
         return RedirectResponse(url="/v1/admin/panel")
 
     # Static file serving (logo images, downloads, etc.)

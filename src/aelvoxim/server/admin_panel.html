@@ -1016,8 +1016,10 @@ function confirmDelete(email) {
 
 document.addEventListener('DOMContentLoaded', function(){
   document.getElementById('loginBtn').onclick = doLogin;
-  var params = new URLSearchParams(window.location.search);
-  var savedKey = params.get('api_key') || localStorage.getItem('ael_admin_key');
+  // 2026-10-17: never accept the admin key from the URL — a key in the query
+  // string leaks into nginx access logs, browser history and Referer headers.
+  // Credentials come from the login form below, then persist in localStorage.
+  var savedKey = localStorage.getItem('ael_admin_key');
   if (savedKey) {
     _apiKey = savedKey;
     document.getElementById('loginOverlay').style.display = 'none';

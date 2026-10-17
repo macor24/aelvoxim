@@ -70,3 +70,20 @@ class RateLimiter:
 # Separate instance: 5 login attempts per 60 seconds (more restrictive)
 api_limiter = RateLimiter(max_requests=20, window_seconds=60)
 login_limiter = RateLimiter(max_requests=5, window_seconds=60)
+# Per-source-IP login limiter (2026-10-17): the email limiter above can be
+# sidestepped by spraying many emails from one host, so bound the IP as well.
+login_ip_limiter = RateLimiter(max_requests=10, window_seconds=60)
+
+
+def client_ip(request) -> str:
+    """Best-effort real client IP (2026-10-17).
+
+    nginx terminates TLS and forwards the source in X-Forwarded-For, so the
+    socket peer is always 127.0.0.1 in production; prefer the first XFF hop.
+    """
+    if request is None:
+        return ""
+    xff = request.headers.get("x-forwarded-for", "")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else ""

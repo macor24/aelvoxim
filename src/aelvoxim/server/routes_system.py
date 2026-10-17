@@ -96,8 +96,16 @@ _SAFETY_RESPONSE = "I'm sorry, but I cannot assist with that request."
 async def login(body: dict, request: Request = None):
     """Login with email + password. Returns api_key for subsequent API calls."""
     email = body.get("email", "").strip().lower()
+    # Rate limit by source IP first (2026-10-17): the per-email limit alone let
+    # one host spray many emails. Counts every attempt, success or failure.
+    from .ratelimit import login_limiter, login_ip_limiter, client_ip
+    _ip = client_ip(request) or "unknown"
+    allowed, retry_after = login_ip_limiter.check("ip:" + _ip)
+    if not allowed:
+        from .audit import log as _audit_log
+        _audit_log("user.login", user=_ip, status="blocked", detail={"reason": "ip rate limit"})
+        raise HTTPException(429, detail=f"Too many login attempts. Retry after {retry_after}s")
     # Rate limit by email (5 attempts per minute)
-    from .ratelimit import login_limiter
     allowed, retry_after = login_limiter.check(email)
     if not allowed:
         raise HTTPException(429, detail=f"Too many login attempts. Retry after {retry_after}s")
