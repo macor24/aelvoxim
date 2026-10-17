@@ -361,7 +361,14 @@ class SpaHandler(SimpleHTTPRequestHandler):
         elif path == "/api/search":
             self._handle_search_web()
         else:
-            self._serve_static()
+            # 2026-10-17 (C 步): 未知的 POST /api/* 必须 404。
+            # 原来一律落到 _serve_static()，摘掉 /api/windows 后它返回
+            # index.html + 200 —— 前端会以为"调用成功但没数据"，正是
+            # 我们要消灭的静默假成功。非 /api/ 路径仍交给静态页（SPA 路由）。
+            if path.startswith("/api/"):
+                self._json({"success": False, "error": "not found"}, 404)
+            else:
+                self._serve_static()
 
     def do_OPTIONS(self):
         self._send(b"", 204)
