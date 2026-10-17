@@ -53,7 +53,6 @@ TABLE = {
     ("GET", "/v1/admin/cognitive"): "admin",
     ("GET", "/v1/admin/dash-full"): "public",
     ("GET", "/v1/admin/data"): "admin",
-    ("GET", "/v1/admin/gateway/connections"): "admin",
     ("GET", "/v1/admin/knowledge-graph"): "admin",
     ("GET", "/v1/admin/learn-directory"): "admin",
     ("GET", "/v1/admin/learn-directory/scan-now"): "admin",
@@ -98,9 +97,6 @@ TABLE = {
     ("GET", "/v1/cortex/planner/{plan_id}"): "public",
     ("GET", "/v1/ethics/gates"): "user",
     ("GET", "/v1/ethics/update"): "admin",
-    ("GET", "/v1/gateway/context"): "user",
-    ("GET", "/v1/gateway/control/{action}"): "user",
-    ("GET", "/v1/gateway/execute"): "user",
     ("GET", "/v1/health"): "public",
     ("GET", "/v1/llm/chat"): "user",
     ("GET", "/v1/llm/chat/stream"): "user",
@@ -120,7 +116,6 @@ TABLE = {
     ("GET", "/v1/webhook/subscriptions"): "user",
     ("GET", "/v1/webhook/test-delivery"): "user",
     ("POST", "/orchestrate"): "public",
-    ("WS", "/v1/gateway/ws"): "ws",
 }
 
 

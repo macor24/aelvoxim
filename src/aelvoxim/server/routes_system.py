@@ -25,9 +25,6 @@ Routes:
     GET  /v1/webhook/subscriptions      — List webhook subscriptions
     DELETE /v1/webhook/subscribe/{sub_id} — Delete a webhook
     POST /v1/webhook/test-delivery      — Test webhook delivery
-    POST /v1/gateway/execute            — Execute Gateway operation
-    GET  /v1/gateway/context            — Get Gateway context
-    POST /v1/gateway/control/{action}   — Control Gateway state
     GET  /v1/admin/users                — List users (admin)
     GET  /v1/admin/user/{email}         — Get user detail (admin)
     POST /v1/admin/update-user          — Update user (admin)
@@ -48,8 +45,6 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
-from urllib.error import URLError
-from urllib.request import urlopen
 
 import logging
 _log = logging.getLogger("aelvoxim.server.routes_system")
@@ -571,44 +566,6 @@ async def webhook_test_delivery(body: dict, current_user: dict = Depends(_verify
     results = deliver_event("test.ping", {"test": True}, sub_id=sub_id)
     return {"results": results}
 
-# ── Gateway endpoints ──
-
-@router.post("/gateway/execute")
-async def gateway_execute(body: dict, user: dict = Depends(_verify_key)):
-    """Execute a Desktop Gateway operation."""
-    plan = body.get("plan", "")
-    try:
-        req = Request(
-            "http://127.0.0.1:9705/api/execute-plan" if plan else "http://127.0.0.1:9705/api/execute",
-            data=json.dumps(body).encode(),
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with urlopen(req, timeout=30) as resp:
-            return json.loads(resp.read().decode())
-    except URLError:
-        raise HTTPException(503, detail="Gateway unavailable")
-
-@router.get("/gateway/context")
-async def gateway_context(body: dict, user: dict = Depends(_verify_key)):
-    """Get current Desktop Gateway context (canvas snapshots)."""
-    try:
-        req = Request("http://127.0.0.1:9705/api/context")
-        with urlopen(req, timeout=10) as resp:
-            return json.loads(resp.read().decode())
-    except URLError:
-        raise HTTPException(503, detail="Gateway unavailable")
-
-@router.post("/gateway/control/{action}")
-async def gateway_control(action: str, user: dict = Depends(_verify_key)):
-    """Control Gateway execution state. Actions: pause, resume, abort, state"""
-    try:
-        req = Request(f"http://127.0.0.1:9705/api/control/{action}", method="POST")
-        with urlopen(req, timeout=10) as resp:
-            return json.loads(resp.read().decode())
-    except URLError:
-        raise HTTPException(503, detail="Gateway unavailable")
-
 # ── Admin endpoints ──
 
 @router.get("/admin/users")
@@ -1067,15 +1024,3 @@ async def learn_directory_clear(admin: dict = Depends(_require_admin)):
     return {"message": "Configuration cleared"}
 
 
-@router.get("/admin/gateway/connections")
-async def admin_gateway_connections(admin: dict = Depends(_require_admin)):
-    """List active Gateway WebSocket connections. Admin only."""
-    from ..server.gateway_ws import get_pool
-    pool = get_pool()
-    connections = {}
-    for email, info in pool.items():
-        connections[email] = {
-            "connected_at": info.get("connected_at", 0),
-            "version": info.get("version", ""),
-        }
-    return {"connections": connections, "count": len(pool)}

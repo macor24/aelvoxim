@@ -292,43 +292,6 @@ def build_system_prompt(system_msg: Optional[str]) -> str:
         + "  Learning — actively learns new topics in background." + NL
     )
 
-    try:
-        from .tool_use import check_gateway
-        _gw_online = check_gateway()
-    except Exception:
-        _gw_online = False
-
-    if _gw_online:
-        base += (
-            "  Desktop Control — operates Windows apps via Gateway." + NL
-            + "DESKTOP CONTROL (via Windows Gateway):" + NL
-            + '  Supported actions — use [TOOL:gateway] {"action":"<name>","target":"...","params":{...}}' + NL
-            + "    activate_window  — Bring window to foreground by title" + NL
-            + "    find_window      — Find window, returns position/size" + NL
-            + "    click_button     — Click a button by name (params.window_title + target)" + NL
-            + "    send_keys        — Keyboard shortcuts: ^=Ctrl, %=Alt, +=Shift." + NL
-            + '    type_text        — Type text. Add params.window to activate first' + NL
-            + "    mouse_click      — Click at coordinates (params.x, params.y)" + NL
-            + "    mouse_drag       — Drag (x1,y1) to (x2,y2)" + NL
-            + "    screenshot       — Take screenshot (target=window_title)" + NL
-            + "    open             — Launch an app by path or name" + NL
-            + "    wait             — Wait N seconds (params.seconds=N)" + NL
-            + '  [TOOL:ocr_screenshot] {"target":"window_title"} — Screenshot + OCR' + NL
-            + '  [TOOL:read_file], [TOOL:write_file], [TOOL:run_code]' + NL
-            + NL
-            + "  Workflow: ocr_screenshot -> examine text -> gateway to click/type" + NL
-        )
-    else:
-        base += (
-            "  ** Desktop Control is NOT available **" + NL
-            + "  The Gateway is not installed or running on this machine." + NL
-            + "  If the user asks to operate their computer, open a file, take a screenshot," + NL
-            + "  or any desktop operation, tell them they need to install the Desktop Gateway." + NL
-            + '  Download: https://aelvoxim.com/static/AEL_Gateway.zip' + NL
-            + "  Guide: unzip, run AEL Gateway.exe, then refresh this page." + NL
-            + "  Do NOT use [TOOL:gateway] or [TOOL:ocr_screenshot]." + NL
-        )
-
     return system_msg or base
 
 

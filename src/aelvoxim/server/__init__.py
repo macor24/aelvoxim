@@ -103,13 +103,6 @@ def create_app() -> FastAPI:
     app.include_router(chimera_router)
     app.include_router(brain_router)
 
-    # Gateway WebSocket — inline in create_app to avoid decorator scope issues
-    from aelvoxim.server.gateway_ws import handle_gateway_ws
-
-    @app.websocket("/v1/gateway/ws")
-    async def gateway_ws_route(ws: WebSocket):
-        await handle_gateway_ws(ws)
-
     # Session IP check middleware (single-device login enforcement)
     @app.middleware("http")
     async def _session_ip_check(request: Request, call_next):
