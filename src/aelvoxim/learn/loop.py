@@ -1108,9 +1108,30 @@ class Learner:
         self._log("🔄 Learning loop started")
         self._last_heartbeat = time.time()
         self._loop_count = 0
+        self._last_gate = ""
         while self._running:
             try:
                 self._last_heartbeat = time.time()
+                self._iteration_started = time.time()
+
+                # 2026-10-17 (U1): heartbeat + counter at the TOP of the iteration.
+                # Every gate below ends in `continue` (cooldown / pace / rate limit /
+                # a successful learn or teach cycle), so the old tail-only heartbeat
+                # almost never ran while the learner was busy: status.json froze at
+                # the last idle round and monitors reported "learner may be dead"
+                # while it was actually learning. Counting here advances on every
+                # pass, whatever path the pass takes.
+                self._loop_count += 1
+                if self._loop_count % 5 == 0:
+                    _active = sum(1 for d in self._directions.values() if d.status == "active")
+                    _completed = sum(1 for d in self._directions.values() if d.status == "completed")
+                    _paused = sum(1 for d in self._directions.values() if d.status == "paused")
+                    self._log(f"  📊 Loop#{self._loop_count}: {_active}active/{_completed}completed/{_paused}paused llm={self._llm_status} last_gate={self._last_gate}")
+                try:
+                    self._save_status()
+                except Exception:
+                    pass
+
                 # Check PG availability — warn but don't block (JSON fallback works)
                 try:
                     from ..storage.db import use_pg as _pg_ok
@@ -1172,15 +1193,18 @@ class Learner:
                     # Cooldown check: skip if within cooldown
                     _cooldown = getattr(direction, "fail_cooldown_until", 0)
                     if _cooldown > time.time():
+                        self._last_gate = "cooldown"
                         continue
                     # Weak pass backpressure: ≥3 consecutive → skip 2 rounds
                     _wps = getattr(direction, "weak_pass_streak", 0)
                     if _wps >= 3 and _wps % 2 != 0:
+                        self._last_gate = "weak_pass"
                         continue
                     # Rate limit: respect _RATE_LIMIT_MIN_INTERVAL per direction
                     _last_tick = getattr(direction, '_last_tick_time', 0)
                     _since_last = time.time() - _last_tick
                     if _since_last < _RATE_LIMIT_MIN_INTERVAL:
+                        self._last_gate = "rate_interval"
                         self._sleep(min(_RATE_LIMIT_MIN_INTERVAL - _since_last, 10))
                         continue
                     # Rate limit: respect _RATE_LIMIT_MAX per 24h per direction
@@ -1192,6 +1216,7 @@ class Learner:
                             _start_dt = _dt.strptime(_started, '%Y-%m-%d %H:%M:%S')
                             _hours_alive = max(1, (time.time() - _start_dt.timestamp()) / 3600)
                             if _cycles_today / _hours_alive > _RATE_LIMIT_MAX / 24:
+                                self._last_gate = "rate_daily"
                                 self._sleep(10)
                                 continue
                         except (ValueError, TypeError):
@@ -1201,12 +1226,14 @@ class Learner:
                     # LLM degraded AND search mock → teach mode
                     if self._llm_status != "available" and self._search_mock:
                         if self._teach_one_cycle(direction):
+                            self._last_gate = "cycle_teach"
                             self._last_heartbeat = time.time()
                             direction._last_tick_time = time.time()
                             self._sleep(60)
                             continue
                     else:
                         if self._learn_one_cycle(direction):
+                            self._last_gate = "cycle_learn"
                             self._last_heartbeat = time.time()
                             direction._last_tick_time = time.time()
                             self._sleep(60)
@@ -1385,21 +1412,11 @@ class Learner:
                     except Exception:
                         _log.exception("loop error")
 
-                # ── Loop summary (every iteration) ──
-                self._loop_count += 1
-                if self._loop_count % 5 == 0:
-                    _active = sum(1 for d in self._directions.values() if d.status == "active")
-                    _completed = sum(1 for d in self._directions.values() if d.status == "completed")
-                    _paused = sum(1 for d in self._directions.values() if d.status == "paused")
-                    self._log(f"  📊 Loop#{self._loop_count}: {_active}active/{_completed}completed/{_paused}paused llm={self._llm_status}")
-
-                # Heartbeat: refresh status.json every round so monitors and
-                # the admin panel see a live learner (previously only written
-                # on start/stop → appeared dead while running).
-                try:
-                    self._save_status()
-                except Exception:
-                    pass
+                # 2026-10-17 (U1): the counter / Loop# summary / status.json
+                # heartbeat used to live HERE, at the tail. Every gate above ends
+                # in `continue`, so while the learner was busy this point was
+                # never reached — status.json froze and monitors cried "learner
+                # may be dead". They now run at the top of the iteration.
 
                 # Self-assessment heartbeat: the cognition tick (metacog
                 # evaluate + self-model sync + memory maintenance) must not
@@ -1418,6 +1435,19 @@ class Learner:
             except Exception as e:
                 self._log(f"  ⚠️ Main loop error: {e}")
                 self._sleep(30)
+
+    def _heartbeat_loop(self):
+        """独立心跳线程（2026-10-17, U1 v2）：每 30s 刷一次 status.json。
+
+        与 iteration 解耦：主循环一轮可能十几分钟（轮内是 LLM 调用 + 检索），
+        把心跳挂在轮首或轮末，都会让监控在"忙"的时候误判成"死"。
+        """
+        while self._running:
+            try:
+                self._save_status()
+            except Exception:
+                _log.exception("heartbeat error")
+            self._sleep(30)
 
     def _sleep(self, seconds: int):
         """Sleep with interrupt support (watchdog or stop).
@@ -1461,6 +1491,14 @@ class Learner:
             self._running = True
             self._thread = threading.Thread(target=self._main_loop_safe, daemon=True, name="learner-main")
             self._thread.start()
+            # 2026-10-17 (U1 v2): heartbeat on its own thread. One iteration can
+            # take >10 min (LLM calls + search inside a cycle), so a heartbeat
+            # tied to iteration boundaries still makes monitors call a busy
+            # learner dead. The heartbeat must be independent of progress.
+            if not getattr(self, "_hb_thread", None) or not self._hb_thread.is_alive():
+                self._hb_thread = threading.Thread(target=self._heartbeat_loop,
+                                                   daemon=True, name="learner-heartbeat")
+                self._hb_thread.start()
             self._log("🚀 Learning loop started in background thread")
             self._save_status()
 
@@ -1588,6 +1626,13 @@ class Learner:
             "running": self._running,
             "direction_count": len(self._directions),
             "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            # 2026-10-17 (U1): expose how the last pass ended, so "busy but
+            # skipping" is distinguishable from "dead" in the readouts.
+            "loop_count": getattr(self, "_loop_count", 0),
+            "last_gate": getattr(self, "_last_gate", ""),
+            # 轮次慢 ≠ 进程死：心跳线程每 30s 刷新，监控应看 updated_at；
+            # iter_age_s 只用来区分"一轮跑很久"与"循环真的卡住"。
+            "iter_age_s": int(time.time() - getattr(self, "_iteration_started", time.time())),
         }
         try:
             STATUS_FILE.write_text(json.dumps(status, ensure_ascii=False, indent=2))
