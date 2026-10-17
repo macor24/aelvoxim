@@ -360,8 +360,6 @@ class SpaHandler(SimpleHTTPRequestHandler):
             self._handle_new_session()
         elif path == "/api/search":
             self._handle_search_web()
-        elif path == "/api/windows":
-            self._handle_windows_mcp()
         else:
             self._serve_static()
 
@@ -540,71 +538,8 @@ class SpaHandler(SimpleHTTPRequestHandler):
         results = self._search_bing(query)
         self._json({"success": True, "data": results})
 
-    def _handle_windows_mcp(self):
-        """Forward a tool call to Windows-MCP (running on Windows host)."""
-        # Auth: require a valid API key (same as other /api endpoints).
-        # An attacker on any webpage could otherwise drive Windows tools via
-        # this endpoint (P0-1, 9.txt audit).
-        key = self._get_auth_key()
-        if not key or not _verify_and_get_user_id(key):
-            self._json({"success": False, "error": "Unauthorized"}, 401)
-            return
-        body = self._read_body()
-        action = body.get("action", "")
-        params = body.get("params", {})
-
-        # Windows-MCP auth key — environment only, never hardcoded (P0-1).
-        WINDOWS_MCP_KEY = os.environ.get("WINDOWS_MCP_KEY", "")
-        WINDOWS_MCP_URL = os.environ.get("WINDOWS_MCP_URL", "")
-        if not (WINDOWS_MCP_KEY and WINDOWS_MCP_URL):
-            self._json({"success": False, "error": "Windows-MCP not configured"}, 404)
-            return
-
-        try:
-            # First get a session from SSE endpoint
-            sse_req = urllib.request.Request(
-                WINDOWS_MCP_URL + "/sse",
-                headers={"Authorization": f"Bearer {WINDOWS_MCP_KEY}"},
-            )
-            sse_resp = urllib.request.urlopen(sse_req, timeout=5)
-            # Read the first event to get the session endpoint
-            data = sse_resp.read(500).decode("utf-8")
-            msg_endpoint = None
-            for line in data.split("\n"):
-                if line.startswith("data: "):
-                    msg_endpoint = line[6:].strip()
-            sse_resp.close()
-
-            if not msg_endpoint:
-                self._json({"success": False, "error": "Failed to get MCP session"}, 500)
-                return
-
-            # Build the MCP call
-            messages_url = WINDOWS_MCP_URL + msg_endpoint
-            mcp_body = json.dumps({
-                "jsonrpc": "2.0",
-                "id": str(int(time.time() * 1000)),
-                "method": "tools/call",
-                "params": {
-                    "name": action,
-                    "arguments": params,
-                },
-            }).encode()
-
-            mcp_req = urllib.request.Request(
-                messages_url,
-                data=mcp_body,
-                headers={
-                    "Authorization": f"Bearer {WINDOWS_MCP_KEY}",
-                    "Content-Type": "application/json",
-                },
-                method="POST",
-            )
-            mcp_resp = urllib.request.urlopen(mcp_req, timeout=30)
-            result = json.loads(mcp_resp.read().decode("utf-8"))
-            self._json({"success": True, "data": result})
-        except Exception as e:
-            self._json({"success": False, "error": str(e)}, 500)
+    # 2026-10-17 (C 步): _handle_windows_mcp 已删除（Windows-MCP 剥离·C 步），
+    # do_POST 的 /api/windows 分支一并摘除。见 git 历史可完整恢复。
 
     def _search_bing(self, query: str, max_results: int = 5) -> list:
         import re, urllib.parse

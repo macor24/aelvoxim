@@ -120,7 +120,6 @@ TABLE = {
     ("GET", "/v1/webhook/subscriptions"): "user",
     ("GET", "/v1/webhook/test-delivery"): "user",
     ("POST", "/orchestrate"): "public",
-    ("POST", "/v1/windows-mcp"): "user",
     ("WS", "/v1/gateway/ws"): "ws",
 }
 

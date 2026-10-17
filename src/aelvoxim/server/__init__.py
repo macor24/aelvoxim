@@ -349,69 +349,9 @@ def create_app() -> FastAPI:
         os.makedirs(_static_dir, exist_ok=True)
     app.mount("/static", StaticFiles(directory=_static_dir), name="static")
 
-    @app.post("/v1/windows-mcp")
-    async def windows_mcp_proxy(body: dict, user: dict = Depends(_verify_key)):
-        """Proxy tool calls to Windows-MCP via Streamable HTTP."""
-        import httpx, json, time, asyncio
-        WINDOWS_MCP_KEY = os.environ.get("WINDOWS_MCP_KEY", "")
-        WINDOWS_MCP_URL = os.environ.get("WINDOWS_MCP_URL", "")
-        if not (WINDOWS_MCP_KEY and WINDOWS_MCP_URL):
-            from fastapi.responses import JSONResponse
-            return JSONResponse({"success": False, "error": "Windows-MCP not configured (set WINDOWS_MCP_KEY and WINDOWS_MCP_URL)"}, status_code=500)
-
-        action = body.get("action", "")
-        params = body.get("params", {})
-        if not action:
-            from fastapi.responses import JSONResponse
-            return JSONResponse({"success": False, "error": "action required"}, status_code=400)
-
-        async with httpx.AsyncClient(timeout=60) as client:
-            # Step 1: Get session ID
-            init_resp = await client.get(
-                f"{WINDOWS_MCP_URL}/mcp",
-                headers={"Authorization": f"Bearer {WINDOWS_MCP_KEY}"},
-            )
-            session_id = init_resp.headers.get("mcp-session-id", "")
-            if not session_id:
-                from fastapi.responses import JSONResponse
-                return JSONResponse({"success": False, "error": "No MCP session"}, status_code=500)
-
-            headers = {
-                "Authorization": f"Bearer {WINDOWS_MCP_KEY}",
-                "Content-Type": "application/json",
-                "Accept": "application/json, text/event-stream",
-                "Mcp-Session-Id": session_id,
-            }
-
-            # Step 2: Initialize session (MCP protocol handshake)
-            init_body = {
-                "jsonrpc": "2.0", "id": "1",
-                "method": "initialize",
-                "params": {
-                    "protocolVersion": "2024-11-05",
-                    "capabilities": {},
-                    "clientInfo": {"name": "aelvoxim", "version": "1.0"},
-                },
-            }
-            await client.post(f"{WINDOWS_MCP_URL}/mcp", json=init_body, headers=headers)
-
-            # Step 3: Call tool
-            mcp_resp = await client.post(
-                f"{WINDOWS_MCP_URL}/mcp",
-                json={
-                    "jsonrpc": "2.0",
-                    "id": "2",
-                    "method": "tools/call",
-                    "params": {"name": action, "arguments": params},
-                },
-                headers=headers,
-            )
-            text = mcp_resp.text
-            for line in text.split("\n"):
-                if line.startswith("data: "):
-                    result = json.loads(line[6:].strip())
-                    return {"success": True, "data": result}
-            return {"success": True, "data": text}
+    # 2026-10-17 (C 步): POST /v1/windows-mcp 代理已摘除（Windows-MCP 剥离·C 步）。
+    # 保留 API.html 的调用点作为观察期探针：任何点击都会命中 404 并留痕。
+    # 完整恢复见 git 历史 / 备份；A 步（14 天 0 调用后）再删目录与前端。
 
     @app.get("/v1/status/planner")
     async def planner_status():
