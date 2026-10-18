@@ -277,7 +277,8 @@ def _pg_search_entities(query: str, etype: Optional[str] = None,
         if etype:
             clauses.append("entity_type = %s"); params.append(etype)
         if user_id:
-            clauses.append("user_id = %s"); params.append(user_id)
+            # 自己的 OR 全局（user_id 为空）——见 visible_to()
+            clauses.append("(user_id = %s OR user_id = '')"); params.append(user_id)
         where = " AND ".join(clauses) if clauses else "TRUE"
         rows = fetch_dict(
             f"SELECT name, entity_type, content, metadata, user_id FROM memory_entities "
@@ -1028,7 +1029,7 @@ def search_entities(query: str, etype: Optional[str] = None,
     if fusion_results:
         result_dicts = []
         for e in fusion_results:
-            if user_id and getattr(e, "user_id", "") != user_id:
+            if not visible_to(getattr(e, "user_id", ""), user_id):
                 continue
             result_dicts.append({
                 "id": e.key,
@@ -1065,7 +1066,8 @@ def search_entities(query: str, etype: Optional[str] = None,
         clauses.append("type = ?")
         params.append(etype)
     if user_id:
-        clauses.append("user_id = ?")
+        # 自己的 OR 全局（user_id 为空）——与 visible_to() 同语义
+        clauses.append("(user_id = ? OR user_id = '')")
         params.append(user_id)
 
     sql = f"SELECT * FROM entities WHERE {' AND '.join(clauses)} ORDER BY created_at DESC"
@@ -1356,6 +1358,18 @@ def memory_read(key: str) -> Optional[dict]:
             "attributes": json.loads(row["attributes"] or "{}")}
 
 
+def visible_to(entry_user_id: str, viewer_user_id: str) -> bool:
+    """记忆可见性：全局条目(user_id 为空)对所有可见；私有条目只对本人可见。
+
+    2026-10-17：读侧原先写成 `entry_uid != viewer_uid ⇒ 丢弃`，
+    于是 user_id 为空的历史条目（生产 1994 行里 1981 行）对任何带身份的检索都不可见。
+    这里把"全局"显式建模，避免过滤把历史记忆一并滤掉。
+    """
+    if not viewer_user_id:
+        return True
+    return entry_user_id in ("", viewer_user_id)
+
+
 def memory_store(key: str, value: str, tags: Optional[List[str]] = None,
                  etype: str = "memory", user_id: str = "") -> bool:
     # PG-first: store in PG with embedding, then sync fusion layers.
@@ -1394,7 +1408,7 @@ def memory_search(query: str, limit: int = 10, user_id: str = "") -> List[dict]:
                 _rows = fetch_dict(
                     "SELECT name, entity_type, content, metadata FROM memory_entities "
                     "WHERE embedding <=> %s::vector < 0.8 "
-                    "AND (user_id = %s OR user_id IS NULL) "
+                    "AND (user_id = %s OR user_id = '' OR user_id IS NULL) "
                     "ORDER BY embedding <=> %s::vector LIMIT %s",
                     (str(_emb), user_id, str(_emb), limit),
                 )

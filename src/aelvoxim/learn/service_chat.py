@@ -491,10 +491,15 @@ def _detect_knowledge_gap(query: str, results: list) -> str:
 
 # ═══ Memory injection ═══
 
+def _user_scope(user: dict) -> str:
+    """记忆归属键：PG 主键 id → user_id（与 server/service_chat.py 同名同义）。"""
+    return str((user or {}).get("id") or (user or {}).get("user_id") or "")
+
+
 def inject_memory_context(user_msg: str, user: dict, extra_context: str) -> str:
     try:
         from ..api import memory_search
-        _uid = user.get("email", "") if user else ""
+        _uid = _user_scope(user)
         mem_results = memory_search(user_msg[:50], limit=15, user_id=_uid) if len(user_msg.strip()) > 3 else []
         if mem_results:
             msg_lower = user_msg.lower()
@@ -627,7 +632,8 @@ def process_memory_commands(user_msg: str, user: dict, identity_prefix: str) -> 
     if "forget" in user_msg.lower():
         try:
             from ..memory import memory_store
-            memory_store(f"forget_flag:{user.get('email','')[:20]}", True)
+            memory_store(f"forget_flag:{user.get('email','')[:20]}", True,
+                         user_id=_user_scope(user))
             identity_prefix += "[Memory: forget requested]\n"
         except Exception:
             _log.exception("service_chat error")
@@ -639,7 +645,7 @@ def process_memory_commands(user_msg: str, user: dict, identity_prefix: str) -> 
 def inject_memory_status(user_msg: str, user: dict, identity_prefix: str) -> str:
     try:
         from ..memory import memory_search
-        _uid = user.get("email", "") if user else ""
+        _uid = _user_scope(user)
         results = memory_search("preference", limit=5, user_id=_uid)
         if results:
             prefs = "; ".join(str(m.get("value", ""))[:80] for m in results[:3])
