@@ -353,14 +353,15 @@ class Calibration:
 
     # ── Convenience methods ──
 
-    def auto_tune(self, metaevolve_analysis: Dict) -> List[Dict]:
-        """Auto-tune parameters based on MetaEVOLVE analysis results.
-
-        Args:
-            metaevolve_analysis: MetaEVOLVE.generate_strategy_advice().to_dict()
+    def compute_tuning(self, metaevolve_analysis: Dict) -> List[Dict]:
+        """计算参数调整建议，**不改配置、不落盘**。
 
         Returns:
-            changes: List of applied changes
+            changes: [{"target": "metacog.evolve_threshold", "old": x, "new": y, "reason": "..."}]
+
+        2026-10-19：原来 auto_tune 边算边改并立即 `_save()`，而 DGM-H 闸门在它之后才
+        检查 ⇒ 502 条 “blocked” 拦的是**已经生效**的改动，闸门等于装饰品。现在拆成
+        compute_tuning / apply_tuning，由调用方在闸门放行后才写入。
 
         Edition gate: community edition disables automatic tuning.
         """
@@ -375,9 +376,9 @@ class Calibration:
         if not self._data.get("metaevolve", {}).get("auto_tune_enabled", True):
             return []
 
-        me = self._data.get("metaevolve", {})
-        mc = self._data.get("metacog", {})
-        jg = self._data.get("judge", {})
+        me = deepcopy(self._data.get("metaevolve", {}))
+        mc = deepcopy(self._data.get("metacog", {}))
+        jg = deepcopy(self._data.get("judge", {}))
 
         changes: List[Dict] = []
 
@@ -402,13 +403,18 @@ class Calibration:
         if hit_rate <= me.get("hit_rate_threshold", 0.5):
             old = mc.get("evolve_threshold", 0.10)
             step = me.get("threshold_tune_step", 0.1)
-            new_val = min(me.get("threshold_max", 0.9), old + step, _ceiling)
-            mc["evolve_threshold"] = new_val
-            changes.append({
-                "target": "metacog.evolve_threshold",
-                "old": old, "new": new_val,
-                "reason": f"Hit rate {hit_rate:.0%}<{me.get('hit_rate_threshold', 0.5):.0%}",
-            })
+            # 2026-10-19：门槛不许抬到系统实际达不到的高度（此前棘轮到 0.35，
+            # 而实际最高分 0.065 ⇒ should_evolve 永远 false，自演化从未启动）
+            _reachable = self._recent_max_overall() + 0.02
+            new_val = min(me.get("threshold_max", 0.9), old + step, _ceiling,
+                          max(_reachable, old))
+            if new_val != old:  # 已顶到可达上限时不再产出空改（否则每轮都是"变了但没变"）
+                mc["evolve_threshold"] = new_val
+                changes.append({
+                    "target": "metacog.evolve_threshold",
+                    "old": old, "new": new_val,
+                    "reason": f"Hit rate {hit_rate:.0%}<{me.get('hit_rate_threshold', 0.5):.0%}",
+                })
 
         # 2. If Judge error rate is high, reduce prediction_confidence weight
         judge_error = metaevolve_analysis.get("judge_error_rate", 0.0) or 0
@@ -447,12 +453,55 @@ class Calibration:
                             "reason": f"{ctype} hit rate {hit:.0%}<30%",
                         })
 
-        if changes:
+        return changes
+
+    def apply_tuning(self, changes: List[Dict]) -> int:
+        """把**已通过闸门**的改动写进配置并落盘。返回实际写入条数。"""
+        applied = 0
+        for c in changes or []:
+            target = str(c.get("target") or "")
+            if "." not in target:
+                continue
+            parts = target.split(".")
+            node: Dict = self._data
+            for part in parts[:-1]:
+                nxt = node.get(part)
+                if not isinstance(nxt, dict):
+                    nxt = {}
+                    node[part] = nxt
+                node = nxt
+            node[parts[-1]] = c.get("new")
+            applied += 1
+        if applied:
+            self._data.setdefault("_meta", {})
             self._data["_meta"]["auto_tune_count"] = self._data["_meta"].get("auto_tune_count", 0) + 1
             self._touch()
             self._save()
+        return applied
 
+    def auto_tune(self, metaevolve_analysis: Dict) -> List[Dict]:
+        """兼容包装：算并直接应用（**不经过闸门**）。新代码用 compute_tuning + apply_tuning。"""
+        changes = self.compute_tuning(metaevolve_analysis)
+        self.apply_tuning(changes)
         return changes
+
+    def _recent_max_overall(self, n: int = 20) -> float:
+        """最近 n 条 metacog 事件里的最高分 —— 给 evolve_threshold 划"可达上限"。"""
+        try:
+            from ..utils import METACORE_DIR as _md
+            p = Path(_md) / "metacog_history.jsonl"
+            if not p.exists():
+                return 0.0
+            lines = p.read_text(encoding="utf-8", errors="replace").strip().splitlines()[-n:]
+            best = 0.0
+            for ln in lines:
+                try:
+                    best = max(best, float(json.loads(ln).get("overall_score") or 0.0))
+                except Exception:
+                    continue
+            return best
+        except Exception:
+            return 0.0
 
     def get_snapshot(self) -> Dict:
         """Get calibration snapshot (for SelfModel recording)."""

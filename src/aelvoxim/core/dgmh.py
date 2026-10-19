@@ -11,11 +11,104 @@ Standalone version, no external dependencies.
 
 from __future__ import annotations
 
+import json
+import time
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..utils import METACORE_DIR
+
+# ── 2026-10-19：闸门配套（冷却 / ungraded 队列 / 批量过闸）────────────
+COOLDOWN_HOURS = 24.0
+
+
+def _cooldown_path() -> Path:
+    return Path(METACORE_DIR) / "dgmh_cooldown.json"
+
+
+def _ungraded_path() -> Path:
+    return Path(METACORE_DIR) / "dgmh_ungraded.jsonl"
+
+
+def _load_cooldown() -> dict:
+    try:
+        return json.loads(_cooldown_path().read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def in_cooldown(target: str, hours: float = COOLDOWN_HOURS) -> bool:
+    """同一 target 上次未通过后，冷却期内不再重试（消掉重复拦截）。"""
+    if not target:
+        return False
+    ts = (_load_cooldown() or {}).get(target)
+    try:
+        return bool(ts) and (time.time() - float(ts)) < hours * 3600
+    except Exception:
+        return False
+
+
+def mark_blocked(target: str) -> None:
+    if not target:
+        return
+    data = _load_cooldown()
+    data[target] = time.time()
+    try:
+        p = _cooldown_path()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def queue_ungraded(change: dict, reason: str = "") -> None:
+    """没有判分器的改动进人工审队列 —— 不再伪造一个 B 级评分。"""
+    try:
+        p = _ungraded_path()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        rec = {"ts": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+               "target": change.get("target"), "old": change.get("old"),
+               "new": change.get("new"), "reason": change.get("reason", ""),
+               "why_ungraded": reason}
+        with open(p, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+def gate_changes(changes, log=None, cooldown_hours: float = COOLDOWN_HOURS):
+    """逐条过闸门。返回 (passed, stats)。
+
+    - 冷却期内：跳过（不重复报告）
+    - 没有判分器（change 里没有 judge_grade）：进 ungraded 队列并冷却，**不默认 B**
+    - 有判分但不达标：记 blocked 并冷却
+    """
+    passed: List[Dict] = []
+    stats = {"blocked": 0, "cooled": 0, "ungraded": 0}
+    for c in changes or []:
+        target = str(c.get("target") or "")
+        if in_cooldown(target, cooldown_hours):
+            stats["cooled"] += 1
+            continue
+        judge = c.get("judge_grade")
+        if not judge:
+            queue_ungraded(c, "no judge available")
+            mark_blocked(target)
+            stats["ungraded"] += 1
+            if log:
+                log(f"  📝 ungraded: {target} (no judge) → 人工审队列")
+            continue
+        ok, reason = check_gate("update", judge, ActivationStatus())
+        if not ok:
+            stats["blocked"] += 1
+            mark_blocked(target)
+            if log:
+                log(f"  🛡️ DGM-H blocked: {target} ({reason})")
+            continue
+        passed.append(c)
+    return passed, stats
 
 
 # ── Activation status ──────────────────────────────────
@@ -156,7 +249,7 @@ EVOLUTION_GATES = {
 JUDGE_ORDER = {"S": 5, "A": 4, "B": 3, "C": 2, "D": 1}
 
 
-def check_gate(change_type: str, judge_grade: str, activation: ActivationStatus,
+def check_gate(change_type: str, judge_grade: Optional[str], activation: ActivationStatus,
                belief_health: Optional[Dict[str, Any]] = None) -> Tuple[bool, str]:
     """Check if evolution proposal passes the Gate. 
 
@@ -189,6 +282,10 @@ def check_gate(change_type: str, judge_grade: str, activation: ActivationStatus,
                 return (False, f"Belief health moderate (high-conf {_high_ratio:.0%}), Level {gate['level']} unavailable")
         if _evidence < 50 and gate["level"] >= 3:
             return (False, f"Total evidence too low ({_evidence}<50), Level 3 unavailable")
+
+    # 2026-10-19：没有判分器时不再伪造 B 去撞 A 的门
+    if not judge_grade or judge_grade not in JUDGE_ORDER:
+        return (False, "ungraded: no judge available")
 
     # Check if Judge grade meets requirements
     min_order = JUDGE_ORDER.get(gate["min_judge"], 0)
@@ -246,7 +343,7 @@ class DGOrchestrator:
     def check_activation(self) -> ActivationStatus:
         return self._activation
 
-    def check_proposal_gate(self, change_type: str, judge_grade: str) -> Tuple[bool, str]:
+    def check_proposal_gate(self, change_type: str, judge_grade: Optional[str]) -> Tuple[bool, str]:
         """Gate check: whether the proposal meets Gate conditions. 
         """
         # SafetyShield check

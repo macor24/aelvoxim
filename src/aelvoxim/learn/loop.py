@@ -536,9 +536,16 @@ class Learner:
                         "total_applied": 0,
                         "failure_report": report.to_dict(),
                     }
-                    changes = cal.auto_tune(analysis)
+                    changes = cal.compute_tuning(analysis)
+                    _applied = 0
                     if changes:
-                        self._log(f"  🔧 Auto-tune applied: {len(changes)} changes")
+                        from ..core.dgmh import gate_changes as _gate_changes
+                        _passed, _stats = _gate_changes(changes, self._log)
+                        _applied = cal.apply_tuning(_passed)
+                        if _stats.get("ungraded"):
+                            self._log(f"  📝 DGM-H ungraded: {_stats['ungraded']}")
+                    if _applied:
+                        self._log(f"  🔧 Auto-tune applied: {_applied} changes")
             except Exception as e:
                 self._log(f"  ⚠️ [Auto-tune] Error: {e}")
 
@@ -939,24 +946,27 @@ class Learner:
                             "failure_rate": 0.0,
                         },
                     }
-                    changes = cal.auto_tune(_auto_data)
+                    changes = cal.compute_tuning(_auto_data)
                     if changes:
-                        # DGM-H Gate: check each change through SafetyShield
+                        # 2026-10-19：先审后改 —— compute 只算，闸门放行才 apply
+                        from ..core.dgmh import gate_changes as _gate_changes
                         _dgmh = _DGOrch()
+                        _passed, _stats = _gate_changes(changes, self._log)
                         _shielded_changes = []
-                        for _c in changes[:5]:
+                        for _c in _passed:
                             _target = _c.get("target", "")
-                            _judge = _c.get("judge_grade", "B")
-                            _ok, _reason = _dgmh.check_proposal_gate("update", _judge)
-                            if not _ok:
-                                self._log(f"  🛡️ DGM-H blocked: {_target} ({_reason})")
-                                continue
                             _sr = _dgmh.shield.check(action="modify", target=_target)
                             if _sr:
                                 self._log(f"  🛡️ SafetyShield blocked: {_target} ({_sr})")
                                 continue
                             _dgmh.shield.count_modify()
                             _shielded_changes.append(_c)
+                        if _shielded_changes:
+                            _n_applied = cal.apply_tuning(_shielded_changes)
+                            if _n_applied:
+                                self._log(f"  🔧 Applied {_n_applied} gated changes")
+                        if _stats.get("ungraded"):
+                            self._log(f"  📝 DGM-H ungraded: {_stats['ungraded']}")
                         if _shielded_changes:
                             self._log(f"  🧠 Cognition: auto-tuned {len(_shielded_changes)} params (DGM-H gated)")
                             # Start tracking effectiveness
