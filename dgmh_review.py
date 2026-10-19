@@ -57,13 +57,14 @@ def _append(p: Path, rec: dict):
 
 
 def pending() -> list:
-    """待审 = 进过 ungraded、但没有对应 approve/reject 的最新条目。"""
+    """待审 = 进过 ungraded、但没有对应 approve/reject 的最新条目。void 的不算。"""
     decided = {(d.get("target"), d.get("new")) for d in _jsonl(DECISIONS)
                if d.get("type") in ("approve", "reject")}
+    voided = {(v.get("target"), v.get("new")) for v in _jsonl(UNGRADED) if v.get("void")}
     seen, out = set(), []
     for rec in reversed(_jsonl(UNGRADED)):
         key = (rec.get("target"), rec.get("new"))
-        if key in decided or key in seen:
+        if rec.get("void") or key in decided or key in voided or key in seen:
             continue
         seen.add(key)
         out.append(rec)
