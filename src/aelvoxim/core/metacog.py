@@ -87,6 +87,68 @@ class MetaCogReport:
         return f"no trigger (score={self.overall_score:.2f})"
 
 
+SCORE_DELTA = 0.02
+
+
+def _triggered_signals(report) -> set:
+    return {t.signal_name for t in (getattr(report, "triggers", None) or [])
+            if getattr(t, "triggered", False)}
+
+
+def _should_record(prev, report, delta: float = SCORE_DELTA) -> bool:
+    """状态没变就不落盘。
+
+    2026-10-19：此前每轮检查都 append 一条，生产堆积 2558 条内容相同的记录，
+    监控每半小时报一次警（写侧无去重）。判定只认三件事：level 变、score 变 > delta、
+    触发信号集合变。持续中这件事不丢 —— 记在 metacog_state.json 的 streak 里。
+    """
+    if prev is None:
+        return True
+    if prev.max_level != report.max_level:
+        return True
+    if abs(float(prev.overall_score or 0.0) - float(report.overall_score or 0.0)) > delta:
+        return True
+    return _triggered_signals(prev) != _triggered_signals(report)
+
+
+def _touch_state(report, recorded: bool) -> None:
+    """把"持续中"写进 state：不落历史，但 streak / last_seen 不丢。"""
+    from ..utils import METACORE_DIR
+    p = METACORE_DIR / "metacog_state.json"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        prev = json.loads(p.read_text())
+    except Exception:
+        prev = {}
+    streak = 1 if recorded else int(prev.get("streak") or 0) + 1
+    p.write_text(json.dumps({
+        "last_seen": report.timestamp,
+        "last_score": round(float(report.overall_score or 0.0), 3),
+        "max_level": report.max_level,
+        "streak": streak,
+        "recorded_at": report.timestamp if recorded else prev.get("recorded_at"),
+    }, ensure_ascii=False), encoding="utf-8")
+
+
+def _learner_liveness(status) -> tuple:
+    """返回 ("running"|"stale"|"unknown", 心跳年龄秒)。判活以心跳为准，不信计数器。
+
+    2026-10-19：原实现读 status.json 的 "cycles" 键 —— 该键根本不存在（实际是
+    loop_count），于是永远取 0、永远判"learner loop not running"，而 learner 心跳
+    只有 12 秒。计数器还有一个坑：重启后 loop_count 归零，单看绝对值会误判。
+    """
+    if not status:
+        return "unknown", -1.0
+    try:
+        age = (datetime.now() - datetime.strptime(
+            str(status.get("updated_at") or ""), "%Y-%m-%d %H:%M:%S")).total_seconds()
+    except Exception:
+        return ("running" if status.get("running") else "unknown"), -1.0
+    if status.get("running") is False or age > 600:
+        return "stale", age
+    return "running", age
+
+
 class MetaCogTrigger:
     """Degradation detection trigger. 
 
@@ -175,8 +237,9 @@ class MetaCogTrigger:
                 actions.append("increase_practice_cycles")
                 actions.append("pause_direction")
             elif t.signal_name == "belief_health":
-                actions.append("cleanup_low_confidence_kb")
-                actions.append("archive_stale_entries")
+                # 2026-10-19：这两个动作全代码没有执行者，留着只会每轮重复"建议"。
+                # 待清理量仍在 memory_health 的 reason 里可见（stale entities N (x%)）。
+                pass
         report = MetaCogReport(
             timestamp=now,
             should_evolve=overall >= evolve_threshold,
@@ -185,16 +248,23 @@ class MetaCogTrigger:
             triggers=triggers,
             suggested_actions=actions,
         )
+        # 2026-10-19：状态未变就不落盘（此前每轮都 append，2558 条同内容记录）
+        _recorded = _should_record(self._history[-1] if self._history else None, report)
         self._history.append(report)
-        # ── Persist history to file ──
+        if _recorded:
+            # ── Persist history to file ──
+            try:
+                from ..utils import METACORE_DIR
+                _hist_file = METACORE_DIR / "metacog_history.jsonl"
+                _hist_file.parent.mkdir(parents=True, exist_ok=True)
+                with open(str(_hist_file), "a") as _fh:
+                    _fh.write(report.to_json() + "\n")
+            except Exception:
+                _log.exception("metacog error")
         try:
-            from ..utils import METACORE_DIR
-            _hist_file = METACORE_DIR / "metacog_history.jsonl"
-            _hist_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(str(_hist_file), "a") as _fh:
-                _fh.write(report.to_json() + "\n")
+            _touch_state(report, _recorded)
         except Exception:
-            _log.exception("metacog error")
+            _log.exception("metacog state error")
         return report
 
     @staticmethod
@@ -369,11 +439,16 @@ class MetaCogTrigger:
             import json as _js, sqlite3 as _sq
             from ..utils import METACORE_DIR as _md, LEARNER_STATUS
 
-            # 1. Learner cycles trend
+            # 1. Learner liveness（判活看心跳；loop_count 只作趋势佐证）
             learner_cycles = 0
+            _live, _hb_age = "unknown", -1.0
             if LEARNER_STATUS.exists():
-                st = _js.loads(LEARNER_STATUS.read_text())
-                learner_cycles = st.get("cycles", 0)
+                try:
+                    st = _js.loads(LEARNER_STATUS.read_text())
+                    learner_cycles = st.get("loop_count", st.get("cycles", 0)) or 0
+                    _live, _hb_age = _learner_liveness(st)
+                except Exception:
+                    _live, _hb_age = "unknown", -1.0
 
             # 2. Entity growth from DB (compare recent vs older)
             _db_path = str(_md / "memory.db")
@@ -397,10 +472,14 @@ class MetaCogTrigger:
                 level = TriggerLevel.MODERATE
                 reasons.append(f"no new entities in 7d (prev {_old_ents})")
 
-            # If learner cycles are very low relative to time
-            if learner_cycles == 0:
+            # If the learner looks dead (heartbeat stale / no status at all)
+            if _live == "stale":
                 score = max(score, 0.3)
-                reasons.append("learner loop not running")
+                reasons.append(f"learner heartbeat stale {int(_hb_age)}s")
+            elif _live == "unknown" and learner_cycles == 0:
+                score = max(score, 0.3)
+                reasons.append("learner loop not running (no status)")
+            # 在跑就什么都不说：让下面的 trend ok 分支照常工作
 
             if not reasons:
                 if _recent_ents > 0:
