@@ -149,6 +149,22 @@ def _learner_liveness(status) -> tuple:
     return "running", age
 
 
+def _unusable_ratio_score(total: int, empty_value: int) -> float:
+    """不可用条目占比 → 分数。0 = 正常；>20% 轻微；>50% 明显。
+
+    2026-10-19：这是 memory_health 的新打分依据（内容为空 = 真缺陷），
+    取代原来按 ">30 天未锁" 扣分的口径（那等于惩罚知识积累）。
+    """
+    if total <= 0:
+        return 0.0
+    ratio = empty_value / total
+    if ratio > 0.5:
+        return 0.5
+    if ratio > 0.2:
+        return 0.4
+    return 0.0
+
+
 class MetaCogTrigger:
     """Degradation detection trigger. 
 
@@ -382,17 +398,22 @@ class MetaCogTrigger:
                     score=0.0, reason="memory is empty",
                 )
 
-            # Metric 1: Stale entity ratio (>30d unlocked)
-            stale_ratio = _expired_entities / max(_total_entities, 1)
-            if stale_ratio > 0.3:
-                score = max(score, 0.5)
-                reasons.append(f"stale entities {_expired_entities} ({stale_ratio:.0%})")
+            # Metric 1（2026-10-19 改口径）：**年龄不是缺陷**。知识库本来就该越积越旧，
+            # 旧口径把 ">30 天未锁" 当降级（1828/2558 = 71% ⇒ 0.5 分）等于惩罚"积累"。
+            # 现在年龄只进 details，不参与打分；打分改用"不可用条目"（内容为空 = 真缺陷）。
+            _empty_value = _db.execute(
+                "SELECT COUNT(*) FROM entities WHERE value IS NULL OR length(trim(value)) = 0"
+            ).fetchone()[0]
+            _unusable_score = _unusable_ratio_score(_total_entities, _empty_value)
+            if _unusable_score > 0:
+                score = max(score, _unusable_score)
+                reasons.append(
+                    f"unusable entries {_empty_value} "
+                    f"({_empty_value / max(_total_entities, 1):.0%} empty)")
+            stale_ratio = _expired_entities / max(_total_entities, 1)  # 仅记录
 
-            # Metric 2: Old event ratio
+            # Metric 2（同日改口径）：事件"旧"同理，不参与打分
             old_event_ratio = _old_events / max(_total_events, 1)
-            if old_event_ratio > 0.5 and _total_events > 50:
-                score = max(score, 0.4)
-                reasons.append(f"old events {old_event_ratio:.0%}")
 
             # Metric 3: Noise detection — location/org dominated by long entries
             _noise_types = {"location", "organization"}
@@ -425,9 +446,12 @@ class MetaCogTrigger:
             reason="; ".join(reasons),
             details={
                 "total_entities": _total_entities,
-                "expired_entities": _expired_entities,
+                "empty_value": _empty_value,
+                "old_30d_entities": _expired_entities,   # 仅信息：不作为降级依据
+                "old_30d_ratio": round(stale_ratio, 3),
                 "locked_entities": _locked_entities,
                 "total_events": _total_events,
+                "old_event_ratio": round(old_event_ratio, 3),
             },
         )
 
@@ -510,7 +534,7 @@ class MetaCogTrigger:
     # ── Signal 8: Belief health ──────────────────────────
 
     @staticmethod
-    def _check_belief_health(belief_health: Optional[Dict[str, float]] = None) -> TriggerResult:
+    def _check_belief_health(belief_health: Optional[Dict[str, Any]] = None) -> TriggerResult:
         if belief_health is None:
             try:
                 from ..utils import METACORE_DIR as _md
@@ -541,6 +565,40 @@ class MetaCogTrigger:
         cal = get_calibration()
         unhealthy_th = cal.get("metacog", "belief_unhealthy_threshold", default=0.6)
         critical_th = cal.get("metacog", "belief_critical_threshold", default=0.3)
+
+        # 2026-10-19：形状归一化。调用方（learn/loop.py:805）传的是**能力统计**
+        # {"count","high_confidence","low_confidence","total_evidence"}，而这里原按
+        # {信念名: 健康度} 解释 ⇒ 键名 "low_confidence" 被当成"一条健康度 0 的信念"，
+        # 于是永久 critical（reason 里那句 critical: low_confidence 就是键名）。
+        # 真实数值曾是 success_rate=1.0 / task_count=114 万。
+        if {"count", "high_confidence"} <= set(belief_health):
+            _cnt = int(belief_health.get("count") or 0)
+            _high = int(belief_health.get("high_confidence") or 0)
+            if _cnt <= 0:
+                return TriggerResult(
+                    signal_name="belief_health", triggered=False, score=0.0,
+                    reason="no beliefs yet",
+                )
+            _ratio = _high / _cnt
+            if _ratio < critical_th:
+                return TriggerResult(
+                    signal_name="belief_health", level=TriggerLevel.CRITICAL,
+                    triggered=True, score=0.9,
+                    reason=f"critical: high-confidence ratio {_ratio:.0%} (n={_cnt})",
+                    details={"count": _cnt, "high_confidence": _high, "ratio": round(_ratio, 4)},
+                )
+            if _ratio < unhealthy_th:
+                return TriggerResult(
+                    signal_name="belief_health", level=TriggerLevel.MODERATE,
+                    triggered=True, score=0.5,
+                    reason=f"unhealthy: high-confidence ratio {_ratio:.0%} (n={_cnt})",
+                    details={"count": _cnt, "high_confidence": _high, "ratio": round(_ratio, 4)},
+                )
+            return TriggerResult(
+                signal_name="belief_health", triggered=False, score=0.0,
+                reason=f"ok (high-conf {_ratio:.0%}, n={_cnt})",
+                details={"count": _cnt, "high_confidence": _high, "ratio": round(_ratio, 4)},
+            )
 
         critical_unhealthy = {n: h for n, h in belief_health.items() if h < critical_th}
         unhealthy = {n: h for n, h in belief_health.items() if h < unhealthy_th}
