@@ -78,7 +78,100 @@ def queue_ungraded(change: dict, reason: str = "") -> None:
         pass
 
 
-def gate_changes(changes, log=None, cooldown_hours: float = COOLDOWN_HOURS):
+ACTIVATION_FILE = METACORE_DIR / "dgmh_activation.json"
+DECISIONS_FILE = METACORE_DIR / "dgmh_decisions.jsonl"
+
+
+def load_activation() -> "ActivationStatus":
+    """从 dgmh_activation.json 读激活等级；文件不存在 ⇒ 默认（Level 1）。
+
+    2026-10-19：以前 gate_changes 每次 new 一个默认 ActivationStatus()，
+    judgestored 恒为 False ⇒ update（Level 2）结构上永不可达，判分再好也拦。
+    """
+    try:
+        d = json.loads(ACTIVATION_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return ActivationStatus()
+    return ActivationStatus(
+        phase1_ready=bool(d.get("phase1_ready", True)),
+        phase2_ready=bool(d.get("phase2_ready", False)),
+        phase3_ready=bool(d.get("phase3_ready", False)),
+        judgestored=bool(d.get("judgestored", False)),
+        user_authorized=bool(d.get("user_authorized", False)),
+        safetyguard_stable=bool(d.get("safetyguard_stable", False)),
+        success_trails_ready=bool(d.get("success_trails_ready", False)),
+    )
+
+
+def record_decision(kind: str, target: str, new_value, grade: str = "A",
+                    by: str = "", why: str = "", decision_id: str = "",
+                    ttl_hours: float = 24.0) -> str:
+    """追加一条人工放行/否决记录（一次性令牌，24h 过期）。返回 id。"""
+    import uuid
+    did = decision_id or uuid.uuid4().hex[:12]
+    rec = {
+        "type": kind, "id": did, "target": target,
+        "new": new_value, "grade": grade, "by": by, "why": why,
+        "ts": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "ts_epoch": time.time(), "ttl_hours": ttl_hours,
+    }
+    with DECISIONS_FILE.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    return did
+
+
+def find_decision(target: str, new_value) -> Optional[str]:
+    """查可用的放行令牌：一次性、24h 内、target 与 new 都要吻合。"""
+    if not DECISIONS_FILE.exists():
+        return None
+    now = time.time()
+    approves, consumed = {}, set()
+    for line in DECISIONS_FILE.read_text(encoding="utf-8").splitlines():
+        try:
+            d = json.loads(line)
+        except Exception:
+            continue
+        if d.get("type") == "approve":
+            approves[d.get("id")] = d
+        elif d.get("type") in ("consume", "reject"):
+            consumed.add(d.get("id"))
+    for did, d in approves.items():
+        if did in consumed or str(d.get("target")) != target:
+            continue
+        try:
+            if abs(float(d.get("new")) - float(new_value)) > 1e-9:
+                continue
+        except (TypeError, ValueError):
+            continue
+        ttl = float(d.get("ttl_hours", 24.0)) * 3600
+        if (now - float(d.get("ts_epoch", 0))) > ttl:
+            continue
+        return str(d.get("grade") or "A")
+    return None
+
+
+def consume_decision(target: str, new_value) -> None:
+    """标记令牌已用（一次性）。"""
+    if not DECISIONS_FILE.exists():
+        return
+    for line in DECISIONS_FILE.read_text(encoding="utf-8").splitlines():
+        try:
+            d = json.loads(line)
+        except Exception:
+            continue
+        if d.get("type") == "approve" and str(d.get("target")) == target:
+            try:
+                if abs(float(d.get("new")) - float(new_value)) <= 1e-9:
+                    record_decision("consume", target, new_value, decision_id=d["id"],
+                                    why="applied")
+                    return
+            except (TypeError, ValueError):
+                continue
+
+
+def gate_changes(changes, log=None, cooldown_hours: float = COOLDOWN_HOURS,
+                 activation: Optional["ActivationStatus"] = None,
+                 belief_health: Optional[Dict[str, Any]] = None):
     """逐条过闸门。返回 (passed, stats)。
 
     - 冷却期内：跳过（不重复报告）
@@ -92,7 +185,7 @@ def gate_changes(changes, log=None, cooldown_hours: float = COOLDOWN_HOURS):
         if in_cooldown(target, cooldown_hours):
             stats["cooled"] += 1
             continue
-        judge = c.get("judge_grade")
+        judge = c.get("judge_grade") or find_decision(target, c.get("new"))
         if not judge:
             queue_ungraded(c, "no judge available")
             mark_blocked(target)
@@ -100,13 +193,16 @@ def gate_changes(changes, log=None, cooldown_hours: float = COOLDOWN_HOURS):
             if log:
                 log(f"  📝 ungraded: {target} (no judge) → 人工审队列")
             continue
-        ok, reason = check_gate("update", judge, ActivationStatus())
+        ok, reason = check_gate("update", judge,
+                                activation if activation is not None else load_activation(),
+                                belief_health=belief_health)
         if not ok:
             stats["blocked"] += 1
             mark_blocked(target)
             if log:
                 log(f"  🛡️ DGM-H blocked: {target} ({reason})")
             continue
+        consume_decision(target, c.get("new"))
         passed.append(c)
     return passed, stats
 
