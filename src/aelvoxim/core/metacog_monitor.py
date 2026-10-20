@@ -125,6 +125,10 @@ class MetaCogMonitor:
             "breaker_tripped": self._tripped,
             "should_evolve": False,
             "triggers": [],
+            "synthetic_triggers": [],   # 合成信号（非观测）：heartbeat_ok 等
+            "meta_score": 0.0,          # 自省原始分（9 信号）
+            "blended_score": 0.5,       # 旧口径混合分（保留对照）
+            "learning_health": None,    # learning 能力成功率（独立指标）
             "reflection": "",
             "suggested_actions": [],
         }
@@ -140,6 +144,7 @@ class MetaCogMonitor:
         # 3. Score from metacog report
         if metacog_report:
             report["score"] = getattr(metacog_report, "overall_score", 0.5)
+            report["meta_score"] = report["score"]
             report["triggers"] = getattr(metacog_report, "triggers", [])
             # Carry the evolution suggestion through — it was hardcoded False
             # here, so loop.py never ran auto_tune even when MetaCogTrigger
@@ -163,6 +168,7 @@ class MetaCogMonitor:
                     level=_level, triggered=True, score=0.1,
                     reason=f"Learner tick {_hb_age:.0f}s ago",
                 ))
+                report["synthetic_triggers"].append("heartbeat_ok")
                 report["score"] = max(report["score"], 0.1)
         # Score from SelfModel learning capability — blend, don't replace.
         # Overwriting score with a high success rate masked overload/low-score
@@ -173,7 +179,12 @@ class MetaCogMonitor:
                 _sm = SelfModel()
                 _lc = _sm._capabilities.get("learning")
                 if _lc and _lc.task_count > 0:
-                    report["score"] = max(report["score"], min(1.0, _lc.success_rate) * 0.5)
+                    # 2026-10-20：不再把 learning 成功率当 score 地板。
+                    # 旧写法 score=max(score, 0.84*0.5)=0.42 > 熔断阈值 0.3，
+                    # 使 L6 熔断器（连续 3 次低分）永远无法触发。learning 单列。
+                    report["learning_health"] = round(min(1.0, _lc.success_rate), 3)
+                    report["blended_score"] = max(report["score"],
+                                                  min(1.0, _lc.success_rate) * 0.5)
                 else:
                     total = learner_stats.get("total_cycles", 1)
                     entries = learner_stats.get("total_entries", 0)
@@ -191,7 +202,26 @@ class MetaCogMonitor:
 
         # 5. Circuit breaker
         if not self._tripped and self._low_conf_streak >= _L6_CONSECUTIVE_LOW:
-            self.trip_breaker(f"Low confidence streak: {self._low_conf_streak}")
+            _observe_only = bool(_cal("l6_observe_only", True))
+            if _observe_only:
+                # 2026-10-20：观察模式。分数地板拿掉后熔断器第一次真的会够到阈值，
+                # 先只记 would_trip，不改变行为；等闭环验证过再收紧。
+                try:
+                    _p = _ETHICS_LOG_DIR / "l6_events.jsonl"
+                    _p.parent.mkdir(parents=True, exist_ok=True)
+                    with open(str(_p), "a") as _f:
+                        _f.write(json.dumps({
+                            "ts": datetime.now().isoformat(),
+                            "event": "l6_would_trip",
+                            "reason": f"Low confidence streak: {self._low_conf_streak}",
+                            "score": report["score"],
+                            "observe_only": True,
+                        }, ensure_ascii=False) + "\n")
+                except Exception:
+                    pass
+                report["suggested_actions"].append("l6_would_trip")
+            else:
+                self.trip_breaker(f"Low confidence streak: {self._low_conf_streak}")
             report["breaker_tripped"] = True
             report["suggested_actions"].append("circuit_breaker_tripped")
 

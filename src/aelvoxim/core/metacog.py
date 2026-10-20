@@ -233,10 +233,18 @@ class MetaCogTrigger:
         # steady-state overall≈0.198 → every evaluation skipped recording).
         _record_threshold = self._cw("record_threshold", default=0.05)
         if overall < _record_threshold:
-            return MetaCogReport(
+            # 2026-10-20：早退也要留痕。此前早退直接 return，state 的 last_seen
+            # 只在越过阈值时才更新 ⇒ "健康地安静"和"已经死了"在读数上完全一样
+            # （生产上被误判成自省链断了 28 小时）。history 仍按阈值节流。
+            _early = MetaCogReport(
                 timestamp=now, should_evolve=False,
                 max_level=TriggerLevel.MILD.value, overall_score=overall,
             )
+            try:
+                _touch_state(_early, False)
+            except Exception:
+                _log.exception("metacog state error")
+            return _early
 
         # Build suggested actions based on triggered signals
         actions: List[str] = []

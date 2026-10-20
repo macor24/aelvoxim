@@ -1101,9 +1101,14 @@ class Learner:
             _trig_count = sum(1 for t in _trig_list if getattr(t, "triggered", False))
             _sug_actions = report.get("suggested_actions", [])
             if _sug_actions or report.get("score", 0) > 0.1 or _trig_count > 0:
-                self._log(f"  🧠 Cognition: score={report.get('score', 0):.3f} "
+                _synth = ",".join(report.get("synthetic_triggers") or []) or "-"
+                _learn = report.get("learning_health")
+                self._log(f"  🧠 Cognition: meta={report.get('meta_score', 0):.3f} "
+                          f"score={report.get('score', 0):.3f} "
+                          f"blended={report.get('blended_score', 0):.3f} "
+                          f"learning={'-' if _learn is None else f'{_learn:.2f}'} "
                           f"actions={len(_sug_actions)} "
-                          f"triggers={_trig_count}/{len(_trig_list)} "
+                          f"triggers={_trig_count}/{len(_trig_list)} synth={_synth} "
                           f"belief={belief_stats.get('count',0)}/{belief_stats.get('total_evidence',0)}")
         except Exception as e:
             import traceback as _tb
