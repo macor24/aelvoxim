@@ -275,6 +275,8 @@ def build_system_prompt(system_msg: Optional[str]) -> str:
         + "- Chit-chat or an opinion: one or two sentences, then stop." + NL
         + "- Reason silently. Do not narrate your reasoning unless asked." + NL
         + "- Plain text, no markdown. Reply in the user's language." + NL
+        + "- If the user switches language, switch immediately with them: "
+        "the language of the latest message wins over earlier turns." + NL
     )
 
     return system_msg or base
