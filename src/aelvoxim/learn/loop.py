@@ -15,6 +15,43 @@ from typing import List, Optional
 
 from ..utils import METACORE_DIR, ensure_dir
 
+_WINDOW_FILE = "metacog_windows.jsonl"
+
+
+def _append_window(ts: float, entries: int, cycles: int) -> None:
+    try:
+        from ..utils import METACORE_DIR
+        p = METACORE_DIR / _WINDOW_FILE
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with open(str(p), "a") as f:
+            f.write(json.dumps({"ts": ts, "e": int(entries), "c": int(cycles)}) + "\n")
+    except Exception:
+        pass
+
+
+def _load_windows(max_age_s: float = 8 * 86400) -> list:
+    """从磁盘恢复 tick 快照（重启不丢窗口数据）。"""
+    try:
+        from ..utils import METACORE_DIR
+        p = METACORE_DIR / _WINDOW_FILE
+        if not p.exists():
+            return []
+        import time as _t
+        cutoff = _t.time() - max_age_s
+        out = []
+        for line in p.read_text().splitlines()[-5000:]:
+            try:
+                d = json.loads(line)
+                if float(d["ts"]) >= cutoff:
+                    out.append((float(d["ts"]), int(d["e"]), int(d["c"])))
+            except Exception:
+                continue
+        return out
+    except Exception:
+        return []
+
+
+
 _RATE_LIMIT_MAX = 5  # Max cognition ticks per 24 hours (per direction)
 _RATE_LIMIT_MIN_INTERVAL = 300  # Min seconds between cognition ticks per direction (5 min — was 60s; fewer, slower ticks)
 _LOOP_ROUND_SLEEP = 600       # Rest between full loop rounds (10 min — was ~8-15s per direction)
@@ -772,24 +809,20 @@ class Learner:
                 except Exception:
                     _log.exception("loop error")
                 # ── Per-timeframe success rate tracking ──
-                _tick_snapshots = getattr(self, '_tick_snapshots', [])
-                _tick_snapshots.append((time.time(), _total_entries, _total_cycles))
-                if len(_tick_snapshots) > 100:
-                    _tick_snapshots = _tick_snapshots[-100:]
+                _tick_snapshots = getattr(self, '_tick_snapshots', None)
+                if _tick_snapshots is None:
+                    _tick_snapshots = _load_windows()
+                _ts_now = time.time()
+                _tick_snapshots.append((_ts_now, _total_entries, _total_cycles))
+                _tick_snapshots = _tick_snapshots[-2000:]
                 self._tick_snapshots = _tick_snapshots
-                _now = time.time()
+                _append_window(_ts_now, _total_entries, _total_cycles)
+                _now = _ts_now
 
-                def _window_rate(window_hours: int) -> float:
-                    """Compute success rate over last N hours from snapshots."""
-                    cutoff = _now - window_hours * 3600
-                    recent = [(e, c) for ts, e, c in _tick_snapshots if ts >= cutoff]
-                    if not recent or len(recent) < 2:
-                        return _overall_success  # fall back to lifetime
-                    e0, c0 = recent[0]
-                    e1, c1 = recent[-1]
-                    de = e1 - e0
-                    dc = c1 - c0
-                    return de / max(dc, 1)
+                def _window_rate(window_hours: int):
+                    """按时间窗算产出率；样本不足返回 None（不猜、不退化成 lifetime）。"""
+                    from ..core.metacog import window_success_rate
+                    return window_success_rate(_tick_snapshots, window_hours, _now)
 
                 _sr_1d = _window_rate(24)
                 _sr_3d = _window_rate(72)

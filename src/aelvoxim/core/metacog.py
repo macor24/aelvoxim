@@ -90,6 +90,23 @@ class MetaCogReport:
 SCORE_DELTA = 0.02
 
 
+def window_success_rate(snapshots, window_hours: int, now: float = None):
+    """按时间窗算"每轮产出条目"的比率。
+
+    2026-10-21：样本不足时返回 None，而不是退回整体成功率。
+    此前 learner 重启会清空内存里的 tick 快照，于是窗口退化成 lifetime 值，
+    重启后的一段时间内永远不会报成功率问题（假健康）。
+    """
+    import time as _t
+    now = now if now is not None else _t.time()
+    cutoff = now - window_hours * 3600
+    recent = [(e, c) for ts, e, c in (snapshots or []) if ts >= cutoff]
+    if len(recent) < 2:
+        return None
+    (e0, c0), (e1, c1) = recent[0], recent[-1]
+    return (e1 - e0) / max(c1 - c0, 1)
+
+
 def _triggered_signals(report) -> set:
     return {t.signal_name for t in (getattr(report, "triggers", None) or [])
             if getattr(t, "triggered", False)}
@@ -299,14 +316,14 @@ class MetaCogTrigger:
         c1 = cal.get("metacog", "success_rate_1d_critical", default=0.70)
         c3 = cal.get("metacog", "success_rate_3d_moderate", default=0.80)
         c7 = cal.get("metacog", "success_rate_7d_warning", default=0.90)
-        if sr1 < c1:
+        if sr1 is not None and sr1 < c1:
             score, level = 0.9, TriggerLevel.CRITICAL
             reasons.append(f"1d {sr1:.0%}<{c1:.0%}")
-        if sr3 < c3:
+        if sr3 is not None and sr3 < c3:
             score = max(score, 0.7)
             level = TriggerLevel.MODERATE if level.value != "critical" else level
             reasons.append(f"3d {sr3:.0%}<{c3:.0%}")
-        if sr7 < c7:
+        if sr7 is not None and sr7 < c7:
             score = max(score, 0.5)
             reasons.append(f"7d {sr7:.0%}<{c7:.0%}")
         return TriggerResult(
