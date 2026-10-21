@@ -442,6 +442,35 @@ def _build_or_refresh_embeddings(force: bool = False):
     _EMBEDDING_CACHE = cache if force else (_load_embeddings() if not changed else cache)
 
 
+_EN_STOP = {
+    "about", "after", "again", "their", "there", "these", "those", "which", "while",
+    "would", "should", "could", "where", "what", "when", "with", "from", "into",
+    "your", "yours", "want", "need", "have", "does", "doing", "make", "using",
+    "please", "still", "just", "like", "some", "such", "than", "then", "them",
+}
+
+
+def _distinctive_ok(query: str, row: dict, min_len: int = 5) -> bool:
+    """英文查询必须命中至少一个有辨识度的词，否则视为弱命中。
+
+    2026-10-21：'how to retry http requests' 会因 'http' 命中
+    'Precondition Failed - Conditional HTTP'。中文查询不受影响（走 trgm 阈值）。
+    """
+    import re as _re
+    if not query or _re.search(r"[\u4e00-\u9fff]", query):
+        return True
+    toks = [t for t in _re.findall(r"[a-zA-Z]{%d,}" % min_len, query.lower())
+            if t not in _EN_STOP]
+    if not toks:
+        return True
+    text = " ".join(str(row.get(k) or "") for k in ("title", "topic", "content")).lower()
+    # 至少命中两个有辨识度的词（只有一个词时命中它即可）。
+    # 单个词太容易撞："how to retry http requests" 里 'requests' 会撞到
+    # 'Precondition Failed - Conditional HTTP requests'。
+    hits = sum(1 for t in toks if t in text)
+    return hits >= min(len(toks), 2)
+
+
 def _pg_up() -> bool:
     """PG 是否可用（trgm 兜底的前置条件）。"""
     try:
@@ -1252,6 +1281,7 @@ class KnowledgeBase:
                         "updated_at": str(r.get("updated_at", "")),
                         "_search_score": float(r.get("sim") or 0),
                     })
+                _out = [r for r in _out if _distinctive_ok(query, r)]
                 if _out:
                     _log.info("knowledge search: trgm hit %d (th=%.2f, query=%.40s)",
                               len(_out), _trgm_th, str(query))
@@ -1301,6 +1331,7 @@ class KnowledgeBase:
                             "created_at": str(r.get("created_at", "")),
                             "updated_at": str(r.get("updated_at", "")),
                         })
+                    _results = [r for r in _results if _distinctive_ok(query, r)]
                     if _results:
                         return _results[:limit]
         except Exception:
@@ -1343,6 +1374,7 @@ class KnowledgeBase:
                         "updated_at": str(r.get("updated_at", "")),
                         "_search_score": float(r.get("sim") or 0),
                     })
+                _out = [r for r in _out if _distinctive_ok(query, r)]
                 if _out:
                     _log.info("knowledge search: trgm hit %d (th=%.2f, query=%.40s)",
                               len(_out), _trgm_th, str(query))
