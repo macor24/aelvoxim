@@ -442,6 +442,15 @@ def _build_or_refresh_embeddings(force: bool = False):
     _EMBEDDING_CACHE = cache if force else (_load_embeddings() if not changed else cache)
 
 
+def _pg_up() -> bool:
+    """PG 是否可用（trgm 兜底的前置条件）。"""
+    try:
+        from ..storage.db import use_pg
+        return bool(use_pg())
+    except Exception:
+        return False
+
+
 def _vector_search(query: str, limit: int = 10) -> list:
     """Vector search: returns (entry, score) list sorted by cosine similarity"""
     cache = _load_embeddings()
@@ -1205,6 +1214,53 @@ class KnowledgeBase:
     ) -> list:
         tags = tags or []
 
+        _has_cjk = bool(re.search(r"[\u4e00-\u9fff]", query or ""))
+        # ── 主检索：pg_trgm word_similarity（跨语言，中文必需）──────────────
+        # 2026-10-21：PG 用的是 to_tsvector('simple')，中文没有空格 ⇒ 一句话就是
+        # 一个 token，中文查询基本永不命中（库里有 Kubernetes 条目也取不到）。
+        # 字符级三元组不依赖分词器，实测能干净分开"真相关"和"泛泛而谈"：
+        # 元认知类问句 ≤0.18，Docker/K8s/FastAPI 类 0.5~0.75。阈值 0.35。
+        if _has_cjk and _pg_up():
+            try:
+                from ..storage.db import fetch_dict
+                _trgm_th = float(os.environ.get("AELVOXIM_KB_TRGM_MIN", "0.35"))
+                _rows = fetch_dict(
+                    "SELECT id::text, topic, title, content, confidence, tags, source, "
+                    "created_at, updated_at, "
+                    "word_similarity(%s, coalesce(title,'') || ' ' || coalesce(topic,'')) AS sim "
+                    "FROM knowledge_entries WHERE status = 'active' "
+                    "ORDER BY sim DESC LIMIT %s",
+                    (query, int(limit)),
+                )
+                _out = []
+                for r in _rows or []:
+                    if float(r.get("sim") or 0) < _trgm_th:
+                        continue
+                    if float(r.get("confidence") or 0) < min_confidence:
+                        continue
+                    if topic and r.get("topic") != topic:
+                        continue
+                    _out.append({
+                        "id": r["id"],
+                        "topic": r["topic"],
+                        "title": r["title"],
+                        "content": r["content"],
+                        "confidence": float(r.get("confidence") or 0.5),
+                        "tags": r.get("tags", []),
+                        "source": r.get("source", ""),
+                        "created_at": str(r.get("created_at", "")),
+                        "updated_at": str(r.get("updated_at", "")),
+                        "_search_score": float(r.get("sim") or 0),
+                    })
+                if _out:
+                    _log.info("knowledge search: trgm hit %d (th=%.2f, query=%.40s)",
+                              len(_out), _trgm_th, str(query))
+                    return _out[:limit]
+                _log.debug("knowledge search: trgm no hit above %.2f (query=%.40s)",
+                          _trgm_th, str(query))
+            except Exception:
+                _log.exception("knowledge trgm error")
+
         # PG search (fast, indexed)
         try:
             from ..storage.db import fetch_dict, use_pg as _up
@@ -1249,6 +1305,52 @@ class KnowledgeBase:
                         return _results[:limit]
         except Exception:
             _log.exception("knowledge error")
+
+        # ── 英文次级：tsquery 没命中时用 trgm 补一次 ──────────────────────
+        # 2026-10-21：PG 用的是 to_tsvector('simple')，中文没有空格 ⇒ 一句话就是
+        # 一个 token，中文查询基本永不命中（库里有 Kubernetes 条目也取不到）。
+        # 字符级三元组不依赖分词器，实测能干净分开"真相关"和"泛泛而谈"：
+        # 元认知类问句 ≤0.18，Docker/K8s/FastAPI 类 0.5~0.75。阈值 0.35。
+        if query and not _has_cjk and _pg_up():
+            try:
+                from ..storage.db import fetch_dict
+                _trgm_th = float(os.environ.get("AELVOXIM_KB_TRGM_MIN", "0.35"))
+                _rows = fetch_dict(
+                    "SELECT id::text, topic, title, content, confidence, tags, source, "
+                    "created_at, updated_at, "
+                    "word_similarity(%s, coalesce(title,'') || ' ' || coalesce(topic,'')) AS sim "
+                    "FROM knowledge_entries WHERE status = 'active' "
+                    "ORDER BY sim DESC LIMIT %s",
+                    (query, int(limit)),
+                )
+                _out = []
+                for r in _rows or []:
+                    if float(r.get("sim") or 0) < _trgm_th:
+                        continue
+                    if float(r.get("confidence") or 0) < min_confidence:
+                        continue
+                    if topic and r.get("topic") != topic:
+                        continue
+                    _out.append({
+                        "id": r["id"],
+                        "topic": r["topic"],
+                        "title": r["title"],
+                        "content": r["content"],
+                        "confidence": float(r.get("confidence") or 0.5),
+                        "tags": r.get("tags", []),
+                        "source": r.get("source", ""),
+                        "created_at": str(r.get("created_at", "")),
+                        "updated_at": str(r.get("updated_at", "")),
+                        "_search_score": float(r.get("sim") or 0),
+                    })
+                if _out:
+                    _log.info("knowledge search: trgm hit %d (th=%.2f, query=%.40s)",
+                              len(_out), _trgm_th, str(query))
+                    return _out[:limit]
+                _log.debug("knowledge search: trgm no hit above %.2f (query=%.40s)",
+                          _trgm_th, str(query))
+            except Exception:
+                _log.exception("knowledge trgm error")
 
         # Vector search (if embedding cache available)
         if use_vector and query:
