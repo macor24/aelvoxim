@@ -1266,11 +1266,20 @@ class KnowledgeBase:
                         _pg_down = not _up_now()
                     except Exception:
                         _pg_down = True
+                    # 2026-10-21：PG 正常但没匹配 ⇒ 这是"库里没有相关知识"，
+                    # 不是故障。此前会拿向量兜底结果（余弦 0.2~0.3）当命中注入，
+                    # 于是"你发现你的不足吗"会命中 LoggerProvider 之类完全无关的条目，
+                    # 命中率恒为 100%。没匹配就不注入。
+                    if not _pg_down:
+                        _log.info(
+                            "knowledge search: pg ok but no match, inject nothing "
+                            "(query=%.50s)", str(query)[:50],
+                        )
+                        return []
+
                     _log.warning(
-                        "knowledge search degraded to vector (PG %s), "
-                        "query=%.50s results=%d",
-                        "unavailable" if _pg_down else "no match",
-                        str(query)[:50], len(vec_results),
+                        "knowledge search degraded to vector (PG unavailable), "
+                        "query=%.50s results=%d", str(query)[:50], len(vec_results),
                     )
                     # Filter vector results by confidence
                     filtered = []
