@@ -92,6 +92,7 @@ class MetaCogMonitor:
         self._tick_times: List[float] = []
         self._overload_ticks: List[float] = []
         self._low_conf_streak: int = 0
+        self._no_obs_streak: int = 0   # 连续「缺观测输入」轮数（L6 新语义）
         self._tripped: bool = False
         self._trip_reason: str = ""
         self._trip_time: float = 0.0
@@ -194,14 +195,28 @@ class MetaCogMonitor:
                 entries = learner_stats.get("total_entries", 0)
                 report["score"] = max(report["score"], min(1.0, entries / max(total, 1)) * 0.5)
 
-        # 4. Low-confidence streak for L6 breaker
-        if report["score"] < _get_low_confidence_threshold():
-            self._low_conf_streak += 1
+        # 4. 观测完整性 streak（2026-10-21 改语义）
+        # 旧口径用 report["score"] < threshold 判「低置信」，但 score 是**严重度**
+        # （0 = 什么都没发现 = 健康），极性反了：有 learning 地板时永不触发，
+        # 拿掉地板后每周期都触发。新口径只看「看不看得见」——健康系统安静不算故障。
+        _missing = []
+        if not learner_stats or "total_cycles" not in learner_stats:
+            _missing.append("learner_stats")
+        if not belief_stats or (belief_stats.get("count", 0) == 0
+                                and belief_stats.get("total_evidence", 0) == 0):
+            _missing.append("belief_stats")
+        if metacog_report is None:
+            _missing.append("metacog_report")
+        report["missing_inputs"] = _missing
+        if _missing:
+            self._no_obs_streak += 1
         else:
-            self._low_conf_streak = 0
+            self._no_obs_streak = 0
+        report["no_obs_streak"] = self._no_obs_streak
 
-        # 5. Circuit breaker
-        if not self._tripped and self._low_conf_streak >= _L6_CONSECUTIVE_LOW:
+        # 5. Circuit breaker（观测完整性）
+        _no_obs_limit = int(_cal("l6_no_obs_cycles", 6))
+        if not self._tripped and self._no_obs_streak >= _no_obs_limit:
             _observe_only = bool(_cal("l6_observe_only", True))
             if _observe_only:
                 # 2026-10-20：观察模式。分数地板拿掉后熔断器第一次真的会够到阈值，
@@ -213,7 +228,8 @@ class MetaCogMonitor:
                         _f.write(json.dumps({
                             "ts": datetime.now().isoformat(),
                             "event": "l6_would_trip",
-                            "reason": f"Low confidence streak: {self._low_conf_streak}",
+                            "reason": f"No observation for {self._no_obs_streak} cycles",
+                            "missing": _missing,
                             "score": report["score"],
                             "observe_only": True,
                         }, ensure_ascii=False) + "\n")
@@ -285,6 +301,7 @@ class MetaCogMonitor:
         self._trip_reason = ""
         self._trip_time = 0
         self._low_conf_streak = 0
+        self._no_obs_streak = 0
 
     def get_trip_info(self) -> Dict[str, Any]:
         return {

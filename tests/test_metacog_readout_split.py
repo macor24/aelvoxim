@@ -62,12 +62,42 @@ def test_monitor_separates_scores(tmp_path, monkeypatch):
 
 
 def test_breaker_is_observe_only(tmp_path, monkeypatch):
+    """新语义：只有"看不见"（缺输入）才计数；分数低不算。"""
     import aelvoxim.core.selfmodel as smmod
     monkeypatch.setattr(smmod, "SelfModel", _FakeSelfModel)
     monkeypatch.setattr(mm, "_ETHICS_LOG_DIR", tmp_path)
     m = mm.MetaCogMonitor()
-    m._low_conf_streak = mm._L6_CONSECUTIVE_LOW - 1
-    rep = m.evaluate(learner_stats={"total_cycles": 100, "total_entries": 90},
-                     belief_stats={}, metacog_report=_Report(0.0))
+    m._no_obs_streak = int(mm._cal("l6_no_obs_cycles", 6)) - 1
+    rep = m.evaluate(learner_stats=None, belief_stats=None, metacog_report=_Report(0.0))
     assert m.is_tripped() is False, "观察模式不应真跳闸"
     assert "l6_would_trip" in rep["suggested_actions"]
+    assert rep["missing_inputs"] == ["learner_stats", "belief_stats"]
+
+
+def test_low_score_alone_never_counts(tmp_path, monkeypatch):
+    """核心纠正：分数 0.0（无信号）但输入齐全 → 不计数、不告警。"""
+    import aelvoxim.core.selfmodel as smmod
+    monkeypatch.setattr(smmod, "SelfModel", _FakeSelfModel)
+    monkeypatch.setattr(mm, "_ETHICS_LOG_DIR", tmp_path)
+    m = mm.MetaCogMonitor()
+    rep = None
+    for _ in range(10):
+        rep = m.evaluate(learner_stats={"total_cycles": 10, "total_entries": 9},
+                         belief_stats={"count": 10, "high_confidence": 10,
+                                       "total_evidence": 12},
+                         metacog_report=_Report(0.0))
+    assert rep is not None
+    assert rep["no_obs_streak"] == 0
+    assert not (tmp_path / "l6_events.jsonl").exists()
+
+
+def test_partial_gap_resets_streak(tmp_path, monkeypatch):
+    import aelvoxim.core.selfmodel as smmod
+    monkeypatch.setattr(smmod, "SelfModel", _FakeSelfModel)
+    m = mm.MetaCogMonitor()
+    m.evaluate(learner_stats=None, belief_stats={}, metacog_report=_Report(0.0))
+    assert m._no_obs_streak == 1
+    rep = m.evaluate(learner_stats={"total_cycles": 1},
+                     belief_stats={"count": 1, "total_evidence": 2},
+                     metacog_report=_Report(0.0))
+    assert rep["no_obs_streak"] == 0
