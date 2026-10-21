@@ -754,7 +754,14 @@ class Learner:
                         self._log(f"  🧩 Gap: {rec[:80]}")
                     # Auto-create plan for top recommendation
                     recs = _gap_result["recommendations"]
-                    if recs and len(self._directions) < 10:
+                    _dir_cap = 10
+                    try:
+                        from ..core.calibration import get_calibration as _get_cal_cap
+                        _dir_cap = int(_get_cal_cap().get("learning", "max_active_directions",
+                                                          default=10) or 10)
+                    except Exception:
+                        pass
+                    if recs and len(self._directions) < _dir_cap:
                         _goal = recs[0].replace("Create direction from user demand: ", "").replace("Re-activate direction: ", "")
                         from aelvoxim.planner import LongTermPlanner
                         _ltp = LongTermPlanner()
@@ -891,6 +898,14 @@ class Learner:
                 belief_stats=belief_stats,
                 metacog_report=_mc_report,
             )
+
+            # ── 最小闭环：自省发现 → 动手 → 24h 后按数据判成败 ──
+            try:
+                from ..core import interventions as _iv
+                if _mc_report is not None:
+                    _iv.tick(_mc_report, lambda h: _window_rate(h), log=self._log)
+            except Exception:
+                _log.exception("loop error (interventions)")
 
             # ── Memory consolidation (every 10 cognition ticks) ──
             try:
