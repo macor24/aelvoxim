@@ -92,6 +92,10 @@ def evaluate_conversation(
         kb_topics = [e.get("topic", "?") for e in knowledge_results[:3]]
     report["knowledge"] = {
         "hit": kb_hit,
+        # 2026-10-21：盲点统计需要"问了什么"，只存前 60 字 + hash，不存完整对话
+        "query_head": (query or "")[:60],
+        "query_hash": __import__("hashlib").sha1((query or "").encode("utf-8")).hexdigest()[:12],
+        "miss": (not kb_hit) or (len(knowledge_results or []) == 0),
         "hit_count": len(knowledge_results) if knowledge_results else 0,
         "topics": kb_topics[:3],
     }

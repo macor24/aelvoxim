@@ -38,6 +38,7 @@ FALLBACK_WEIGHTS = {
     "snapshot_trend": 0.10,
     "belief_health": 0.10,
     "execution_health": 0.25,  # highest weight: execution layer resources
+    "retrieval_gap": 0.10,     # 2026-10-21：用户问了但知识检索空手（外部视角）
 }
 
 
@@ -232,9 +233,14 @@ class MetaCogTrigger:
             self._check_snapshot_trend(),
             self._check_belief_health(belief_health),
             self._check_execution_health(),
+            self._check_retrieval_gap(),
         ]
 
         weights = self._cw("trigger_weights", default=FALLBACK_WEIGHTS)
+        _unweighted = [t.signal_name for t in triggers if t.signal_name not in weights]
+        if _unweighted:
+            # 2026-10-21：此前未登记的信号静默拿 0.1，权重表漏项完全看不出来
+            _log.warning("metacog signals without weight (using 0.1): %s", _unweighted)
         overall = sum(t.score * weights.get(t.signal_name, 0.1) for t in triggers)
         levels = [t for t in triggers if t.triggered]
         max_level = max(
@@ -647,6 +653,33 @@ class MetaCogTrigger:
             triggered=True, score=score, reason=reason,
             details={"unhealthy": unhealthy, "critical": critical_unhealthy},
         )
+
+    # ── Signal 10: Retrieval gap（用户问了，但知识没答上）──────────
+    def _check_retrieval_gap(self) -> TriggerResult:
+        """近 24h 的检索空手率。样本不足不出分（防"7 条数据算 100%"）。"""
+        try:
+            from .blindspots import stats as _bs
+            s = _bs(24)
+        except Exception as e:  # noqa: BLE001
+            return TriggerResult(signal_name="retrieval_gap", triggered=False,
+                                 score=0.0, reason=f"stats failed: {e}")
+        n = int(s.get("total") or 0)
+        ratio = float(s.get("miss_ratio") or 0.0)
+        min_n = int(self._cw("retrieval_gap_min_samples", default=10))
+        ex = "; ".join(s.get("top_queries") or [])[:60]
+        if n < min_n:
+            return TriggerResult(signal_name="retrieval_gap", triggered=False, score=0.0,
+                                 reason=f"样本不足 (n={n}/{min_n})", details=s)
+        if ratio >= 0.8:
+            return TriggerResult(signal_name="retrieval_gap", level=TriggerLevel.CRITICAL,
+                                 triggered=True, score=0.9,
+                                 reason=f"空手率 {ratio:.0%} ({s['miss']}/{n}) 例: {ex}", details=s)
+        if ratio >= 0.5:
+            return TriggerResult(signal_name="retrieval_gap", level=TriggerLevel.MODERATE,
+                                 triggered=True, score=0.6,
+                                 reason=f"空手率 {ratio:.0%} ({s['miss']}/{n}) 例: {ex}", details=s)
+        return TriggerResult(signal_name="retrieval_gap", triggered=False, score=0.0,
+                             reason=f"空手 {s['miss']}/{n} ({ratio:.0%})", details=s)
 
     # ── Signal 9: Execution health (expert workers, heartbeat) ──
 
