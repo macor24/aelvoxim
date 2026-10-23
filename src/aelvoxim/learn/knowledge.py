@@ -578,6 +578,21 @@ class KnowledgeBase:
         tags = tags or []
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+        # ── 质量闸（2026-10-22）：默认 0.0 = 不拦，保持现状 ──
+        # 这台系统此前只有"学多快"（每方向每天 5 轮），没有"学多严"：
+        # 写库不看置信度，confidence 直接用列默认 0.5。实验闸门必须真实可调，
+        # 所以要有一个写入侧的门，而不是只在检索侧过滤。
+        try:
+            from ..core.calibration import get_calibration as _gc
+            _min_conf = float(_gc().get("learning", "min_accept_confidence", default=0.0) or 0.0)
+        except Exception:
+            _min_conf = 0.0
+        if _min_conf > 0 and float(confidence or 0) < _min_conf:
+            _log.info("knowledge rejected (conf %.2f < %.2f): %s",
+                      float(confidence or 0), _min_conf, str(title)[:40])
+            return {"id": "", "_status": "rejected_low_conf", "title": title,
+                    "topic": topic, "created_at": now}
+
         # ── Plan limit check ──
         try:
             from ..server.auth import PLANS
