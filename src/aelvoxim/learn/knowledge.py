@@ -227,11 +227,25 @@ def _read_entry(entry_id: str) -> Optional[dict]:
 
 
 def _update_topic_index(topic: str, timestamp: str):
-    index = _read_index()
-    if topic not in index["topics"]:
-        index["topics"][topic] = {"count": 0, "last_updated": ""}
-    index["topics"][topic]["last_updated"] = timestamp
-    _write_index(index)
+    """Refresh a topic's last_updated — read-modify-write inside the write guard.
+
+    This used to be an unguarded read+write like the old append: a concurrent
+    writer's freshly added id was dropped when this wrote its stale snapshot back
+    (17 entries went missing this way on 2026-10-26).
+    """
+    _ensure_dirs()
+    with _FileWriteGuard():
+        index = _read_index()
+        topics = index.setdefault("topics", {})
+        meta = topics.get(topic)
+        if not isinstance(meta, dict):
+            meta = {"count": 0, "last_updated": ""}
+        meta["last_updated"] = timestamp
+        topics[topic] = meta
+        raw = json.dumps(index, ensure_ascii=False, indent=2)
+        if len(raw.encode()) > _MAX_JSON_SIZE:
+            raise ValueError(f"Index data too large: {len(raw)} > {_MAX_JSON_SIZE}")
+        INDEX_FILE.write_text(raw)
 
 
 # ── Semantic deduplication ──────────────────────
@@ -695,6 +709,21 @@ class KnowledgeBase:
                 "_sanity_reason": sanity_check,
                 "title": title, "topic": topic, "created_at": now,
             }
+
+        # ── title/content coherence (2026-10-26) ──
+        # Execution results are captured stdout of a canned template in learn/execute.py;
+        # the caller files them under whatever direction is currently learning, so title
+        # and body often have nothing in common (a DatetimeIndex entry holding a SQL index
+        # benchmark). 595 such entries were found on 2026-10-26 — refuse new ones.
+        if (source or "") == "execution_result" and content:
+            import re as _re2
+            _subject = (title or "").split(" - ", 1)[-1]
+            _kw = [w for w in _re2.findall(r"[A-Za-z]{5,}", _subject)][:4]
+            _body = (content or "").lower()
+            if len(_kw) >= 2 and not any(w.lower() in _body for w in _kw):
+                _log.info("knowledge rejected (title/content mismatch): %s", str(title)[:50])
+                return {"id": "", "_status": "rejected_mismatch", "title": title,
+                        "topic": topic, "created_at": now}
 
         # ── Exact content dedup via content_hash ──
         if content_hash:

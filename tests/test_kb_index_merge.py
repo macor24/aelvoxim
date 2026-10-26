@@ -75,3 +75,13 @@ def test_save_embeddings_is_atomic(kb_tmp):
     kn._save_embeddings({"a": {"vector": [1.0], "text": "t"}})
     assert json.loads(kn._EMBEDDING_FILE.read_text()).keys() == {"a"}
     assert not kn._EMBEDDING_FILE.with_suffix(".tmp").exists()
+
+
+def test_update_topic_index_keeps_entries(kb_tmp):
+    """The topic refresh must never truncate the entries list it just read."""
+    kn.INDEX_FILE.write_text(json.dumps({"entries": ["a", "b"], "topics": {"T": {"count": 1, "last_updated": ""}}}))
+    kn._update_topic_index("T", "2026-10-26 19:00:00")
+    data = json.loads(kn.INDEX_FILE.read_text())
+    assert data["entries"] == ["a", "b"]
+    assert data["topics"]["T"]["last_updated"] == "2026-10-26 19:00:00"
+    assert data["topics"]["T"]["count"] == 1
