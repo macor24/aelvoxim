@@ -145,6 +145,41 @@ def _write_entry(entry: dict):
         _entry_path(entry["id"]).write_text(raw)
 
 
+def add_to_index(entry_id: str, topic: str = "", timestamp: str = "") -> bool:
+    """Append an entry id to index.json — read-append-write inside the write guard.
+
+    The append used to be an unguarded read-modify-write (``_read_index()`` then
+    ``_write_index()``): api and learner could both read the same list, and the
+    second write silently dropped the first one's id. That is why freshly learned
+    entries disappeared from the index (1366 such entries were found on
+    2026-10-26 and had to be re-indexed by hand). Returns True when the id was
+    actually added.
+    """
+    if not entry_id:
+        return False
+    _ensure_dirs()
+    with _FileWriteGuard():
+        index = _read_index()
+        entries = index.setdefault("entries", [])
+        if entry_id in entries:
+            return False
+        entries.append(entry_id)
+        if topic:
+            topics = index.setdefault("topics", {})
+            meta = topics.get(topic)
+            if not isinstance(meta, dict):
+                meta = {"count": 0, "last_updated": ""}
+            meta["count"] = int(meta.get("count", 0) or 0) + 1
+            meta["last_updated"] = timestamp or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            topics[topic] = meta
+        raw = json.dumps(index, ensure_ascii=False, indent=2)
+        if len(raw.encode()) > _MAX_JSON_SIZE:
+            raise ValueError(f"Index data too large: {len(raw)} > {_MAX_JSON_SIZE}")
+        INDEX_FILE.write_text(raw)
+    invalidate_active_cache()
+    return True
+
+
 def _read_pending() -> dict:
     if not PENDING_FILE.exists():
         return {"pending": [], "archived": []}
@@ -312,6 +347,7 @@ def _find_duplicate(title: str, summary: str = "", topic: str = "") -> tuple:
 _EMBEDDING_FILE = KNOWLEDGE_DIR / "embeddings.json"
 _EMBEDDING_LOCK = threading.Lock()
 _EMBEDDING_CACHE = None  # {"entry_id": {"vector": [...], "text": "..."}}
+_EMBEDDING_STAMP = None  # (mtime_ns, size) of the file the cache was loaded from
 _VOCAB_CACHE = None  # Global vocabulary: {"word": idx}
 
 # Chinese word segmentation: simple bigram segmentation (single char + double char)
@@ -375,9 +411,17 @@ def _cosine_sim(v1: list, v2: list) -> float:
     return dot / (norm1 * norm2) if norm1 * norm2 > 0 else 0.0
 
 
+def _embedding_stamp():
+    try:
+        st = _EMBEDDING_FILE.stat()
+        return (st.st_mtime_ns, st.st_size)
+    except FileNotFoundError:
+        return None
+
+
 def _load_embeddings() -> dict:
     """Load embedding cache"""
-    global _EMBEDDING_CACHE
+    global _EMBEDDING_CACHE, _EMBEDDING_STAMP
     if _EMBEDDING_CACHE is not None:
         return _EMBEDDING_CACHE
     if _EMBEDDING_FILE.exists():
@@ -387,12 +431,36 @@ def _load_embeddings() -> dict:
             _EMBEDDING_CACHE = {}
     else:
         _EMBEDDING_CACHE = {}
+    _EMBEDDING_STAMP = _embedding_stamp()
     return _EMBEDDING_CACHE
 
 
 def _save_embeddings(data: dict):
+    """Persist vectors without clobbering keys another process wrote.
+
+    This used to be a blind write of the caller's in-memory dict, so api and
+    learner overwrote each other: 22 freshly backfilled vectors vanished within
+    30 minutes on 2026-10-26. Now the on-disk file is merged in whenever it
+    changed since our last read/write, and the swap is atomic.
+    """
+    global _EMBEDDING_CACHE, _EMBEDDING_STAMP
     with _EMBEDDING_LOCK:
-        _EMBEDDING_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+        payload = dict(data or {})
+        current = _embedding_stamp()
+        if _EMBEDDING_STAMP is not None and current != _EMBEDDING_STAMP and _EMBEDDING_FILE.exists():
+            try:
+                disk = json.loads(_EMBEDDING_FILE.read_text())
+                if isinstance(disk, dict):
+                    merged = dict(disk)
+                    merged.update(payload)
+                    payload = merged
+            except Exception:
+                _log.exception("knowledge error: embeddings merge failed, writing cache as-is")
+        tmp = _EMBEDDING_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
+        tmp.replace(_EMBEDDING_FILE)
+        _EMBEDDING_CACHE = payload
+        _EMBEDDING_STAMP = _embedding_stamp()
 
 
 def _build_or_refresh_embeddings(force: bool = False):
@@ -705,12 +773,7 @@ class KnowledgeBase:
         # MetaCore: store directly to active, no pending/approve pipeline
         # Update index simultaneously (entries list + topics metadata)
         _write_entry(entry)
-        index = _read_index()
-        if entry_id not in index["entries"]:
-            index["entries"].append(entry_id)
-        _write_index(index)
-        _update_topic_index(topic, now)
-        invalidate_active_cache()
+        add_to_index(entry_id, topic, now)
         return entry
 
     @staticmethod
@@ -929,14 +992,7 @@ class KnowledgeBase:
             except Exception:
                 _log.exception("knowledge error: PG dual-write failed on approve")
 
-            index = _read_index()
-            index["entries"].append(entry_id)
-            topic = entry["topic"]
-            if topic not in index["topics"]:
-                index["topics"][topic] = {"count": 0, "last_updated": ""}
-            index["topics"][topic]["count"] += 1
-            index["topics"][topic]["last_updated"] = entry["_promoted_at"]
-            _write_index(index)
+            add_to_index(entry_id, entry.get("topic", ""), entry.get("_promoted_at", ""))
 
             pending_data["pending"].pop(idx)
             _write_pending(pending_data)

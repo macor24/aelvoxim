@@ -250,26 +250,26 @@ def cmd_rebuild_index(args):
 
 
 def cmd_backfill_emb(args):
-    from aelvoxim.storage.embedding import get_embedding
+    """Rebuild the vector cache in the space _vector_search actually scores.
 
-    entries = load_entries()
-    idx = set(str(x) for x in read_index().get("entries", []))
-    emb = json.loads(EMB.read_text(encoding="utf-8")) if EMB.exists() else {}
-    missing = sorted(i for i in idx if i not in emb and i in entries)
-    print(f"index={len(idx)} embedded={len(emb)} missing={len(missing)}")
+    Earlier this used storage.embedding.get_embedding (hash pseudo-vectors, 384/2048
+    dims of noise). Those live in a different space than the bag-of-words TF vectors
+    the retriever builds from the shared vocabulary, so backfilled entries could
+    never rank. Delegate to the module's own rebuild instead.
+    """
+    from aelvoxim.learn import knowledge as kn
+
+    index_ids = kn._read_index().get("entries", [])
+    have = kn._load_embeddings()
+    print(f"index_ids={len(index_ids)} embedded={len(have)}")
     if not args.apply:
-        print("DRY-RUN")
+        print("DRY-RUN (would run knowledge._build_or_refresh_embeddings(force=True))")
         return 0
-    for i in missing:
-        d = entries[i][1]
-        text = (d.get("title") or "") + " " + (d.get("content") or "")[:400]
-        emb[i] = {"vector": get_embedding(text), "text": (d.get("title") or "")[:200]}
-    tmp = EMB.with_suffix(".tmp")
-    with tmp.open("w", encoding="utf-8") as fh:
-        json.dump(emb, fh, ensure_ascii=False)
-    json.loads(tmp.read_text(encoding="utf-8"))  # validate before swap
-    tmp.replace(EMB)
-    print(f"embeddings rewritten: {len(emb)}")
+    kn._EMBEDDING_CACHE = None          # force a fresh read of the file on disk
+    kn._build_or_refresh_embeddings(force=True)
+    kn._EMBEDDING_CACHE = None
+    after = kn._load_embeddings()
+    print(f"embedded_after={len(after)}")
     return 0
 
 
