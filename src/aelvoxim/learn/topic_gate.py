@@ -30,10 +30,15 @@ _DATA_DIR = Path(os.environ.get("AELVOXIM_DATA_DIR") or (Path.home() / ".aelvoxi
 DENY_FILE = _DATA_DIR / "learning_denylist.json"
 
 # Fallback when the operator file is absent. The file (if present) replaces this.
+# Scope: the Zenttop/Alibaba product-copy task and the lead-gen/email task the
+# operator wanted switched off — NOT the domains themselves. "Alibaba Cloud" and
+# "cutting tools" are this project's own subject matter and must stay learnable.
 DEFAULT_DENY: Tuple[str, ...] = (
-    "zenttop", "kitchen knife", "alibaba", "阿里巴巴", "阿里文案", "刀具工厂",
+    "zenttop", "阿里文案", "阿里国际站", "阿里巴巴国际站", "alibaba.com",
+    "刀具工厂", "kitchen knife factory copy",
     "hindi", "kavita", "कविता", "devanagari",
-    "拓客", "客户线索", "自动拓客", "发邮件", "whatsapp", "watsap",
+    "拓客", "客户线索", "自动拓客", "发邮件", "群发",
+    "lead generation", "cold email", "whatsapp", "watsap",
 )
 
 MAX_TOPIC_LEN = 80

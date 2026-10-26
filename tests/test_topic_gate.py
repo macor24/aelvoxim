@@ -55,6 +55,18 @@ GOOD = [
     "分布式系统一致性协议（如Raft或Paxos的工程实现）",
     "AI自我进化与能力扩展",
     "AI智能体自我进化方向",
+    # denylist must target the Zenttop/lead-gen TASKS, not the domains:
+    "Alibaba Cloud ECS 远程运维",
+    "Alibaba Cloud RDS backup",
+    "数控刀具选型与寿命",
+    "kitchen knife factory automation",
+]
+
+DENY_CASES = [
+    ("Zenttop 刀具工厂阿里文案", "denylist:zenttop"),
+    ("阿里国际站产品文案撰写", "denylist:阿里国际站"),
+    ("自动拓客 客户线索收集", "denylist:拓客"),
+    ("cold email sequence for B2B leads", "denylist:cold email"),
 ]
 
 
@@ -69,6 +81,13 @@ def test_junk_rejected(topic, reason):
 def test_real_topics_kept(topic):
     ok, why = tg.check(topic)
     assert ok, f"should keep {topic!r} but got {why}"
+
+
+@pytest.mark.parametrize("topic,reason", DENY_CASES)
+def test_denylist_hits_the_task_not_the_domain(topic, reason):
+    ok, why = tg.check(topic)
+    assert not ok, f"should block {topic!r}"
+    assert why == reason, f"{topic!r} -> {why}, expected {reason}"
 
 
 def test_denylist_file_overrides_defaults(tmp_path, monkeypatch):
