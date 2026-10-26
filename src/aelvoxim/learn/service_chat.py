@@ -11,6 +11,26 @@ from typing import List, Optional
 
 _log = logging.getLogger("aelvoxim.routes")
 
+from .topic_gate import check as _topic_check
+
+
+def _safe_topic(raw: str, fallback: str = "conversation") -> str:
+    """Chat text may only become a KB topic if it passes topic_gate.
+
+    2026-10-26 (A1): a chat question or a pasted prompt stored as the KB topic is
+    what promoted junk into learning directions downstream.
+    """
+    text = (raw or fallback).strip()
+    try:
+        ok, reason = _topic_check(text)
+    except Exception:
+        _log.exception("topic_gate check failed")
+        ok, reason = False, "gate_error"
+    if ok:
+        return text[:80]
+    _log.info("chat topic suppressed by gate (%s): %.60s", reason, text)
+    return fallback
+
 # ═══ Thread-safe per-user scoped container ═══
 from threading import Lock as _Lock
 from typing import TypeVar, Generic, Set
@@ -1186,7 +1206,7 @@ def chat_pipeline(
                 for _fact_title, _fact_content in _facts[:3]:
                     from ..learn.knowledge import KnowledgeBase as _kb
                     _kb.store_pending(
-                        topic=signals.get("raw_topic", "conversation")[:80],
+                        topic=_safe_topic(signals.get("raw_topic", "conversation")),
                         title=_fact_title[:80],
                         content=_fact_content[:500],
                         source="chat_fact",
@@ -1198,7 +1218,7 @@ def chat_pipeline(
                 if signals.get("correction"):
                     from ..learn.knowledge import KnowledgeBase as _kb
                     _kb.store_pending(
-                        topic=signals.get("raw_topic", "conversation")[:80],
+                        topic=_safe_topic(signals.get("raw_topic", "conversation")),
                         title=f"对话纠正: {signals.get('raw_topic', 'conversation')[:40]}",
                         content=f"用户纠正: 原={signals['correction']['old_term']} 新={signals['correction']['new_term']}",
                         source="chat_correction",

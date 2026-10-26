@@ -15,6 +15,7 @@ from typing import Dict, List, Optional, Set
 
 import logging
 _log = logging.getLogger("aelvoxim.learn.discover")
+from .topic_gate import check as _topic_check
 
 # ── arXiv discovery ──────────────────────────
 
@@ -225,32 +226,35 @@ def suggest_directions_from_knowledge(
     all_entries: list,
     max_suggestions: int = 3,
 ) -> List[str]:
-    """Analyze knowledge base and suggest topics not yet being learned."""
-    user_chat_candidates: Dict[str, float] = {}
+    """Analyze knowledge base and suggest topics not yet being learned.
+
+    2026-10-26 (A2): topics whose source is ``user_chat`` never become learning
+    directions. Chat text is a question or a pasted prompt, not a research
+    topic; promoting it turned single requests into autonomous directions that
+    generated hundreds of entries. Every remaining candidate passes topic_gate.
+    """
     other_candidates: Dict[str, float] = {}
+    skipped = 0
 
     for e in all_entries:
         t = e.get("topic", "").strip()
         if not t or t in existing_topics:
             continue
-        src = e.get("source", "")
+        if e.get("source", "") == "user_chat":
+            skipped += 1
+            continue
         conf = e.get("confidence", 0)
-        vl = e.get("value_level", 0)
+        if not _topic_check(t)[0]:
+            skipped += 1
+            continue
+        if t not in other_candidates or conf > other_candidates[t]:
+            other_candidates[t] = conf
 
-        if src == "user_chat" and vl >= 2:
-            if t not in user_chat_candidates or conf > user_chat_candidates[t]:
-                user_chat_candidates[t] = conf
-        elif src != "user_chat":
-            if t not in other_candidates or conf > other_candidates[t]:
-                other_candidates[t] = conf
-
-    suggestions = sorted(user_chat_candidates.keys(),
-                         key=lambda t: user_chat_candidates[t],
+    suggestions = sorted(other_candidates.keys(),
+                         key=lambda t: other_candidates[t],
                          reverse=True)
-    suggestions += sorted(other_candidates.keys(),
-                          key=lambda t: other_candidates[t],
-                          reverse=True)
-
+    if skipped:
+        _log.info("suggest_directions: skipped %d chat/junk topics", skipped)
     return suggestions[:max_suggestions]
 
 

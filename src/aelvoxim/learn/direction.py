@@ -14,6 +14,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 from ..utils import METACORE_DIR, ensure_dir
+from .topic_gate import check as _topic_check
 
 _log = logging.getLogger("aelvoxim.learn.direction")
 
@@ -185,6 +186,13 @@ class DirectionManager:
         if any(m in t for m in fragment_markers):
             return False
         if len(t) <= 2:
+            return False
+        # 2026-10-26: chat sentences, pasted prompts, phone numbers and the
+        # operator denylist must never become learning directions.
+        # See learn/topic_gate.py for the why.
+        _ok, _reason = _topic_check(t)
+        if not _ok:
+            _log.info("topic_gate rejected direction (%s): %.60s", _reason, t)
             return False
         return True
 
