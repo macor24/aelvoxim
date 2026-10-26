@@ -681,19 +681,11 @@ class KnowledgeBase:
             (content or "").encode("utf-8")
         ).hexdigest() if content else ""
 
-        # ── PG dual-mode: store with embedding ──
-        from ..storage.db import execute as _pg_exec, use_pg as _use_pg
-        if _use_pg():
-            try:
-                from ..storage.embedding import get_embedding as _ge
-                _emb = _ge((title or "") + " " + (summary or content or ""))
-                _pg_exec("""
-                    INSERT INTO knowledge_entries (topic, title, content, status, source)
-                    VALUES (%s, %s, %s, %s, %s)
-                    ON CONFLICT DO NOTHING
-                """, (topic, title, summary or content, "active", source or "chat"))
-            except Exception:
-                _log.exception("knowledge error")
+        # ── PG dual-mode: row is written together with the file, AFTER the gates ──
+        # (2026-10-26) This insert used to run here, before the sanity check and the
+        # duplicate checks, so every rejected/deduped entry still left an active row
+        # in PG: 2069 such rows were found with no file behind them. The insert now
+        # lives next to _write_entry() at the end of this method.
 
         # ── Common sense reasonableness check ────────────────
         sanity_check = _check_content_sanity(topic, summary or content)
@@ -771,6 +763,18 @@ class KnowledgeBase:
             "validated": validated,
         }
         # MetaCore: store directly to active, no pending/approve pipeline
+        # PG row + file are written together here, after every gate above has
+        # passed, so a rejected/deduped entry never leaves an orphan PG row.
+        from ..storage.db import execute as _pg_exec, use_pg as _use_pg
+        if _use_pg():
+            try:
+                _pg_exec("""
+                    INSERT INTO knowledge_entries (topic, title, content, status, source, created_at)
+                    VALUES (%s, %s, %s, %s, %s, COALESCE(%s::timestamp, now()))
+                    ON CONFLICT DO NOTHING
+                """, (topic, title, summary or content, "active", source or "chat", now))
+            except Exception:
+                _log.exception("knowledge error: PG dual-write failed")
         # Update index simultaneously (entries list + topics metadata)
         _write_entry(entry)
         add_to_index(entry_id, topic, now)
