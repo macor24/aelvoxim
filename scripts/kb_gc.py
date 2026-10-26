@@ -85,6 +85,22 @@ def norm_title(t: str) -> str:
     return t.strip()
 
 
+_PLAN_PREFIX_RE = re.compile(r"^(已完成计划|完成计划)\s*[:：]?\s*")
+
+
+def topic_passes(gate, topic: str):
+    """Gate verdict, but a plan-completion title with a real payload counts as fine."""
+    ok, reason = gate.check(topic or "")
+    if ok:
+        return True, reason
+    if reason == "plan_title":
+        payload = _PLAN_PREFIX_RE.sub("", topic or "")
+        ok2, _ = gate.check(payload)
+        if ok2:
+            return True, "plan_title_with_payload"
+    return False, reason
+
+
 def load_entries():
     out = {}
     for p in E.glob("*.json"):
@@ -158,27 +174,49 @@ def cmd_status(args):
         print(f"  topics_only_in_pg={len(topics - file_topics)} topics_only_in_files={len(file_topics - topics)}")
 
     gate = load_gate()
+    gate_dirs = gate_kb = -1
     if gate:
         bad_dirs, bad_kb = [], defaultdict(int)
         try:
             from aelvoxim.storage.db import fetch_dict, use_pg
             if use_pg():
                 for r in fetch_dict("SELECT topic FROM learning_directions"):
-                    ok, reason = gate.check(r["topic"] or "")
+                    ok, reason = topic_passes(gate, r["topic"])
                     if not ok:
                         bad_dirs.append((reason, r["topic"]))
                 for r in fetch_dict("SELECT topic, count(*) n FROM knowledge_entries GROUP BY 1"):
-                    ok, reason = gate.check(r["topic"] or "")
+                    ok, reason = topic_passes(gate, r["topic"])
                     if not ok:
                         bad_kb[reason] += int(r["n"])
         except Exception:
             pass
+        gate_dirs, gate_kb = len(bad_dirs), sum(bad_kb.values())
         print("── gate")
         print(f"  directions_failing_gate={len(bad_dirs)}  kb_rows_failing_gate={sum(bad_kb.values())}")
         for reason, topic in bad_dirs[:6]:
             print(f"    [{reason}] {topic[:60]!r}")
         if bad_kb:
             print("   " + ", ".join(f"{k}={v}" for k, v in sorted(bad_kb.items())))
+
+    if getattr(args, "check", False):
+        warns = []
+        if len(not_indexed) > 20:
+            warns.append(f"active_not_indexed={len(not_indexed)} (>20)")
+        if len(not_embedded) > 20:
+            warns.append(f"active_not_embedded={len(not_embedded)} (>20)")
+        if wasted > 50:
+            warns.append(f"duplicate_titles_wasted={wasted} (>50)")
+        if gate_dirs > 0:
+            warns.append(f"directions_failing_gate={gate_dirs}")
+        if gate_kb > 0:
+            warns.append(f"kb_rows_failing_gate={gate_kb}")
+        print(f"── check @ {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        if warns:
+            for w in warns:
+                print(f"  WARN {w}")
+            print("  RESULT=WARN")
+            return 1
+        print("  RESULT=OK (nothing above threshold)")
     return 0
 
 
@@ -279,6 +317,8 @@ def main():
     ap.add_argument("--rebuild-index", action="store_true")
     ap.add_argument("--backfill-emb", action="store_true")
     ap.add_argument("--prune-dupes", action="store_true")
+    ap.add_argument("--check", action="store_true",
+                    help="exit 1 when the KB drifts past thresholds (for the weekly timer)")
     ap.add_argument("--apply", action="store_true")
     args = ap.parse_args()
     if args.rebuild_index:
