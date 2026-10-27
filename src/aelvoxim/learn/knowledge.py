@@ -152,30 +152,45 @@ def add_to_index(entry_id: str, topic: str = "", timestamp: str = "") -> bool:
     ``_write_index()``): api and learner could both read the same list, and the
     second write silently dropped the first one's id. That is why freshly learned
     entries disappeared from the index (1366 such entries were found on
-    2026-10-26 and had to be re-indexed by hand). Returns True when the id was
-    actually added.
+    2026-10-26). The write is verified afterwards and retried once, because a
+    concurrent unguarded writer elsewhere still costs us an occasional append —
+    the retry makes it self-healing and the warning line records it.
+
+    Returns True when the id ends up in the index.
     """
     if not entry_id:
         return False
-    _ensure_dirs()
-    with _FileWriteGuard():
-        index = _read_index()
-        entries = index.setdefault("entries", [])
-        if entry_id in entries:
-            return False
-        entries.append(entry_id)
-        if topic:
-            topics = index.setdefault("topics", {})
-            meta = topics.get(topic)
-            if not isinstance(meta, dict):
-                meta = {"count": 0, "last_updated": ""}
-            meta["count"] = int(meta.get("count", 0) or 0) + 1
-            meta["last_updated"] = timestamp or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            topics[topic] = meta
-        raw = json.dumps(index, ensure_ascii=False, indent=2)
-        if len(raw.encode()) > _MAX_JSON_SIZE:
-            raise ValueError(f"Index data too large: {len(raw)} > {_MAX_JSON_SIZE}")
-        INDEX_FILE.write_text(raw)
+    for attempt in (1, 2):
+        _ensure_dirs()
+        with _FileWriteGuard():
+            index = _read_index()
+            entries = index.setdefault("entries", [])
+            if entry_id in entries:
+                if attempt == 1:
+                    return False          # a genuine duplicate: nothing to do
+                break
+            entries.append(entry_id)
+            if topic:
+                topics = index.setdefault("topics", {})
+                meta = topics.get(topic)
+                if not isinstance(meta, dict):
+                    meta = {"count": 0, "last_updated": ""}
+                meta["count"] = int(meta.get("count", 0) or 0) + 1
+                meta["last_updated"] = timestamp or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                topics[topic] = meta
+            raw = json.dumps(index, ensure_ascii=False, indent=2)
+            if len(raw.encode()) > _MAX_JSON_SIZE:
+                raise ValueError(f"Index data too large: {len(raw)} > {_MAX_JSON_SIZE}")
+            INDEX_FILE.write_text(raw)
+        try:
+            present = entry_id in set(_read_index().get("entries", []))
+        except Exception:
+            _log.exception("knowledge error: index verify failed for %s", entry_id)
+            present = True
+        if present:
+            invalidate_active_cache()
+            return True
+        _log.warning("index append lost for %s (attempt %d) — retrying", entry_id, attempt)
     invalidate_active_cache()
     return True
 
@@ -1689,15 +1704,18 @@ class KnowledgeBase:
         if entry:
             path = _entry_path(entry_id)
             path.unlink(missing_ok=True)
-            index = _read_index()
-            if entry_id in index["entries"]:
-                index["entries"].remove(entry_id)
-            topic = entry["topic"]
-            if topic in index["topics"]:
-                index["topics"][topic]["count"] = max(0, index["topics"][topic]["count"] - 1)
-                if index["topics"][topic]["count"] == 0:
-                    del index["topics"][topic]
-            _write_index(index)
+            # read-modify-write under the same guard as add_to_index(): an
+            # unguarded read here wiped ids appended by another process.
+            with _FileWriteGuard():
+                index = _read_index()
+                if entry_id in index["entries"]:
+                    index["entries"].remove(entry_id)
+                topic = entry["topic"]
+                if topic in index["topics"]:
+                    index["topics"][topic]["count"] = max(0, index["topics"][topic]["count"] - 1)
+                    if index["topics"][topic]["count"] == 0:
+                        del index["topics"][topic]
+                _write_index(index)
             return True
         pending_data = _read_pending()
         for idx, e in enumerate(pending_data["pending"]):
