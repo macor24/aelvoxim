@@ -142,6 +142,9 @@ def pg_rows():
         return None
 
 
+LAST_METRICS: dict = {}
+
+
 def cmd_status(args):
     entries = load_entries()
     active = {i: v for i, v in entries.items() if v[1].get("_status", "active") == "active"}
@@ -157,6 +160,8 @@ def cmd_status(args):
         groups[norm_title(d.get("title", ""))].append((d.get("updated_at") or d.get("created_at") or "", i))
     dup_groups = {k: v for k, v in groups.items() if len(v) > 1 and k}
     wasted = sum(len(v) - 1 for v in dup_groups.values())
+    LAST_METRICS.update(entries=len(entries), active=len(active), not_indexed=len(not_indexed),
+                        not_embedded=len(not_embedded), dup_groups=len(dup_groups), wasted=wasted)
 
     print("── file store")
     print(f"  entries={len(entries)} active={len(active)} hex_id={hex_n} uuid_id={uuid_n}")
@@ -290,6 +295,12 @@ def cmd_prune_dupes(args):
     if not args.apply:
         print("DRY-RUN")
         return 0
+    audit_dir = DATA / "audit"
+    audit_dir.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%Y%m%d_%H%M%S")
+    (audit_dir / f"prune_dupes_{stamp}.json").write_text(json.dumps(
+        [{"id": i, "title": active[i][1].get("title"), "topic": active[i][1].get("topic")} for i in victims],
+        ensure_ascii=False, indent=1), encoding="utf-8")
     idx = read_index()
     emb = json.loads(EMB.read_text(encoding="utf-8")) if EMB.exists() else {}
     for i in victims:
@@ -309,6 +320,35 @@ def cmd_prune_dupes(args):
     json.loads(tmp.read_text(encoding="utf-8"))
     tmp.replace(EMB)
     print(f"pruned files={len(victims)} index={len(idx['entries'])} emb={len(emb)}")
+    return len(victims)
+
+
+def cmd_weekly(args):
+    """Weekly upkeep: report → prune duplicate titles → catch index/vectors up → report.
+
+    Order matters: prune first (drops ids from index+emb), then rebuild the index,
+    then backfill vectors, so nothing that survived is left unindexed.
+    """
+    args.check = True
+    cmd_status(args)
+    m = dict(LAST_METRICS)
+    print(f"── weekly plan: wasted={m.get('wasted')} not_indexed={m.get('not_indexed')} "
+          f"not_embedded={m.get('not_embedded')}")
+
+    if args.apply and (m.get("wasted") or 0) > 50:
+        victims = cmd_prune_dupes(args)
+        print(f"   pruned duplicate entries: {victims}")
+    elif (m.get("wasted") or 0) > 50:
+        print("   (dry-run) would prune duplicate titles")
+
+    if args.apply and (m.get("not_indexed") or 0) > 0:
+        cmd_rebuild_index(args)
+    if args.apply and (m.get("not_embedded") or 0) > 0:
+        cmd_backfill_emb(args)
+
+    if args.apply:
+        print("── after")
+        cmd_status(args)
     return 0
 
 
@@ -317,16 +357,21 @@ def main():
     ap.add_argument("--rebuild-index", action="store_true")
     ap.add_argument("--backfill-emb", action="store_true")
     ap.add_argument("--prune-dupes", action="store_true")
+    ap.add_argument("--weekly", action="store_true",
+                    help="prune dupes + catch up index/vectors (dry-run unless --apply)")
     ap.add_argument("--check", action="store_true",
                     help="exit 1 when the KB drifts past thresholds (for the weekly timer)")
     ap.add_argument("--apply", action="store_true")
     args = ap.parse_args()
+    if args.weekly:
+        return cmd_weekly(args)
     if args.rebuild_index:
         return cmd_rebuild_index(args)
     if args.backfill_emb:
         return cmd_backfill_emb(args)
     if args.prune_dupes:
-        return cmd_prune_dupes(args)
+        cmd_prune_dupes(args)
+        return 0
     return cmd_status(args)
 
 
