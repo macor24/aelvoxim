@@ -34,10 +34,25 @@ def get_cognitive_status() -> dict[str, Any]:
         "learner": _learner_status(),
         "selfmodel": _selfmodel_status(),
         "metacog": _metacog_status(),
+        "chat_quality": _chat_quality_status(),
         "health": _subsystem_health(),
         "edition": _get_edition(),
     }
     return result
+
+
+def _chat_quality_status() -> dict[str, Any]:
+    """对话质量信号（P0-7 · L1）：由 chat_monitor 的日评估记录派生，只读。
+
+    显式带 available/samples，样本不足时不要填默认值冒充读数。
+    """
+    try:
+        from .chat_monitor import chat_quality_signal
+
+        return chat_quality_signal()
+    except Exception:
+        _log.exception("admin_panel chat_quality error")
+        return {"available": False, "samples": 0, "error": "signal_unavailable"}
 
 
 def _learner_status() -> dict[str, Any]:

@@ -45,11 +45,21 @@ def _load_day(date_str: Optional[str] = None) -> List[dict]:
     fp = _daily_path(date_str)
     if not fp.exists():
         return []
+    out: List[dict] = []
     try:
         text = fp.read_text(encoding="utf-8").strip()
-        return [json.loads(line) for line in text.split("\n") if line.strip()]
     except Exception:
         return []
+    for line in text.split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            out.append(json.loads(line))
+        except Exception:
+            # 单行坏掉不吞整天（此前会 return []，一天读数全丢）
+            _log.warning("chat_monitor: skip malformed line in %s", fp.name)
+    return out
 
 
 def evaluate_conversation(
@@ -239,6 +249,66 @@ def get_summary(limit_days: int = 7) -> dict:
         },
         "knowledge_hit_rate": round(hit / len(all_records) * 100, 1),
     }
+
+
+# ── Chat quality signal (P0-7 · L1) ─────────
+# 只读派生：不加新文件、不写记忆实体、不动 calibration 的演化阈值。
+# 数据源就是 evaluate_conversation 已经落盘的 chat_monitor/YYYY-MM-DD.jsonl。
+#
+# 阈值为什么是 65 而不是 60：_calc_robustness_score 的底分是 50，且
+# response_time_ms<5000 与 query_len>0 两个加分项对"空回答"也会命中
+# ⇒ 完全失败的一轮实测得 60（fair）。用 <60 当"低分"等于永不触发。
+_LOW_SCORE_DEFAULT = 65.0
+
+
+def chat_quality_signal(window_days: int = 2, min_samples: int = 5,
+                        low_threshold: float = _LOW_SCORE_DEFAULT) -> dict:
+    """Derive a chat-quality signal from recent evaluation records.
+
+    Pure read: no writes, no memory entities, no threshold side effects.
+    Returns availability explicitly — no silent 0/0.5 fill-ins.
+    """
+    records: List[dict] = []
+    for i in range(max(1, window_days)):
+        d = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
+        records.extend(_load_day(d))
+
+    scored = [r for r in records if isinstance(r.get("robustness_score"), (int, float))]
+    samples = len(scored)
+    out: dict = {
+        "available": False,
+        "samples": samples,
+        "window_days": window_days,
+        "low_threshold": low_threshold,
+        "min_samples": min_samples,
+        "low_rate": None,
+        "avg_score": None,
+        "worst_level": None,
+        "recent_low": [],
+    }
+    if samples < max(1, min_samples):
+        return out
+
+    low = [r for r in scored if float(r["robustness_score"]) < low_threshold]
+    out["available"] = True
+    out["low_rate"] = round(len(low) / samples, 3)
+    out["avg_score"] = round(sum(float(r["robustness_score"]) for r in scored) / samples, 1)
+    out["worst_level"] = min(
+        (r.get("level", "unknown") for r in scored),
+        key=lambda lv: {"poor": 0, "fair": 1, "good": 2, "excellent": 3}.get(lv, 4),
+    )
+    # 只带匿名标识：时间/分数/档位/query hash，不带正文
+    out["recent_low"] = [
+        {
+            "ts": r.get("ts", ""),
+            "score": round(float(r["robustness_score"]), 1),
+            "level": r.get("level", "unknown"),
+            "kb_hit": bool((r.get("knowledge") or {}).get("hit")),
+            "query_hash": (r.get("knowledge") or {}).get("query_hash", ""),
+        }
+        for r in low[-5:]
+    ]
+    return out
 
 
 def cleanup_old(keep_days: int = 30) -> int:
