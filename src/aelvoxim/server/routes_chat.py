@@ -9,6 +9,9 @@ Routes:
 from __future__ import annotations
 
 import logging
+import os
+import threading
+import time
 from fastapi import APIRouter, Depends, HTTPException
 from .routes import _verify_key
 
@@ -266,6 +269,89 @@ async def sync_session_messages(
         _log.exception("routes_chat error")
         saved = 0
     return {"success": True, "saved": saved}
+
+
+# ── Post-stream finishing (P0-1) ──────────────────────────────
+# 三条出口都要跑收尾：自然结束、[WIN:] 分支提前 return、[TOOL:] 分支提前 return。
+# 收尾含 PG 写 + 一次 KB 检索（0.2–1s），放后台线程：既不阻塞事件循环，
+# 也不会因客户端断连（生成器被取消）而丢失。
+# AELVOXIM_POST_STREAM_INLINE=1 时同步执行（判据测试用，生产不要开）。
+_POST_STREAM_INLINE = os.environ.get("AELVOXIM_POST_STREAM_INLINE", "").lower() in (
+    "1", "true", "yes")
+_finished_keys: set = set()
+_finished_lock = threading.Lock()
+
+
+def _post_stream_finish(user, sid, email, user_msg, collected, t0):
+    """assistant 落 PG → 会话快照 → 对话记忆/实体 → 质量评估。异常只记日志。"""
+    text = "".join(collected)
+    try:
+        if email and text:
+            from ..storage.db import save_message_to_pg
+            save_message_to_pg(sid, "assistant", text)
+    except Exception:
+        _log.exception("routes_chat post-stream pg save error")
+    try:
+        from .session_manager import save_snapshot
+        save_snapshot(
+            email or "",
+            sid,
+            [{"role": "user", "content": user_msg or ""},
+             {"role": "assistant", "content": text}],
+            entities=[],
+            task_keywords=None,
+        )
+    except Exception:
+        _log.exception("routes_chat post-stream snapshot error")
+    try:
+        if email and text:
+            from .service_chat import store_conversation_memory, extract_and_store_entities
+            _ev_id = store_conversation_memory(user_msg, text, user)
+            extract_and_store_entities(user_msg, text, user, _ev_id)
+    except Exception:
+        _log.exception("routes_chat post-stream memory error")
+    try:
+        from .chat_monitor import evaluate_conversation
+        _eval_q = user_msg or ""
+        _eval_kb = []
+        try:
+            from ..learn.knowledge import KnowledgeBase
+            _eval_kb = KnowledgeBase.search(query=_eval_q[:200], min_confidence=0.3, limit=5) or []
+        except Exception:
+            _log.exception("routes_chat post-stream eval kb error")
+        evaluate_conversation(
+            query=_eval_q,
+            answer=text,
+            user_id=email or "",
+            knowledge_results=_eval_kb,
+            response_time_ms=max(0.0, time.time() - t0) * 1000,
+        )
+    except Exception:
+        _log.exception("routes_chat post-stream eval error")
+
+
+def _schedule_post_stream_finish(user, sid, email, user_msg, collected, t0):
+    """幂等调度：同一次请求（sid + 起跑时刻）只跑一次。
+
+    键用浮点秒而不是 int(t0)：同一会话一秒内连发两条时，int 会误判成重复，
+    第二条的收尾直接被吞掉。
+    """
+    key = f"{sid}:{t0:.6f}"
+    with _finished_lock:
+        if key in _finished_keys:
+            return
+        _finished_keys.add(key)
+        if len(_finished_keys) > 2000:
+            _finished_keys.clear()
+    if _POST_STREAM_INLINE:
+        _post_stream_finish(user, sid, email, user_msg, collected, t0)
+        return
+    threading.Thread(
+        target=_post_stream_finish,
+        args=(user, sid, email, user_msg, collected, t0),
+        daemon=True,
+        name="chat-post-stream",
+    ).start()
 
 
 @router.post("/llm/chat/stream")
@@ -722,7 +808,8 @@ async def llm_chat_stream(
                     _pg_collected.append(_full_text)
                     yield f"data: {json.dumps({'token': _full_text})}\n\n"
                     yield "data: [DONE]\n\n"
-
+                    _schedule_post_stream_finish(
+                        user, _pg_sid, _pg_email, _pg_msg, _pg_collected, _t0_stream)
                     return
                 try:
                     from .tool_use import execute_tool_calls, has_tool_calls
@@ -735,14 +822,11 @@ async def llm_chat_stream(
                             # Yield the clean result — replace raw [TOOL:...] with execution output
                             # Pre-tool text was already streamed; tool portion is replaced inline
                             yield f"data: {json.dumps({'token': _result_text + chr(10)})}\n\n"
-                            # Save tool result before returning
-                            if _pg_email and _result_text:
-                                try:
-                                    from ..storage.db import save_message_to_pg
-                                    save_message_to_pg(_pg_sid, "assistant", _result_text)
-                                except Exception:
-                                    _log.exception("routes_chat error")
+                            # 收尾统一由 _schedule_post_stream_finish 负责（P0-1）：
+                            # 这里不再单独落库，避免同一回答写两遍
                             yield "data: [DONE]\n\n"
+                            _schedule_post_stream_finish(
+                                user, _pg_sid, _pg_email, _pg_msg, _pg_collected, _t0_stream)
                             return
                 except Exception as _exc:
                     _chat_log.warning("  Stream tool execution error: %s", _exc)
@@ -760,65 +844,11 @@ async def llm_chat_stream(
         except Exception:
             _log.exception("routes_chat stream error")  # log real error
             yield f"data: {json.dumps({'error': 'Internal error'})}\n\n"
-        # Save assistant response after stream finishes (best-effort)
-        _text = "".join(_pg_collected)
-        if _pg_email and _text:
-            try:
-                from ..storage.db import save_message_to_pg
-                save_message_to_pg(_pg_sid, "assistant", _text)
-            except Exception:
-                _log.exception("routes_chat error")
-
-        # Cross-session snapshot: persist session summary/topics/tasks so a
-        # future session can restore context (session_manager.restore_context).
-        try:
-            from .session_manager import save_snapshot
-            save_snapshot(
-                user.get("email", "") if user else "",
-                _pg_sid,
-                [{"role": "user", "content": _pg_msg or ""},
-                 {"role": "assistant", "content": _text}],
-                entities=[],
-                task_keywords=None,
-            )
-        except Exception:
-            _log.exception("routes_chat snapshot error")
-
-        # Stream path memory write: persist conversation event + extracted
-        # entities (mirrors chat_pipeline's post-processing, which the
-        # streaming endpoint previously never called).
-        try:
-            if _pg_email and _text:
-                from .service_chat import store_conversation_memory, extract_and_store_entities
-                _ev_id = store_conversation_memory(_pg_msg, _text, user)
-                extract_and_store_entities(_pg_msg, _text, user, _ev_id)
-        except Exception:
-            _log.exception("routes_chat memory store error")
-
-        # Post-chat quality evaluation (mirrors chat_pipeline). Must run for
-        # BOTH non-empty and empty replies — an empty reply IS a quality
-        # signal (failed/blank stream). Safe: wrapped in try.
-        try:
-            from .chat_monitor import evaluate_conversation
-            # Real KB results (not hardcoded []): hit_count/topics in the
-            # monitor must reflect actual knowledge retrieval, otherwise the
-            # panel always shows 0 and looks like KB search is broken.
-            _eval_q = _pg_msg or user_msg
-            _eval_kb = []
-            try:
-                from ..learn.knowledge import KnowledgeBase
-                _eval_kb = KnowledgeBase.search(query=_eval_q[:200], min_confidence=0.3, limit=5) or []
-            except Exception:
-                _log.exception("routes_chat eval kb search error")
-            evaluate_conversation(
-                query=_eval_q,
-                answer=_text,
-                user_id=user.get("email", "") if user else "",
-                knowledge_results=_eval_kb,
-                response_time_ms=max(0.0, _tmod.time() - _t0_stream) * 1000,
-            )
-        except Exception:
-            _log.exception("routes_chat post-chat eval error")
+        # 收尾（PG 落库 → 会话快照 → 对话记忆/实体 → 质量评估）。
+        # P0-1：三条出口（自然结束 / [WIN:] / [TOOL:]）共用这一个函数，
+        # 不再被提前 return 跳过；执行放后台线程，不阻塞也不随断连取消。
+        _schedule_post_stream_finish(
+            user, _pg_sid, _pg_email, _pg_msg, _pg_collected, _t0_stream)
     return StreamingResponse(
         _generate(),
         media_type="text/event-stream",
