@@ -312,6 +312,7 @@ def _post_stream_finish(user, sid, email, user_msg, collected, t0):
         _log.exception("routes_chat post-stream memory error")
     try:
         from .chat_monitor import evaluate_conversation
+        from .service_chat import record_confidence
         _eval_q = user_msg or ""
         _eval_kb = []
         try:
@@ -319,13 +320,17 @@ def _post_stream_finish(user, sid, email, user_msg, collected, t0):
             _eval_kb = KnowledgeBase.search(query=_eval_q[:200], min_confidence=0.3, limit=5) or []
         except Exception:
             _log.exception("routes_chat post-stream eval kb error")
-        evaluate_conversation(
+        _report = evaluate_conversation(
             query=_eval_q,
             answer=text,
             user_id=email or "",
             knowledge_results=_eval_kb,
             response_time_ms=max(0.0, time.time() - t0) * 1000,
         )
+        # 置信度（P0-2/P0-3）：流式端点此前完全不记录，健康面板恒 samples=0。
+        # 用真实评估分，取不到就不记，不写默认值。
+        if _report:
+            record_confidence(float(_report.get("robustness_score", 0)) / 100.0)
     except Exception:
         _log.exception("routes_chat post-stream eval error")
 

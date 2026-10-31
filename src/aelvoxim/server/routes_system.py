@@ -395,7 +395,8 @@ def _health_response():
         import logging
         logging.getLogger("aelvoxim.routes").warning("learner check failed")
 
-    result["confidence"] = {"current": 0.5, "avg_50": 0.5, "trend": "stable", "samples": 0}
+    result["confidence"] = {"current": None, "avg_50": None, "trend": "unavailable",
+                            "samples": 0, "basis": "evaluate.robustness_score"}
     try:
         from ..server.service_chat import get_confidence_trend
         result["confidence"] = get_confidence_trend()

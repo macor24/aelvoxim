@@ -1010,7 +1010,6 @@ def chat_pipeline(
 ) -> dict:
     global _LAST_PLAN_CHECK
     t0 = _time.time()
-    _confidence_score = 0.5
     # LLM-based fact contradiction check — off by default, enable via env
     _llm_check_on = os.environ.get("AELVOXIM_LLM_CHECK", "").lower() in ("1", "true", "yes")
     _uid = (user or {}).get("email", "")[:20]
@@ -1336,16 +1335,11 @@ def chat_pipeline(
     run_post_chat_tasks(user_msg, text, user, [], t0,
                         user.get("user_id", "") if user else "")
 
-    # Record confidence for health monitoring
-    try:
-        record_confidence(_confidence_score)
-    except Exception:
-        _log.exception("service_chat error")
-
     # Post-chat quality evaluation
     # NOTE: evaluate even when text is empty — an empty/blank reply IS a
     # quality signal (failed stream, no content) and must be recorded.
     # Self-review and learning below still require non-empty text.
+    _eval_report = None
     try:
         from .chat_monitor import evaluate_conversation
         # Real KB results (not hardcoded []): hit_count/topics in the
@@ -1356,7 +1350,7 @@ def chat_pipeline(
             _eval_kb = KnowledgeBase.search(query=user_msg[:200], min_confidence=0.3, limit=5) or []
         except Exception:
             _log.exception("service_chat eval kb search error")
-        evaluate_conversation(
+        _eval_report = evaluate_conversation(
             query=user_msg,
             answer=text,
             user_id=user.get("email", "") if user else "",
@@ -1365,6 +1359,14 @@ def chat_pipeline(
         )
     except Exception:
         _log.exception("service_chat error")
+
+    # 置信度（P0-2/P0-3）：取真实评估分 robustness_score(0-100)/100。
+    # 拿不到评估结果就不记；绝不写默认 0.5 —— 那会让 /v1/health 恒为常量。
+    if _eval_report:
+        try:
+            record_confidence(float(_eval_report.get("robustness_score", 0)) / 100.0)
+        except Exception:
+            _log.exception("service_chat confidence error")
 
     # Self-review (content-level quality assessment)
     if text:
@@ -1538,19 +1540,26 @@ def record_confidence(score: float) -> None:
 
 
 def get_confidence_trend() -> dict:
-    """Return latest confidence trend for health endpoint."""
+    """Return latest confidence trend for health endpoint.
+
+    2026-10-30（P0-2/P0-3）：样本改由真实评估分驱动（robustness_score/100），
+    此前每个样本都是写死的 0.5，trend 恒为 stable。basis 字段说明来源语义。
+    """
     import time as _tm
+    _basis = "evaluate.robustness_score"
     if not _CONFIDENCE_WINDOW:
-        return {"current": 0.5, "avg_50": 0.5, "trend": "stable", "samples": 0}
+        return {"current": None, "avg_50": None, "trend": "unavailable",
+                "samples": 0, "basis": _basis}
     now = _tm.time()
     recent = [s for t, s in _CONFIDENCE_WINDOW if now - t < 300]
     if not recent:
-        return {"current": _CONFIDENCE_WINDOW[-1][1], "avg_50": 0.5, "trend": "stable", "samples": 0}
+        return {"current": _CONFIDENCE_WINDOW[-1][1], "avg_50": None, "trend": "stale",
+                "samples": 0, "basis": _basis}
     avg = sum(recent) / len(recent)
     trend = "up" if len(recent) > 5 and recent[-1] > recent[0] * 1.1 else \
             "down" if len(recent) > 5 and recent[-1] < recent[0] * 0.9 else "stable"
     return {"current": round(recent[-1], 3), "avg_50": round(avg, 3),
-            "trend": trend, "samples": len(recent)}
+            "trend": trend, "samples": len(recent), "basis": _basis}
 
 
 # ── Curiosity list for autonomous learning ──
