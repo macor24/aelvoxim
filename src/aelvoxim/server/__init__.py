@@ -348,30 +348,29 @@ def create_app() -> FastAPI:
 
     @app.get("/v1/status/planner")
     async def planner_status():
-        """Report learner status for the Orchestrator's LongTermPlanner."""
-        result = {
-            "total_cycles": 0,
-            "active_directions": 0,
-            "total_entries": 0,
-            "last_heartbeat": 0.0,
-        }
+        """Report learner status for the Orchestrator's LongTermPlanner.
+
+        P0-5（2026-10-30）：原来读 API 进程内的 learner 单例（file-backed mirror），
+        拿到的是陈旧快照且 last_heartbeat 恒 0。改为读 worker 写的 status.json；
+        文件过期就返回 stale + 计数 0，不返回假数。
+        """
         try:
-            from aelvoxim.learn.loop import get_learner
-            learner = get_learner()
-            result["total_cycles"] = sum(
-                d.cycles_completed for d in learner._directions.values()
-            ) if hasattr(learner, '_directions') else 0
-            result["active_directions"] = sum(
-                1 for d in learner._directions.values()
-                if d.status == "active"
-            ) if hasattr(learner, '_directions') else 0
-            result["total_entries"] = sum(
-                d.entries_created for d in learner._directions.values()
-            ) if hasattr(learner, '_directions') else 0
-            result["last_heartbeat"] = getattr(learner, '_last_heartbeat', 0.0)
+            from aelvoxim.learn.loop import read_learner_status
+            st = read_learner_status()
         except Exception:
             _log.exception("server error")
-        return result
+            st = {"total_cycles": 0, "active_directions": 0, "total_entries": 0,
+                  "last_heartbeat": 0.0, "stale": True}
+        return {
+            "total_cycles": st.get("total_cycles", 0),
+            "active_directions": st.get("active_directions", 0),
+            "total_entries": st.get("total_entries", 0),
+            "last_heartbeat": st.get("last_heartbeat", 0.0),
+            "running": st.get("running", False),
+            "updated_at": st.get("updated_at", ""),
+            "age_s": st.get("age_s"),
+            "stale": st.get("stale", True),
+        }
 
     # Serve ChatAEL frontend (built SPA) at /chatael
     from pathlib import Path as _Path

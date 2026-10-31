@@ -386,12 +386,15 @@ def _health_response():
     # SentriKit removed — it is an independent project with its own API.
     result["dependencies"]["sentrikit"] = {"status": "removed"}
     try:
-        from ..learn.learner import get_learner
-        l = get_learner()
-        if l:
-            result["dependencies"]["learner"] = {"running": l.is_running()}
+        from ..learn.loop import read_learner_status
+        _st = read_learner_status()
+        result["dependencies"]["learner"] = {
+            "running": _st.get("running", False),
+            "stale": _st.get("stale", True),
+            "age_s": _st.get("age_s"),
+        }
     except Exception:
-        result["dependencies"]["learner"] = {"running": False}
+        result["dependencies"]["learner"] = {"running": False, "stale": True}
         import logging
         logging.getLogger("aelvoxim.routes").warning("learner check failed")
 
@@ -841,17 +844,22 @@ async def admin_knowledge_graph(user: dict = Depends(_require_admin)):
 
 @router.get("/admin/learner/status")
 async def admin_learner_status(user: dict = Depends(_require_admin)):
-    """Return learner status."""
+    """Return learner status.
+
+    P0-5：读数走 worker 写的 status.json（read_learner_status），不再把
+    API 进程内 learner 单例的 is_running()/snapshot 混进来。
+    """
     try:
-        from ..learn.learner import get_learner
-        from ..utils import read_json, LEARNER_CONFIG, LEARNER_STATUS
-        l = get_learner()
+        from ..learn.loop import read_learner_status
+        from ..utils import read_json, LEARNER_CONFIG
+        st = read_learner_status()
         cfg = read_json(LEARNER_CONFIG) or {}
-        st = read_json(LEARNER_STATUS) or {}
         return {
-            "running": st.get("running", False) or (l.is_running() if hasattr(l, "is_running") else False),
-            "direction_count": len(cfg),
+            "running": st.get("running", False),
+            "direction_count": st.get("direction_count", len(cfg)),
             "updated_at": st.get("updated_at", ""),
+            "stale": st.get("stale", True),
+            "age_s": st.get("age_s"),
         }
     except Exception:
         raise HTTPException(500, detail="Failed to read log")

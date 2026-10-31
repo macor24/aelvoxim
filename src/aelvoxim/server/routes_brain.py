@@ -68,15 +68,11 @@ async def get_brain_status(_user: dict = Depends(_verify_key)):
         grade_result = sm.overall_grade()
         grade_label = grade_result.get("grade", "N/A") if isinstance(grade_result, dict) else str(grade_result)
 
-        # Try to count active directions from learner
+        # P0-5：活跃方向数走 status.json（worker 真值），不读 API 进程内单例
         active_dirs = 0
-        from ..learn.learner import get_learner
         try:
-            learner = get_learner()
-            active_dirs = sum(
-                1 for d in (learner._directions or {}).values()
-                if d.status == "active"
-            )
+            from ..learn.loop import read_learner_status
+            active_dirs = int(read_learner_status().get("active_directions", 0) or 0)
         except Exception:
             _log.exception("routes_brain error")
 

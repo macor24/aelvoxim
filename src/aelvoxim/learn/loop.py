@@ -113,6 +113,44 @@ def get_learner():
     return _learner_instance
 
 
+def read_learner_status(max_age_s: int = 90) -> dict:
+    """读 worker 写的 status.json（P0-4 / P0-5 的统一读数口）。
+
+    API 进程里的 Learner 只是 file-backed mirror：`_directions` 是上次落盘快照，
+    `_last_heartbeat` 恒 0。所有"学习循环在干什么"的读数都走这里，别读单例。
+    超过 max_age_s 没刷新视为 stale，计数一律回 0——宁可为 0 也不返回假数。
+    """
+    empty = {
+        "running": False, "direction_count": 0,
+        "total_cycles": 0, "active_directions": 0, "total_entries": 0,
+        "last_heartbeat": 0.0, "loop_count": 0, "last_gate": "",
+        "updated_at": "", "age_s": None, "stale": True,
+    }
+    try:
+        data = json.loads(STATUS_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return empty
+    if not isinstance(data, dict):
+        return empty
+
+    out = dict(empty)
+    for k in ("running", "direction_count", "total_cycles", "active_directions",
+              "total_entries", "last_heartbeat", "loop_count", "last_gate", "updated_at"):
+        if k in data:
+            out[k] = data[k]
+    try:
+        _ts = datetime.strptime(str(out["updated_at"]), "%Y-%m-%d %H:%M:%S")
+        out["age_s"] = int((datetime.now() - _ts).total_seconds())
+        out["stale"] = out["age_s"] > max_age_s
+    except Exception:
+        out["age_s"] = None
+        out["stale"] = True
+    if out["stale"]:
+        out.update({"running": False, "total_cycles": 0, "active_directions": 0,
+                    "total_entries": 0, "last_heartbeat": 0.0})
+    return out
+
+
 class Learner:
     """Persistent self-learning agent. Runs a background loop.
 
@@ -1710,6 +1748,12 @@ class Learner:
             "running": self._running,
             "direction_count": len(self._directions),
             "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            # P0-5（2026-10-30）：真实计数写进 status.json，让 API 进程/监控
+            # 有真值可读，不必依赖进程内 mirror 的陈旧快照。
+            "total_cycles": sum(d.cycles_completed for d in self._directions.values()),
+            "active_directions": sum(1 for d in self._directions.values() if d.status == "active"),
+            "total_entries": sum(d.entries_created for d in self._directions.values()),
+            "last_heartbeat": getattr(self, "_last_heartbeat", 0.0),
             # 2026-10-17 (U1): expose how the last pass ended, so "busy but
             # skipping" is distinguishable from "dead" in the readouts.
             "loop_count": getattr(self, "_loop_count", 0),
