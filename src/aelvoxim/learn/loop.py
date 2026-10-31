@@ -691,6 +691,61 @@ class Learner:
         _min_gap = float(os.environ.get("AELVOXIM_COGNITION_MIN_GAP_SEC", "1800"))
         return (time.time() - getattr(self, "_last_cognition_tick_ts", 0.0)) >= _min_gap
 
+    def _run_gap_analysis(self) -> None:
+        """缺口分析 → 自动建计划（P0-6）。
+
+        2026-10-30：此前 `analyze_knowledge_gaps` 只在开关注解内 import、却在
+        开关外无条件调用 ⇒ 社区版每次 tick 抛 NameError，被外层 except 吞成一条
+        `loop error`。现在导入、开关判断、调用三者同处：开关关或模块缺失都不做事、
+        不报错；真正出错才记 `gap analysis failed`。
+        """
+        from ..server.edition import get as _ed_get_gap
+
+        try:
+            from ..learn.gap_analysis import analyze_knowledge_gaps as _analyze_gaps
+        except ImportError:
+            return  # 该版本不带缺口分析模块
+        if not _ed_get_gap("gap_analysis_enabled", False):
+            return
+
+        _kb_topics: dict = {}
+        try:
+            from ..learn.knowledge import KnowledgeBase
+            for e in KnowledgeBase.get_all_active():
+                t = e.get("topic", "")
+                if t:
+                    _kb_topics[t] = _kb_topics.get(t, 0) + 1
+        except Exception:
+            _log.exception("gap analysis kb stats failed")
+
+        _gap_result = _analyze_gaps(
+            self._directions, _kb_topics, [],
+            min_entries_threshold=5, saturation_threshold=0.8,
+        )
+        if not _gap_result.get("recommendations"):
+            return
+
+        recs = _gap_result["recommendations"]
+        for rec in recs[:2]:
+            self._log(f"  🧩 Gap: {rec[:80]}")
+        # Auto-create plan for top recommendation
+        _dir_cap = 10
+        try:
+            from ..core.calibration import get_calibration as _get_cal_cap
+            _dir_cap = int(_get_cal_cap().get("learning", "max_active_directions",
+                                              default=10) or 10)
+        except Exception:
+            pass
+        if not recs or len(self._directions) >= _dir_cap:
+            return
+        _goal = recs[0].replace("Create direction from user demand: ", "").replace(
+            "Re-activate direction: ", "")
+        from aelvoxim.planner import LongTermPlanner
+        _ltp = LongTermPlanner()
+        if _goal and not any(d.topic == _goal for d in self._directions.values()):
+            _plan = _ltp.create_plan(_goal, source="gap_analysis")
+            self._log(f"  🗺️ Plan created: {_plan.id} -> {_goal[:50]}")
+
     def _cognition_tick(self) -> None:
         """Run meta-cognition checks and self-improvement actions.
 
@@ -731,45 +786,11 @@ class Learner:
             }
             belief_stats = {"count": 0, "high_confidence": 0, "low_confidence": 0, "total_evidence": 0}
 
-            # Gap analysis → auto-create plans
+            # Gap analysis → auto-create plans（P0-6：导入/开关/调用同处，见 _run_gap_analysis）
             try:
-                from ..server.edition import get as _ed_get_gap
-                if _ed_get_gap("gap_analysis_enabled", False):
-                    from ..learn.gap_analysis import analyze_knowledge_gaps
-                _kb_topics = {}
-                try:
-                    from ..learn.knowledge import KnowledgeBase
-                    for e in KnowledgeBase.get_all_active():
-                        t = e.get("topic", "")
-                        if t:
-                            _kb_topics[t] = _kb_topics.get(t, 0) + 1
-                except Exception:
-                    _log.exception("loop error")
-                _gap_result = analyze_knowledge_gaps(
-                    self._directions, _kb_topics, [],
-                    min_entries_threshold=5, saturation_threshold=0.8,
-                )
-                if _gap_result.get("recommendations"):
-                    for rec in _gap_result["recommendations"][:2]:
-                        self._log(f"  🧩 Gap: {rec[:80]}")
-                    # Auto-create plan for top recommendation
-                    recs = _gap_result["recommendations"]
-                    _dir_cap = 10
-                    try:
-                        from ..core.calibration import get_calibration as _get_cal_cap
-                        _dir_cap = int(_get_cal_cap().get("learning", "max_active_directions",
-                                                          default=10) or 10)
-                    except Exception:
-                        pass
-                    if recs and len(self._directions) < _dir_cap:
-                        _goal = recs[0].replace("Create direction from user demand: ", "").replace("Re-activate direction: ", "")
-                        from aelvoxim.planner import LongTermPlanner
-                        _ltp = LongTermPlanner()
-                        if _goal and not any(d.topic == _goal for d in self._directions.values()):
-                            _plan = _ltp.create_plan(_goal, source="gap_analysis")
-                            self._log(f"  🗺️ Plan created: {_plan.id} -> {_goal[:50]}")
+                self._run_gap_analysis()
             except Exception:
-                _log.exception("loop error")
+                _log.exception("gap analysis failed")
             if hasattr(sm, '_capabilities'):
                 bc = sm._capabilities.get("belief_health", None)
                 if bc:
