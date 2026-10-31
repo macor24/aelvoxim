@@ -50,6 +50,18 @@ def apply_control(learner, ctrl: dict, last_id: str):
         return cmd_id, f"error:{type(exc).__name__}:{exc}"[:200]
 
 
+def should_exit(learner) -> bool:
+    """只有"本该在跑"却线程死掉时才退出；空闲等待（无方向 / 版本开关关）不算死。
+
+    2026-10-30（P0-4）：旧循环用 `not learner._thread` 判死，结果没有方向或
+    community 版本下 start() 不建线程 ⇒ worker 30s 后自己退出、systemd 反复重启。
+    """
+    if not getattr(learner, "_running", False):
+        return False
+    thread = getattr(learner, "_thread", None)
+    return thread is None or not thread.is_alive()
+
+
 def main() -> int:
     from aelvoxim.learn.loop import (
         get_learner, LEARNER_DIR,
@@ -114,8 +126,9 @@ def main() -> int:
             pass
 
         if not learner._thread or not learner._thread.is_alive():
-            learner._log("🚨 Learner thread died — worker exiting for systemd restart")
-            return 2
+            if should_exit(learner):
+                learner._log("🚨 Learner thread died — worker exiting for systemd restart")
+                return 2
 
 
 if __name__ == "__main__":

@@ -131,6 +131,26 @@ def test_start_queues_command(learner_dir, client):
     assert json.loads((learner_dir / "control.json").read_text(encoding="utf-8"))["cmd"] == "start"
 
 
+def test_should_exit_only_when_running_without_live_thread():
+    class _L:
+        def __init__(self, running, thread):
+            self._running = running
+            self._thread = thread
+
+    class _T:
+        def __init__(self, alive):
+            self._alive = alive
+
+        def is_alive(self):
+            return self._alive
+
+    assert learn_worker.should_exit(_L(True, None)) is True
+    assert learn_worker.should_exit(_L(True, _T(False))) is True
+    assert learn_worker.should_exit(_L(True, _T(True))) is False
+    # 空闲等待（无方向 / 版本开关关）不算死，不能退出
+    assert learn_worker.should_exit(_L(False, None)) is False
+
+
 def test_endpoints_no_longer_touch_singleton():
     """静态守卫：start/stop 不得再调 get_learner()。"""
     src = Path("src/aelvoxim/server/routes_system.py").read_text(encoding="utf-8")
