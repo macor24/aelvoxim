@@ -151,6 +151,46 @@ def read_learner_status(max_age_s: int = 90) -> dict:
     return out
 
 
+CONTROL_FILE = STATUS_FILE.parent / "control.json"
+CONTROL_ACK_FILE = STATUS_FILE.parent / "control_ack.json"
+
+
+def write_learner_control(cmd: str, by: str = "") -> dict:
+    """把 start/stop 指令写进 control.json（P0-4）。
+
+    原子写：tmp + os.replace，worker 5s 轮询，读到新 id 才执行。
+    控制面走文件而不是进程内单例：真实循环在 learn_worker.py 独立进程里。
+    """
+    payload = {
+        "id": f"{cmd}-{int(time.time() * 1000)}",
+        "cmd": cmd,
+        "by": (by or "")[:80],
+        "ts": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    CONTROL_FILE.parent.mkdir(parents=True, exist_ok=True)
+    tmp = CONTROL_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    os.replace(tmp, CONTROL_FILE)
+    return payload
+
+
+def read_learner_control() -> dict:
+    try:
+        data = json.loads(CONTROL_FILE.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def write_learner_control_ack(cmd_id: str, cmd: str, result: str, detail: str = "") -> None:
+    try:
+        payload = {"id": cmd_id, "cmd": cmd, "result": result, "detail": detail[:200],
+                   "ts": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+        CONTROL_ACK_FILE.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        _log.exception("learner control ack error")
+
+
 class Learner:
     """Persistent self-learning agent. Runs a background loop.
 

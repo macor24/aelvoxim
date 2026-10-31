@@ -864,31 +864,36 @@ async def admin_learner_status(user: dict = Depends(_require_admin)):
     except Exception:
         raise HTTPException(500, detail="Failed to read log")
 
+def _queue_learner_cmd(cmd: str, user: dict) -> dict:
+    """把 start/stop 交给 worker 执行（P0-4）。
+
+    修前：端点直接操作 API 进程内的 Learner 单例——stop 只停了个空壳，
+    30s 后 status.json 又被 worker 心跳覆写成 running=true，看着像"停不下来"。
+    worker 不在（status.json 过期）时返回 409，绝不在这里偷起第二个 Learner。
+    """
+    from ..learn.loop import read_learner_status, write_learner_control
+
+    st = read_learner_status()
+    if st.get("stale"):
+        raise HTTPException(
+            409,
+            detail="learner worker 未运行（status.json 过期）；请先 systemctl start aelvoxim-learner",
+        )
+    payload = write_learner_control(cmd, by=(user or {}).get("email", ""))
+    return {"success": True, "queued": True, "cmd": cmd, "id": payload["id"],
+            "note": "worker 5s 内执行；以 status.json 的 running/loop_count 为准"}
+
+
 @router.post("/admin/learner/start")
 async def admin_learner_start(user: dict = Depends(_require_admin)):
-    """Start learner loop."""
-    try:
-        from ..learn.learner import get_learner
-        l = get_learner()
-        l._load_config()
-        if not l._directions:
-            raise HTTPException(400, detail="No learning directions configured")
-        l.start()
-        return {"success": True, "message": "Learning loop started"}
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(500, detail="Failed to read log")
+    """Queue start for the standalone learner worker."""
+    return _queue_learner_cmd("start", user)
+
 
 @router.post("/admin/learner/stop")
 async def admin_learner_stop(user: dict = Depends(_require_admin)):
-    """Stop learner loop."""
-    try:
-        from ..learn.learner import get_learner
-        get_learner().stop()
-        return {"success": True, "message": "Learning loop stopped"}
-    except Exception:
-        raise HTTPException(500, detail="Failed to read log")
+    """Queue stop for the standalone learner worker."""
+    return _queue_learner_cmd("stop", user)
 
 @router.get("/admin/skill-timeline")
 async def admin_skill_timeline(months: int = 6, user: dict = Depends(_require_admin)):
