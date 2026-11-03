@@ -277,7 +277,24 @@ def run_safety_check(user_msg: str, user: dict) -> Optional[dict]:
 
 def build_system_prompt(system_msg: Optional[str]) -> str:
     NL = "\n"
-    base = (
+    # 2026-11-03：恢复 10-19 之前的人设（用户反馈"做回去 AI 味之前的对话提示"）。
+    # 两版都在，用 AELVOXIM_CHAT_PROMPT=classic|terse 切换，默认 terse（保持现网不变）。
+    # classic 已删掉失效句 "interact with the user's desktop"（Gateway 10 月已摘除）。
+    classic = (
+        "You are Aelvoxim, a cognitive self-learning AI brain with cross-session memory."
+        " You reason, plan and use tools." + NL + NL
+        + "Response style: Use plain text, not markdown." + NL
+        + "Always reply in the same language." + NL + NL
+        + "REASONING GUIDELINES:" + NL
+        + "- If the question involves comparison, causality, multi-step logic, "
+        "math, code debugging, or contradictory info, reason step by step." + NL
+        + "- For straightforward factual questions, answer directly." + NL
+        + NL
+        + "CAPABILITIES (beyond conversation):" + NL
+        + "  Memory — remembers across sessions." + NL
+        + "  Learning — actively learns new topics in background." + NL
+    )
+    terse = (
         "You are Aelvoxim." + NL + NL
         + "How to talk:" + NL
         + "- Like a person: short, direct, no pleasantries." + NL
@@ -291,7 +308,20 @@ def build_system_prompt(system_msg: Optional[str]) -> str:
         + "- If the user switches language, switch immediately with them: "
         "the language of the latest message wins over earlier turns." + NL
     )
-
+    # plain = 7-09 之前的原始人设（"intelligent, friendly AI assistant"），
+    # 没有 cognitive-brain 包装、没有 CAPABILITIES 段。
+    plain = (
+        "You are Aelvoxim, an intelligent, friendly AI assistant."
+        " You have cross-session memory." + NL + NL
+        + "Response style: Use plain text, not markdown." + NL
+        + "Always reply in the same language." + NL + NL
+        + "REASONING GUIDELINES:" + NL
+        + "- If the question involves comparison, causality, multi-step logic, "
+        "math, code debugging, or contradictory info, reason step by step." + NL
+        + "- For straightforward factual questions, answer directly." + NL
+    )
+    _style = (os.environ.get("AELVOXIM_CHAT_PROMPT", "terse") or "terse").strip().lower()
+    base = {"classic": classic, "plain": plain}.get(_style, terse)
     return system_msg or base
 
 
