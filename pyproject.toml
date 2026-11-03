@@ -27,6 +27,10 @@ dependencies = [
     "bcrypt>=5.0.0",
     "fastapi>=0.162.0",
     "uvicorn[standard]>=0.54.0",
+    # 2026-11-03: GHSA-6q48-6c7w-9gw2 (critical) — certifi < 2026.10.19 仍带
+    # emSign ECC Root CA - G3，其下级中间证书私钥已泄露（可被用于 MITM）。
+    # 虽然只是 httpx 的传递依赖，但它在 TLS 信任链上，必须显式钉住。
+    "certifi>=2026.10.19",
 ]
 
 [tool.ruff]
