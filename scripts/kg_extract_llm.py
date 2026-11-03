@@ -37,6 +37,11 @@ _p = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_p)
 canonicalize, is_knowledge_edge = _p.canonicalize, _p.is_knowledge_edge
 VOCAB = sorted(_p.CANONICAL)
+# P1 只收"能支撑多跳推理"的骨架谓词。`uses/likes/owns/feels/works_at` 不可传递，
+# 且在 200 条样本里是方向反转的重灾区（X uses Phi Accrual / Grafana uses Loki）；
+# 它们对闭包没有贡献，收进来只会稀释精确率。
+SKELETON = {"is_a", "part_of", "has_part", "member_of", "has_member",
+            "prerequisite", "depends_on", "located_in"}
 
 CFG = os.path.expanduser("~/.aelvoxim/llm-config.json")
 SENT_SPLIT = re.compile(r"[。！？\n]+|(?<=[.!?])\s+")  # 不在 "." 处硬切：Node.js / psycopg2 / v1.2 会被切碎
@@ -55,7 +60,11 @@ Rules:
 2. The predicate must be readable off one sentence of the note. Do NOT add world
    knowledge, do NOT infer transitive relations, do NOT guess.
 3. Max 3 tuples per note. If nothing is supported, return an empty list for that note.
-4. Output JSON only, no prose, no code fences:
+4. Direction matters: if the note says "Y uses X" or "Y is built on X", emit (Y, uses, X) —
+   never the reverse. If you cannot tell the direction, skip the triple.
+5. Objects must be a named thing/class, never a file name, path, URL, endpoint, attribute,
+   or a rephrasing of the subject. Avoid bare bucket words (tool/library/framework/strategy).
+6. Output JSON only, no prose, no code fences:
 {{"items":[{{"id":"<note id>","triples":[{{"s":"...","p":"is_a","o":"..."}}]}}]}}
 """
 
@@ -75,12 +84,15 @@ def load_cfg():
     return m["api_key"], m.get("base_url", "https://api.deepseek.com/v1").rstrip("/"), m.get("name", "deepseek-chat")
 
 
-def chat(key, base, model, system, user, timeout=180):
+def chat(key, base, model, system, user, timeout=180, thinking=False):
     body = json.dumps({
         "model": model,
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
         "temperature": 0,
         "max_tokens": 12000,
+        # deepseek-v4-flash: 默认会先跑 thinking pass（单次 ~3.4k token，占总成本 40%+）。
+        # 抽取是"照抄原文关系"，不需要推理链；关掉后同输入同输出，成本降到 1/2.4。
+        **({} if thinking else {"thinking": {"type": "disabled"}}),
     }).encode("utf-8")
     req = urllib.request.Request(base + "/chat/completions", data=body,
                                  headers={"Authorization": "Bearer " + key,
@@ -112,6 +124,15 @@ def sentence_of(content, needle):
     return ""
 
 
+FILEISH = re.compile(r"(^[/~]|^https?:|\.(js|json|py|md|conf|lock|xml|yml|yaml|toml|txt|html|css)$)", re.I)
+GENERIC = {"工具", "库", "框架", "策略", "标准", "模型", "机制", "方式", "方法", "技巧", "优化",
+           "关键部件", "组件", "文件", "library", "framework", "tool", "strategy", "mechanism",
+           "model", "standard", "file", "component"}
+
+
+SCOPE = None
+
+
 def verify(s, p, o, content):
     """回溯闸 + 负向断言。返回 (ok, reason)。"""
     if not (s and o and p):
@@ -120,8 +141,21 @@ def verify(s, p, o, content):
         return False, "length"
     if not is_knowledge_edge(p):
         return False, "predicate"
+    if SCOPE and p not in SCOPE:
+        return False, "predicate_out_of_scope"
     if s.strip().lower() == o.strip().lower():
         return False, "self_loop"
+    if FILEISH.search(o.strip()):
+        return False, "object_fileish"
+    if FILEISH.search(s.strip()):
+        return False, "subject_fileish"
+    _sl, _ol = s.strip().lower(), o.strip().lower()
+    if _sl in _ol or _ol in _sl:
+        return False, "tautology"
+    if _ol in GENERIC:
+        return False, "object_generic"
+    if len(o) > 32:
+        return False, "object_too_long"
     if s.lower() not in content.lower():
         return False, "subject_absent"
     if o.lower() not in content.lower():
@@ -184,7 +218,11 @@ def main():
     ap.add_argument("--batch-size", type=int, default=8)
     ap.add_argument("--max-calls", type=int, default=30)
     ap.add_argument("--budget-tokens", type=int, default=400000)
-    ap.add_argument("--chars-per-entry", type=int, default=1500)
+    ap.add_argument("--chars-per-entry", type=int, default=900)
+    ap.add_argument("--thinking", action="store_true", help="保留 thinking pass（默认关闭，省 2.4x token）")
+    ap.add_argument("--only-source", default="", help="只抽某种来源（如 execution_result）")
+    ap.add_argument("--preds", choices=["skeleton", "all"], default="skeleton",
+                    help="skeleton=只收可传递骨架谓词（默认）；all=全 14 个")
     ap.add_argument("--batch", default=time.strftime("%Y%m%d_%H%M%S"))
     args = ap.parse_args()
     if not args.dir and not args.dsn:
@@ -192,9 +230,27 @@ def main():
         return 2
 
     data = load_dir(args.dir) if args.dir else load_pg(args.dsn)
-    kept = filter_corpus(data["knowledge_entries"], data["learning_directions"])[args.skip: args.skip + args.limit]
+    if args.only_source:
+        # 一手材料（execution_result）大多被 topic 名连坐：1149 条里 510 条挂在标识符方向、
+        # 598 条被判 low_value ⇒ 走 filter_corpus 会被整体清空（实测 0 条）。
+        # 所以按来源抽时只做正文去重，不套主题/状态筛（内容质量由抽取闸把关）。
+        _seen_fp = set()
+        kept = []
+        for k in data["knowledge_entries"]:
+            if (k.get("source") or "") != args.only_source:
+                continue
+            fp = hashlib.sha1((k.get("content") or "").encode()).hexdigest()
+            if fp in _seen_fp:
+                continue
+            _seen_fp.add(fp)
+            kept.append(k)
+    else:
+        kept = filter_corpus(data["knowledge_entries"], data["learning_directions"])
+    kept = kept[args.skip: args.skip + args.limit]
+    global SCOPE
+    SCOPE = SKELETON if args.preds == "skeleton" else None
     key, base, model = load_cfg()
-    system = SYSTEM.format(preds=", ".join(VOCAB))
+    system = SYSTEM.format(preds=", ".join(sorted(SCOPE) if SCOPE else VOCAB))
 
     os.makedirs(args.out, exist_ok=True)
     path = os.path.join(args.out, f"triples_{args.batch}.jsonl")
@@ -217,7 +273,7 @@ def main():
             f"[{k['id']}]\ntitle: {k.get('title','')[:120]}\n{(k.get('content') or '')[:args.chars_per_entry]}"
             for k in chunk)
         try:
-            text, tk, finish = chat(key, base, model, system, USER_TMPL.format(notes=notes))
+            text, tk, finish = chat(key, base, model, system, USER_TMPL.format(notes=notes), thinking=args.thinking)
         except Exception as exc:
             drops[f"call_error:{type(exc).__name__}"] += 1
             calls += 1
