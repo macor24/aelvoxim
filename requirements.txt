@@ -2,6 +2,9 @@
 # Locked versions — DO NOT upgrade without testing
 # Last updated: 2026-07-12
 
+# TLS 信任库（GHSA-6q48-6c7w-9gw2 critical：< 2026.10.19 带被泄露的 emSign G3 根）
+certifi>=2026.10.19
+
 # Web framework
 fastapi==0.162.0
 uvicorn==0.54.0
