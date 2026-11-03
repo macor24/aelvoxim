@@ -301,15 +301,34 @@ def _pg_search_entities(query: str, etype: Optional[str] = None,
 
 def _pg_store_relation(rel_id: str, source: str, target: str, rel_type: str,
                        attributes: Optional[Dict] = None) -> bool:
-    """Insert a relation row into PG memory_relations (by entity names)."""
+    """Insert a relation row into PG memory_relations.
+
+    2026-11-03 修：写入同时落 name 与 id，并补 created_at。
+    旧实现只写 name ⇒ 迁移来的历史行（只写 id、name 为空）读不回来；
+    新实现两边都写，读取端按 name 或 id 都能命中；同一 (s,p,o) 不重复插入。
+    """
     try:
         from ..storage.db import execute
-        import json as _js
+        from .predicates import canonicalize
+        _s, _t = (source or "").strip()[:200], (target or "").strip()[:200]
+        _p = canonicalize(rel_type)
+        if not (_s and _t and _p):
+            return False
         execute(
-            """INSERT INTO memory_relations (source_name, target_name, relation_type, weight)
-               VALUES (%s, %s, %s, %s)""",
-            (source[:200], target[:200], rel_type,
-             float((attributes or {}).get("_strength", 0.5))),
+            """INSERT INTO memory_relations
+                 (source_name, target_name, source_id, target_id, relation_type, weight, created_at)
+               SELECT %s, %s,
+                      (SELECT id FROM memory_entities WHERE name = %s
+                        ORDER BY created_at DESC NULLS LAST LIMIT 1),
+                      (SELECT id FROM memory_entities WHERE name = %s
+                        ORDER BY created_at DESC NULLS LAST LIMIT 1),
+                      %s, %s, NOW()
+                WHERE NOT EXISTS (
+                      SELECT 1 FROM memory_relations
+                       WHERE source_name = %s AND target_name = %s AND relation_type = %s)""",
+            (_s, _t, _s, _t, _p,
+             float((attributes or {}).get("_strength", 0.5)),
+             _s, _t, _p),
         )
         return True
     except Exception:
@@ -320,30 +339,54 @@ def _pg_store_relation(rel_id: str, source: str, target: str, rel_type: str,
 def _pg_get_relations(entity_id: Optional[str] = None,
                       rel_type: Optional[str] = None,
                       direction: str = "both") -> List[dict]:
-    """Fetch relations from PG memory_relations by entity name."""
+    """Fetch relations from PG memory_relations.
+
+    2026-11-03 修：匹配 name **或** id。历史行（SQLite→PG 迁移）只有 id、name 为空，
+    旧实现只按 name 过滤 ⇒ 1100 条边一条都读不回来（按名字可检索 0/1100）。
+    名字为空时用 entities 表把 id 翻成名字，读端不必等回填完成。
+    """
     try:
         from ..storage.db import fetch_dict
+        from .predicates import canonicalize
         clauses, params = [], []
         if entity_id:
+            _id = None
+            _hit = fetch_dict(
+                "SELECT id FROM memory_entities WHERE name = %s "
+                "ORDER BY created_at DESC NULLS LAST LIMIT 1", (entity_id,))
+            if _hit:
+                _id = str(_hit[0]["id"])
             if direction == "out":
-                clauses.append("source_name = %s"); params.append(entity_id)
+                clauses.append("(source_name = %s OR source_id = %s)")
+                params.extend([entity_id, _id])
             elif direction == "in":
-                clauses.append("target_name = %s"); params.append(entity_id)
+                clauses.append("(target_name = %s OR target_id = %s)")
+                params.extend([entity_id, _id])
             else:
-                clauses.append("(source_name = %s OR target_name = %s)")
-                params.extend([entity_id, entity_id])
+                clauses.append("(source_name = %s OR target_name = %s OR source_id = %s OR target_id = %s)")
+                params.extend([entity_id, entity_id, _id, _id])
         if rel_type:
-            clauses.append("relation_type = %s"); params.append(rel_type)
+            clauses.append("relation_type = %s"); params.append(canonicalize(rel_type))
         where = " AND ".join(clauses) if clauses else "TRUE"
         rows = fetch_dict(
-            f"SELECT source_name, target_name, relation_type, weight, created_at "
-            f"FROM memory_relations WHERE {where} ORDER BY created_at DESC",
+            f"SELECT source_name, target_name, source_id, target_id, relation_type, weight, created_at "
+            f"FROM memory_relations WHERE {where} ORDER BY created_at DESC NULLS LAST",
             tuple(params),
         )
+        # 名字为空的行：用 id 翻回名字，别把边读成 '' - '' 的空气边
+        _blank = {str(r["source_id"]) for r in rows if not r.get("source_name") and r.get("source_id")}
+        _blank |= {str(r["target_id"]) for r in rows if not r.get("target_name") and r.get("target_id")}
+        _name_map: Dict[str, str] = {}
+        if _blank:
+            _ph = ",".join(["%s"] * len(_blank))
+            for _e in fetch_dict(f"SELECT id, name FROM memory_entities WHERE id IN ({_ph})",
+                                 tuple(_blank)):
+                _name_map[str(_e["id"])] = _e.get("name", "")
         return [{
-            "id": f"{r.get('source_name','')}-{r.get('target_name','')}",
-            "source": r.get("source_name", ""),
-            "target": r.get("target_name", ""),
+            "id": f"{r.get('source_name','') or _name_map.get(str(r.get('source_id')), '')}"
+                  f"-{r.get('target_name','') or _name_map.get(str(r.get('target_id')), '')}",
+            "source": r.get("source_name", "") or _name_map.get(str(r.get("source_id")), ""),
+            "target": r.get("target_name", "") or _name_map.get(str(r.get("target_id")), ""),
             "type": r.get("relation_type", "related"),
             "attributes": {"_strength": r.get("weight", 0.5)},
             "created_at": str(r.get("created_at", "") or ""),
@@ -1173,6 +1216,10 @@ def store_relation(rel_id: str, source: str, target: str, rel_type: str,
                    attributes: Optional[Dict] = None) -> bool:
     if _pg_active():
         return _pg_store_relation(rel_id, source, target, rel_type, attributes)
+    from .predicates import canonicalize
+    rel_type = canonicalize(rel_type)
+    if not (source and target and rel_type):
+        return False
     db = _get_db()
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     attrs_json = json.dumps(attributes or {}, ensure_ascii=False)

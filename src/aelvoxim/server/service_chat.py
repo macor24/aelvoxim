@@ -888,6 +888,24 @@ def extract_and_store_entities(user_msg: str, text: str, user: dict, event_id: s
                                 user_id=user.get("email", "") if user else "")
                 except Exception:
                     _log.exception("service_chat error")
+        # 2026-11-03：抽取器一直在返回 relations，但这里以前只存 entities
+        # ⇒ 语义关系算出来就被丢掉（生产库 1100 条边里语义边 0 条）。
+        # 现在实体先落库，再把关系落库（store_relation 会用名字解析出 id）。
+        relations = _result.get("relations", [])
+        if relations:
+            import hashlib as _hl
+            from ..memory import store_relation
+            for rel in relations:
+                try:
+                    _s = (rel.get("subject") or "").strip()
+                    _t = (rel.get("object") or "").strip()
+                    _p = (rel.get("predicate") or "").strip()
+                    if not (_s and _t and _p):
+                        continue
+                    _rid = "chat:" + _hl.sha1(f"{_s}|{_p}|{_t}".encode("utf-8")).hexdigest()[:16]
+                    store_relation(_rid, _s, _t, _p, {"source": "chat", "_strength": 0.6})
+                except Exception:
+                    _log.exception("service_chat relation store error")
     except Exception:
         _log.exception("service_chat error")
 
