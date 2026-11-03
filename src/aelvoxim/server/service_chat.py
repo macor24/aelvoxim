@@ -273,6 +273,14 @@ def run_safety_check(user_msg: str, user: dict) -> Optional[dict]:
     q = user_msg.lower()
     for kw in _blocked_keywords:
         if kw in q:
+            # 拦截必须留痕：只记规则名 + 命中词 + 消息头 30 字，便于事后判误杀
+            try:
+                from .audit import log as _audit_log
+                _audit_log("chat.blocked", user=(user or {}).get("email", ""), status="blocked",
+                           detail={"rule": "local_keyword", "kw": kw,
+                                   "msg_head": (user_msg or "")[:30]})
+            except Exception:
+                _log.exception("safety audit log failed")
             return {"allowed": False, "reason": f"本地安全规则阻止: 包含敏感词\"{kw}\""}
     return None
 

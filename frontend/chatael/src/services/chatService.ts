@@ -56,8 +56,13 @@ function classifyError(err: any): string {
   // HTTP errors with status
   if (err?.status || (err?.message && err.message.startsWith('HTTP '))) {
     const status = err.status || parseInt(err.message?.split(' ')[1] || '0');
-    if (status === 401 || status === 403) {
+    if (status === 401) {
       return 'API Key 无效，请重新登录';
+    }
+    if (status === 403) {
+      // 403 不一定是登录失效：安全规则/权限都会走这里。有服务端 detail 就照实说。
+      const detail = (err as any)?.detail;
+      return detail ? `请求被拒绝：${detail}` : '请求被拒绝（可能触发了安全规则）';
     }
     if (status === 429) {
       return '请求过于频繁，请稍后重试';
@@ -137,6 +142,12 @@ export async function sendChatMessage(
       const err = new Error(`HTTP ${res.status}`);
       // status attached for classifyError
       (err as Error & {status: number}).status = res.status;
+      // 403 的 detail 是给人看的原因（安全规则命中），带上它才知道到底拦了什么
+      try {
+        const parsed = JSON.parse(errBody);
+        const d = typeof parsed?.detail === 'string' ? parsed.detail : '';
+        if (d) (err as Error & {detail?: string}).detail = d.slice(0, 120);
+      } catch { /* 非 JSON 就保持通用文案 */ }
       throw err;
     }
 
