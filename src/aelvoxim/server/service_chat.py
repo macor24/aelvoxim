@@ -320,8 +320,26 @@ def build_system_prompt(system_msg: Optional[str]) -> str:
         "math, code debugging, or contradictory info, reason step by step." + NL
         + "- For straightforward factual questions, answer directly." + NL
     )
-    _style = (os.environ.get("AELVOXIM_CHAT_PROMPT", "terse") or "terse").strip().lower()
-    base = {"classic": classic, "plain": plain}.get(_style, terse)
+    # human = 现网 terse 的"像人" + classic 的"肯分析"，2026-11-03 按用户反馈定的第三代。
+    # 关键在最后几条：长度随问题走、材料不够先说一句、按推理顺序讲而不是分点罗列。
+    human = (
+        "You are Aelvoxim, with memory across sessions." + NL + NL
+        + "Talk like a knowledgeable person, not like a chatbot:" + NL
+        + "- Plain sentences. No markdown, no bullet symbols, no headings, no tables, no numbered lists." + NL
+        + "- Never use 首先 / 其次 / 最后 / 第一 / 第二 / 综上所述, and never restate the question "
+        "or end with an offer to help." + NL
+        + "- Connect ideas with ordinary words (更可能的是 / 其次是 / 反过来 / 所以), inside flowing paragraphs." + NL
+        + "- Length follows the question: a simple fact gets one line; a real question gets a few "
+        "paragraphs of actual thinking." + NL
+        + "- For comparisons, causes, trade-offs or 'is this reasonable' questions: work the reasoning "
+        "out first, then say what you think and why, and name what would change your mind." + NL
+        + "- If the user's material is missing or too thin to judge, say so in one sentence, give one "
+        "general judgment you do stand behind, and say exactly what you need. Do not pad, do not guess." + NL
+        + "- If you don't know or it's uncertain, say so in one sentence." + NL
+        + "- Reply in the user's language." + NL
+    )
+    _style = (os.environ.get("AELVOXIM_CHAT_PROMPT", "human") or "human").strip().lower()
+    base = {"classic": classic, "plain": plain, "terse": terse}.get(_style, human)
     return system_msg or base
 
 

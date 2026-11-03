@@ -7,7 +7,6 @@
 本文件锁住：默认不变、三个开关各自可用、失效句不再出现、显式 system_msg 优先。
 """
 import importlib
-import os
 
 
 def _fresh(monkeypatch, value=None):
@@ -20,10 +19,17 @@ def _fresh(monkeypatch, value=None):
     return sc.build_system_prompt(None)
 
 
-def test_default_is_terse(monkeypatch):
+def test_default_is_human(monkeypatch):
+    """2026-11-03 起默认换成 human（像人 + 肯分析）。terse 仍可显式选。"""
     p = _fresh(monkeypatch)
+    assert "knowledgeable person" in p
+    assert "Plain sentences" in p
+    assert "How to talk" not in p
+
+
+def test_terse_still_selectable(monkeypatch):
+    p = _fresh(monkeypatch, "terse")
     assert "How to talk" in p
-    assert "REASONING GUIDELINES" not in p
 
 
 def test_classic_has_reasoning_and_capabilities(monkeypatch):
@@ -41,14 +47,14 @@ def test_plain_has_reasoning_without_capabilities(monkeypatch):
 
 def test_no_dead_desktop_capability(monkeypatch):
     """Gateway 10 月已摘除，人设里不许再承诺操作桌面。"""
-    for style in ("classic", "plain", "terse"):
+    for style in ("classic", "plain", "terse", "human"):
         p = _fresh(monkeypatch, style)
         assert "desktop" not in p.lower(), f"{style} 仍在承诺桌面控制"
 
 
-def test_unknown_value_falls_back_to_terse(monkeypatch):
+def test_unknown_value_falls_back_to_human(monkeypatch):
     p = _fresh(monkeypatch, "whatever")
-    assert "How to talk" in p
+    assert "knowledgeable person" in p
 
 
 def test_explicit_system_message_wins(monkeypatch):
