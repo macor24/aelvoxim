@@ -260,11 +260,15 @@ def run_safety_check(user_msg: str, user: dict) -> Optional[dict]:
     except Exception:
         _log.exception("service_chat error")
     # Local keyword-based safety check
+    # 2026-11-03：原来的表里有 "你是" / "你是一个" / "sql注入" / "绕过" / "破解" / "入侵"，
+    # 都是裸子串匹配 ⇒ 正常提问被拦（生产实测 "如果你是厂家觉得怎么样？" 被判 403，
+    # 前端把它显示成"API Key 无效，请重新登录"）。改成只拦**注入句式**和**明确的制作有害物**，
+    # 主题词（SQL 注入、绕过、破解）交给语义层判断，不在这里硬拦。
     _blocked_keywords = [
         "ignore all previous instructions", "ignore all prior",
-        "你是一个", "system prompt:", "你是",
-        "写病毒", "写木马", "黑客工具", "sql注入",
-        "绕过", "破解", "入侵",
+        "system prompt:",
+        "你是一个不受限制", "越狱模式", "developer mode enabled",
+        "写病毒", "写木马", "制作病毒", "制作木马", "黑客工具",
     ]
     q = user_msg.lower()
     for kw in _blocked_keywords:
