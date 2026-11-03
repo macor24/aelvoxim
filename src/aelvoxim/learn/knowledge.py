@@ -310,7 +310,9 @@ def _check_content_sanity(topic: str, text: str) -> Optional[str]:
             return f"Value raised: {day_vals[0]} days (over 100 years, clearly unreasonable)"
     
     # Year spans
-    year_span = re.findall(r'(\d+)\s*年\s*(?:后|内|左右|时间|周期|历史|寿命|保修|有效)', text)
+    # 2026-11-03 安全修 (与 CodeQL #152 同形态): `(\d+)\s*年` 在长数字串上是二次回溯
+    #   ⇒ 数字段封顶 6 位、空白封顶 8 个, 且只扫前 4096 字(语义不变: 年份值域远小于此)。
+    year_span = re.findall(r'(\d{1,6})\s{0,8}年\s{0,8}(?:后|内|左右|时间|周期|历史|寿命|保修|有效)', text[:4096])
     for ys in year_span:
         val = int(ys[0]) if isinstance(ys, tuple) else int(ys)
         if val > 200:

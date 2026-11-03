@@ -230,9 +230,13 @@ def detect_ttl(text: str) -> Optional[int]:
         if label in text_l:
             return days
     # Regex: "remember for 3 days", "keep 2 weeks", "keep a week", "keep this info for a week"
-    _ttl_re = re.search(r'(\d+)\s*(天|周|月|年)(?:内|后|有效)', text_l) or \
-              re.search(r'(?:保留)(\d+)\s*(天|周|月|年)', text_l) or \
-              re.search(r'(?:记住|keep|remember)\D{0,15}(\d+)\s*(天|周|月|年)', text_l)
+    # 2026-11-03 安全修 (CodeQL #152, ReDoS): `(\d+)\s*` 在"长数字串 + 无单位"输入上是二次回溯
+    #   (实测 16k 数字 3.5s) ⇒ 数字段封顶 6 位、空白封顶 8 个, 并只扫前 4096 字。
+    #   语义不变: TTL 现实值 1~3650 天; 超长数字串本来就不是合法 TTL。
+    _scan = text_l[:4096]
+    _ttl_re = re.search(r'(\d{1,6})\s{0,8}(天|周|月|年)(?:内|后|有效)', _scan) or \
+              re.search(r'(?:保留)(\d{1,6})\s{0,8}(天|周|月|年)', _scan) or \
+              re.search(r'(?:记住|keep|remember)\D{0,15}(\d{1,6})\s{0,8}(天|周|月|年)', _scan)
     if _ttl_re:
         u = {'天': 1, '周': 7, '月': 30, '年': 365}.get(_ttl_re.group(2), 1)
         return int(_ttl_re.group(1)) * u

@@ -63,3 +63,27 @@ def test_detect_clear_command():
     assert detect_clear_command("清理我的记忆") is True
     assert detect_clear_command("清除所有记忆") is True
     assert detect_clear_command("今天天气") is False
+
+
+# ── 2026-11-03 安全回归 (CodeQL #152): ReDoS ─────────────────────────────
+def test_detect_ttl_redos_is_linear():
+    """长数字串 + 无单位 ⇒ 必须快速返回 None（改前 16k 数字要 3.5s）。"""
+    import time
+    for n in (4000, 16000):
+        t0 = time.time()
+        assert detect_ttl("1" * n + "x") is None
+        dt = time.time() - t0
+        assert dt < 0.05, "n=%d 用了 %.3fs ⇒ 二次回溯仍在" % (n, dt)
+
+
+def test_detect_ttl_semantics_unchanged():
+    """封顶数字段不影响正常语义。"""
+    assert detect_ttl("保留3天") == 3
+    assert detect_ttl("记住这个信息保留一周") == 7
+    assert detect_ttl("keep 2 天") == 2
+    assert detect_ttl("永久记住") == -1
+    assert detect_ttl("今天天气不错") is None
+    # 英文单位(months/weeks)本来就不支持 —— 既有行为, 不是本次改动引入
+    assert detect_ttl("keep this 2 months") is None
+    # 超长数字(>6 位)不再当 TTL —— 本来就不是合法值
+    assert detect_ttl("保留1234567天") is None

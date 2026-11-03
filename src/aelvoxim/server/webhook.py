@@ -88,7 +88,8 @@ def subscribe(
         """, (sub_id, url, json.dumps(events), secret, user_id, description, now))
     except Exception as e:
         _log.exception("webhook subscribe failed")
-        return {"error": str(e)}
+        # 2026-11-03 安全修 (CodeQL #153): 异常原文含 SQL/驱动/主机信息, 只进日志, 不回客户端。
+        return {"error": "failed to create subscription"}
 
     return {
         "id": sub_id,
@@ -285,7 +286,8 @@ def _deliver_single(
                     "sub_id": sub_id,
                     "url": url,
                     "status": "failed",
-                    "error": str(e),
+                    # 2026-11-03 安全修 (CodeQL #153): 连接错误原文含内网主机/端口, 只进日志。
+                    "error": "connection failed",
                     "attempts": attempt + 1,
                 }
 
