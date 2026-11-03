@@ -568,7 +568,29 @@ async def webhook_test_delivery(body: dict, current_user: dict = Depends(_verify
     # Only deliver to the requested subscription — never fan out to every
     # subscriber (P0-9, 9.txt audit).
     results = deliver_event("test.ping", {"test": True}, sub_id=sub_id)
-    return {"results": results}
+    # 2026-11-03 安全修 (CodeQL #153): 路由层兜底 —— 只回白名单字段；
+    #   任何异常/上游错误文本都不透传，只折成两类稳定文案(原文进日志)。
+    return {"results": _safe_delivery_results(results)}
+
+
+_SAFE_DELIVERY_KEYS = ("sub_id", "url", "status", "status_code", "attempts")
+
+
+def _safe_delivery_results(results) -> list:
+    """把投递结果收敛成"字段白名单 + 固定错误文案"，防止异常文本随响应外泄。
+
+    白名单外的键一律丢弃；error 只可能是 "HTTP error" / "delivery failed" / 缺省。
+    """
+    out = []
+    for r in results or []:
+        if not isinstance(r, dict):
+            continue
+        item = {k: r.get(k) for k in _SAFE_DELIVERY_KEYS}
+        err = r.get("error")
+        if err:
+            item["error"] = "HTTP error" if str(err).startswith("HTTP ") else "delivery failed"
+        out.append(item)
+    return out
 
 # ── Admin endpoints ──
 
