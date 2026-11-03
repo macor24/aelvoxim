@@ -33,9 +33,24 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
 
+# 按文件路径加载谓词表：import aelvoxim.memory.predicates 会连带执行
+# memory/__init__.py 的模块级初始化（sqlite/PG），在以 postgres 身份跑读数时
+# 会失败并静默退化成"所有边都是 unknown"——读数口径被悄悄换掉。
+# 这里宁可显式告警，也不许静默退化。
+_PRED_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                          "..", "src", "aelvoxim", "memory", "predicates.py")
 try:
-    from aelvoxim.memory.predicates import canonicalize, classification, is_transitive
-except Exception:  # 未安装包时退化为本地口径，读数不中断
+    import importlib.util as _ilu
+    _spec = _ilu.spec_from_file_location("_ael_predicates", _PRED_PATH)
+    assert _spec is not None and _spec.loader is not None
+    _mod = _ilu.module_from_spec(_spec)
+    _spec.loader.exec_module(_mod)
+    canonicalize, classification, is_transitive = (
+        _mod.canonicalize, _mod.classification, _mod.is_transitive)
+except Exception as _exc:  # 未安装包时退化为本地口径，读数不中断，但必须出声
+    print(f"[warn] 谓词表加载失败({type(_exc).__name__})，本次读数用退化口径：所有边记为 unknown",
+          file=sys.stderr)
+
     def canonicalize(pred) -> str:
         return (pred or "").strip().lower().replace(" ", "_")
 
