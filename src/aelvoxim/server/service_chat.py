@@ -504,28 +504,9 @@ def enhance_with_knowledge(user_msg: str, extra_context: str, user: dict, max_pe
                 if _entry_id:
                     _set_recent_knowledge_hit(_sq, _entry_id, user)
             
-            # Layer 1b: Probe detection based on search results
-            _gap = _detect_knowledge_gap(_sq, kb_results)
-        else:
-            _gap = "ask_teach"
-        
-        if _gap:
-            _t = _sq[:80]
-            if _gap == "ask_teach":
-                extra_context += (
-                    f"\n[Probe: ask_teach]"
-                    f" After answering, if natural:"
-                    f" '这个话题我了解不多，{_t} —— 能教我一些吗？'\n"
-                )
-            elif _gap == "ask_deepen":
-                extra_context += (
-                    f"\n[Probe: ask_deepen]"
-                    f" After answering, if natural:"
-                    f" '关于 {_t} 还有一些细节，想了解更多吗？'\n"
-                )
-            # Record curiosity for autonomous learning
-            if _gap == "ask_teach" and _t and len(_t) > 3:
-                _add_curiosity_topic(_t, user)
+            # 2026-11-03 删：原来这里按"知识库没命中"生成 [Probe: ask_teach] /
+            # [Probe: ask_deepen]，让模型在回答末尾反问"能教我一些吗"，并把用户问句
+            # 塞进好奇心队列当学习方向。用户判定这是 AI 味 + 把提问当原料，一并去掉。
     except Exception:
         _log.exception("service_chat error")
     # Cache result (per-user)
@@ -961,44 +942,30 @@ def extract_and_store_entities(user_msg: str, text: str, user: dict, event_id: s
 # ═══ Fact check ═══
 
 def verify_response_facts(text: str, user_msg: str, user: dict) -> str:
-    """Post-response hallucination guard.
-    
-    Checks the response for potential factual issues and appends
-    a disclaimer when uncertainty is detected.
-    
-    Returns the original text, optionally with a confidence note appended.
+    """Post-response hallucination guard（2026-11-03 改口径）。
+
+    旧版：回答里出现"可能/不确定/might be"就追加一句英文免责声明。
+    实测问题：模型越诚实越被贴标签，而且英文贴在中文回答后面非常出戏
+    （生产实测 `[Note: I'm less confident about some details above. …]`）。
+
+    新版只保留真正的风险类：**成串的具体数字**（≥3 个 4 位以上数字）且知识库没命中，
+    并按回答语言给一句短提示。没有数字就直接返回，顺带省掉一次 KB 查询。
     """
     try:
-        # 1. Check for uncertainty markers in the response itself
-        uncertainty_markers = [
-            "I'm not sure", "I'm not certain", "I think", "I believe",
-            "might be", "could be", "possibly", "perhaps", "may be",
-            "不确定", "可能", "大概", "也许是", "我记得",
-        ]
-        has_uncertainty = any(marker in text.lower() for marker in uncertainty_markers)
-        
-        # 2. Check for suspiciously specific unverified data
-        #    (4+ digit numbers that appear without context)
         import re as _re
-        large_numbers = _re.findall(r'\b\d{4,}\b', text)
-        has_large_numbers = len(large_numbers) >= 3
-        
-        # 3. Check if knowledge base has relevant entries (confidence check)
+        large_numbers = _re.findall(r"\b\d{4,}\b", text)
+        if len(large_numbers) < 3:
+            return text
+
         from ..learn.knowledge import KnowledgeBase
-        kb_results = KnowledgeBase.search(query=user_msg[:200], min_confidence=0.3, limit=3)
-        kb_available = bool(kb_results)
-        
-        # Decision: append disclaimer if uncertainty + unverifiable
-        if has_uncertainty and not kb_available:
-            return text + (
-                "\n\n[Note: I'm less confident about some details above. "
-                "Consider verifying with additional sources.]"
-            )
-        if has_large_numbers and not kb_available:
-            return text + (
-                "\n\n[Note: Some specific figures in this response may not be verified. "
-                "Please cross-check.]"
-            )
+        if KnowledgeBase.search(query=user_msg[:200], min_confidence=0.3, limit=1):
+            return text
+
+        if _re.search(r"[\u4e00-\u9fa5]", text):
+            note = "（以上具体数字我没核实，用之前对一下来源。）"
+        else:
+            note = " (Those figures are unverified — check them against a source.)"
+        return text + "\n\n" + note
     except Exception:
         _log.exception("service_chat error")
     return text
@@ -1204,13 +1171,6 @@ def chat_pipeline(
             _cortex_drift_warning = decision["adjustments"]["drift_warning"]
             if decision["expert_notes"]:
                 extra_context += "\n" + decision["expert_notes"].strip()
-
-    # Extract probe marker from extra_context (set by enhance_with_knowledge)
-    _cortex_probe = None
-    if "[Probe: ask_teach]" in extra_context:
-        _cortex_probe = "ask_teach"
-    elif "[Probe: ask_deepen]" in extra_context:
-        _cortex_probe = "ask_deepen"
 
     # Build prompt
     enhanced_system = build_system_prompt(system_msg)
