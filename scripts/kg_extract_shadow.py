@@ -65,7 +65,7 @@ STOP = {
     "我们", "这个", "那个", "可以", "需要", "使用", "包含", "支持", "依赖", "以下", "首先",
 }
 
-SENT_SPLIT = re.compile(r"[。！？\.\!\?\n]+")
+SENT_SPLIT = re.compile(r"[。！？\n]+|(?<=[.!?])\s+")  # 不在 "." 处硬切：Node.js / psycopg2 / v1.2 会被切碎
 
 
 def canon_key(s: str) -> str:
