@@ -752,6 +752,23 @@ def _avg_rate(entries: List[SnapshotEntry]) -> float:
     return sum(s.overall_success_rate for s in entries) / len(entries) if entries else 0.0
 
 
+def last_success_rate(default: float = 0.5) -> float:
+    """最近一次快照里的整体成功率（0..1）。读不到时返回 default。
+
+    2026-11-04：auto-tune 曾把 metacog 的 overall_score（退化分，实测量级 0..0.37）
+    当成 hit_rate（0..1 命中率）喂给"hit_rate<50% 就抬阈值"的规则 —— 该条件因此
+    恒成立，每轮都产出同一条 evolve_threshold 提案，全部卡在 DGM-H 闸门。
+    这里给出一条语义正确的取值路径：自模型快照里的 overall_success_rate（实测 0.92）。
+    """
+    try:
+        snaps = SelfModel().get_snapshots(limit=1)
+        if snaps:
+            return float(snaps[-1].get("overall_success_rate") or 0.0)
+    except Exception:
+        pass
+    return default
+
+
 class TrendAnalyzer:
     """Analyze SelfModel snapshot sequence for cross-time trends.
 

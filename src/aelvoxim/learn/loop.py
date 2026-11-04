@@ -1081,9 +1081,12 @@ class Learner:
             if "auto_tune" not in _current_skip and report.get("score", 0) > 0:
                 if report.get("should_evolve", False):
                     from ..core.calibration import Calibration
+                    from ..core.selfmodel import last_success_rate as _last_sr
                     cal = Calibration()
                     _auto_data = {
-                        "hit_rate": report.get("score", 0.5),
+                        # 2026-11-04：这里原来传 report["score"]（metacog 退化分，0..0.37），
+                        # 却被下游当成 0..1 的 hit_rate 用 → "hit_rate<50%" 恒成立。
+                        "hit_rate": _last_sr(),
                         "judge_error_rate": 0.0,
                         "by_type": {},
                         "total_proposals": 0,
