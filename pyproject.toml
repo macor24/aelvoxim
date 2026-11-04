@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "aelvoxim"
 version = "1.2.0"
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 description = "知境 (Aelvoxim) — Lightweight AI Cognitive Engine Framework — give your AI a memory, metacognition, and self-learning"
 readme = "README.md"
 license = {text = "MIT"}
@@ -36,8 +36,11 @@ dependencies = [
     "httpx==0.28.1",
     "pydantic==2.13.4",
     "psycopg2-binary==2.9.12",
-    "Pillow==13.0.0",
-    "numpy==2.5.1",
+    # 2026-11-04: 这里只列**代码真正 import 的**包（fastapi/uvicorn/httpx/bcrypt/
+    # psycopg2/pydantic）。原来的 Pillow / numpy 在 src/ 与 scripts/ 里 0 引用，
+    # 却因为 numpy==2.5.1 只支持 Python>=3.12，把整个项目的 requires-python
+    # 硬拖到 3.12，直接让 CI 的 3.10/3.11 矩阵装不上。它们仍留在
+    # requirements.txt（部署环境用），但不再当库依赖。
     # 2026-11-03: GHSA-6q48-6c7w-9gw2 (critical) — certifi < 2026.10.19 仍带
     # emSign ECC Root CA - G3，其下级中间证书私钥已泄露（可被用于 MITM）。
     # 刻意保留下限（不钉死）：CA 包越新越好，且这是安全修复线。

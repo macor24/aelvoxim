@@ -86,7 +86,7 @@ def subscribe(
                 (id, url, events, secret, user_id, description, created_at)
             VALUES (%s, %s, %s::jsonb, %s, %s, %s, %s)
         """, (sub_id, url, json.dumps(events), secret, user_id, description, now))
-    except Exception as e:
+    except Exception:
         _log.exception("webhook subscribe failed")
         # 2026-11-03 安全修 (CodeQL #153): 异常原文含 SQL/驱动/主机信息, 只进日志, 不回客户端。
         return {"error": "failed to create subscription"}
