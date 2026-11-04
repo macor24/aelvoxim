@@ -47,6 +47,12 @@
 - `learn/llm.py` 里对 `core.safety.r6_intercept_output` 的调用是空挂（模块不存在，被
   `except Exception: pass` 吞掉）——**2026-11-04 已删除该调用**，不再假装有这层防护；
   输出侧实际生效的是 `content_filter`（需 `AELVOXIM_CONTENT_FILTER=1`）。
+- DGM-H 的 Level 2 名为 "judge-driven evolution"，但**提案这条路没有接判分器**：
+  `core/judge.py` 里 `JudgeEngine` / `RuleBasedJudge` / `Proposal` 三件套齐全，
+  `dgmh.check_gate` 也按 judge_grade 分档（`update` 需 A），但 src 内无人实例化它们，
+  也没有任何代码写 `judge_grade`（2026-10-19 `661d5d3` 删掉"默认冒充 B"之后，
+  提案一律落到 ungraded 队列）。实际可用的是人工入口 `scripts/dgmh_review.py`；
+  按结果自动判分尚未实现——纯规则打分（`RuleBasedJudge`）只能当过滤器，不能当放行者。
 
 | 你的痛点 | 常见做法 | 知境的做法 |
 |---|---|---|
