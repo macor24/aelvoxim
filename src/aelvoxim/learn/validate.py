@@ -502,9 +502,16 @@ def _execution_has_value(topic: str, task: str, content: str) -> Optional[bool]:
             model=model,
             system_prompt="You are a technical content evaluator.",
             user_message=prompt,
-            max_tokens=10,
+            # 2026-11-04: 10 tokens was never enough for a reasoning model — it
+            # spends the budget on thinking and returns empty content, which the
+            # code below read as "no" and DROPPED otherwise-good entries.
+            max_tokens=512,
         )
         answer = (text or "").strip().lower()
+        # 空答 ≠ 不合格。空答只说明模型没答出来（预算被思考吃掉 / 上游抖动），
+        # 交给调用方走 None 分支（降置信度），不要当 False 直接丢掉内容。
+        if not answer:
+            return None
         if "yes" in answer and "metadata" not in answer:
             return True
         # metadata_only → treat as partial pass (config/API specs ARE technical content)

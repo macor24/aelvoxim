@@ -1346,6 +1346,17 @@ def get_confidence_trend() -> dict:
 def _add_curiosity_topic(topic: str, user: dict = None) -> None:
     """Add a topic to the curiosity list (persisted to JSON)."""
     from pathlib import Path as _P
+    # 2026-11-04: 这里此前 verbatim 收下任何文本（用户原话、甚至一整段英文 prompt），
+    # 随后被当作"待探索方向"学习、并以原话当 topic 写进知识库 —— 周检那批
+    # question/chat_sentence 行就是从这条链路来的。用与 kb_gc 同一个闸门先拦。
+    try:
+        from .topic_gate import check as _tg_check
+        _ok, _reason = _tg_check(topic or "")
+        if not _ok:
+            _log.info("curiosity topic rejected (%s): %r", _reason, (topic or "")[:60])
+            return
+    except Exception:
+        pass
     fp = _P.home() / ".aelvoxim" / "curiosity.json"
     fp.parent.mkdir(parents=True, exist_ok=True)
     try:

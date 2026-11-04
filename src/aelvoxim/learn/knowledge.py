@@ -50,6 +50,35 @@ _lock_fd: Optional[int] = None
 _RECENTLY_DISCARDED: Dict[str, float] = {}
 _DISCARDED_TTL = 3600  # 1 hour
 
+# ── Topic gate at write time (2026-11-04) ────────────
+# 同一个闸门（learn/topic_gate.py）此前只在每周 kb_gc 里跑：周检查出一批
+# "问句/聊天原文当 topic"的行，人再手工清。实测两天里这类行从 2 长到 4+，
+# 说明有活水源（curiosity 把用户原话当学习方向，落库时沿用原话当 topic）。
+# 现在写库前过闸：不合格的 topic 直接拒收并计数，周检才有机会长期为 0。
+_GATE_REJECTS: Dict[str, int] = {}
+
+
+def _topic_gate_reject(topic: str, where: str) -> str:
+    """写库前过 topic_gate。返回拒绝原因，空串 = 通过。
+
+    闸门自身异常时放行（宁可入库也不静默丢数据），但会计数可见。
+    """
+    try:
+        from .topic_gate import check
+        ok, reason = check(topic or "")
+    except Exception:
+        return ""
+    if ok:
+        return ""
+    _GATE_REJECTS[reason] = int(_GATE_REJECTS.get(reason, 0)) + 1
+    _log.warning("knowledge topic rejected (%s) at %s: %r", reason, where, (topic or "")[:80])
+    return reason
+
+
+def topic_gate_stats() -> Dict[str, int]:
+    """写库闸拒收计数（按原因）。只读，给 status.json 用。"""
+    return dict(_GATE_REJECTS)
+
 
 def _acquire_process_lock():
     """Acquire process-level file lock (blocking). All write operations acquire this lock before the thread lock."""
@@ -677,6 +706,12 @@ class KnowledgeBase:
         tags = tags or []
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+        # ── topic 闸（2026-11-04）：不合格的 topic 不进库，也不静默 ──
+        _rej = _topic_gate_reject(topic, "store")
+        if _rej:
+            return {"id": "", "_status": "rejected_bad_topic", "_reason": _rej,
+                    "title": title, "topic": topic, "created_at": now}
+
         # ── 质量闸（2026-10-22）：默认 0.0 = 不拦，保持现状 ──
         # 这台系统此前只有"学多快"（每方向每天 5 轮），没有"学多严"：
         # 写库不看置信度，confidence 直接用列默认 0.5。实验闸门必须真实可调，
@@ -958,6 +993,11 @@ class KnowledgeBase:
         for idx, entry in enumerate(pending_data["pending"]):
             if entry["id"] != entry_id:
                 continue
+
+            # ── topic 闸（2026-11-04）：pending 里历史遗留的脏 topic 不许晋升 ──
+            _rej = _topic_gate_reject(entry.get("topic", ""), "approve")
+            if _rej:
+                return {"approved": False, "reason": f"topic rejected by gate: {_rej}"}
 
             dup_entry, dup_score = _find_duplicate(
                 entry.get("title", ""), entry.get("summary", "")
@@ -1248,6 +1288,12 @@ class KnowledgeBase:
         tags = tags or []
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         content_hash = hashlib.sha256((content or "").encode("utf-8")).hexdigest() if content else ""
+
+        # ── topic 闸（2026-11-04）：curiosity 曾把用户原话当学习方向进来 ──
+        _rej = _topic_gate_reject(topic, "store_pending")
+        if _rej:
+            return {"id": "", "_status": "rejected_bad_topic", "_reason": _rej,
+                    "title": title, "topic": topic, "created_at": now}
 
         # Pending queue backpressure: reject if queue is full
         pending_data = _read_pending()
