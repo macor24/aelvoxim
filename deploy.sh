@@ -90,10 +90,12 @@ cd /opt/aelvoxim
 python3 -m venv venv
 source venv/bin/activate
 pip install --upgrade pip -q
-# 核心依赖
-pip install bcrypt fastapi uvicorn[standard] psycopg2-binary pydantic Pillow numpy -q
-# 安装项目（editable）
-pip install -e . -q 2>/dev/null || pip install . -q
+# 2026-11-04: 依赖只认 requirements.txt（唯一定义），不再逐个装未钉版本的包。
+# 之前这行装的是 latest，随后 pip install -e . 又按 pyproject 的下限升一次，
+# 结果"一次正常部署"就可能把 fastapi 从 0.139 跳到 0.162。
+pip install -r requirements.txt -q
+# 只装本项目本身，不再重解依赖（否则等于绕过上面的钉版）
+pip install -e . --no-deps -q 2>/dev/null || pip install . --no-deps -q
 echo "  Done: $(pip list 2>/dev/null | grep -c ^[a-z]) packages"
 DEPEOF
 echo "✅ Python 依赖完成"

@@ -5,6 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "aelvoxim"
 version = "1.2.0"
+requires-python = ">=3.12"
 description = "知境 (Aelvoxim) — Lightweight AI Cognitive Engine Framework — give your AI a memory, metacognition, and self-learning"
 readme = "README.md"
 license = {text = "MIT"}
@@ -24,12 +25,22 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Application Frameworks",
 ]
 dependencies = [
-    "bcrypt>=5.0.0",
-    "fastapi>=0.162.0",
-    "uvicorn[standard]>=0.54.0",
+    # 2026-11-04: 运行时依赖一律钉死到"线上实测版本"。
+    # 原因：此前 pyproject 写 >=0.162.0、线上跑 0.139.0，下一次 pip install -e .
+    # 会为了满足下限把 fastapi 推 22 个版本（含 6 个 breaking），而且是在一次
+    # "正常部署"里悄悄发生。升级要单独排期 + 跑回归，不许夹在部署里。
+    "bcrypt==5.0.0",
+    "fastapi==0.139.0",
+    "uvicorn[standard]==0.51.0",
+    # 代码里 17 个文件直接 import httpx，之前只是靠传递依赖被带进来（未声明）。
+    "httpx==0.28.1",
+    "pydantic==2.13.4",
+    "psycopg2-binary==2.9.12",
+    "Pillow==13.0.0",
+    "numpy==2.5.1",
     # 2026-11-03: GHSA-6q48-6c7w-9gw2 (critical) — certifi < 2026.10.19 仍带
     # emSign ECC Root CA - G3，其下级中间证书私钥已泄露（可被用于 MITM）。
-    # 虽然只是 httpx 的传递依赖，但它在 TLS 信任链上，必须显式钉住。
+    # 刻意保留下限（不钉死）：CA 包越新越好，且这是安全修复线。
     "certifi>=2026.10.19",
 ]
 
