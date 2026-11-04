@@ -32,6 +32,10 @@ src/aelvoxim_orchestrator/scheduler.py
 # Local refactor/deploy backups (kept on disk, never versioned)
 *.bak_*
 dist.bak_*/
+# 2026-11-04: 同日备份目录/文件用连字符命名（.bak-2026xxxx、uv.lock.bak-2026xxxx），
+# 上面的 *.bak_* 匹配不到，于是每次都在 git status 里冒充"新文件"。
+.bak-*/
+*.bak-*
 
 # Alibaba Cloud certificate download — contains private keys, never commit
 26941119_www.aelvoxim.com_nginx/
