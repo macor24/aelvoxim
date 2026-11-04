@@ -413,7 +413,17 @@ class Calibration:
             _reachable = self._recent_max_overall() + 0.02
             new_val = min(me.get("threshold_max", 0.9), old + step, _ceiling,
                           max(_reachable, old))
-            if new_val != old:  # 已顶到可达上限时不再产出空改（否则每轮都是"变了但没变"）
+            # 2026-11-04：抬阈值必须真的能减少触发，否则只是棘轮。
+            # 实测：最近 200 条 overall_score 里 193 条 ≥0.2（96.5%），把 0.1 抬到 0.2
+            # 后仍有 96.5% 触发 —— 这类"抬了等于没抬"的调整会一路爬到可达上限，
+            # 最终 evolution 永不触发（2026-10-19 就是被 0.35 卡死）。
+            _above = self._recent_above_ratio(new_val) if new_val != old else 1.0
+            if new_val != old and _above >= 0.9:
+                # 注意：compute_tuning 必须无副作用（只算不写），所以这里只记日志，
+                # 不改 self._data —— 真正的写入由 apply_tuning 在闸门放行后做。
+                _log.info("evolve_threshold %s->%s 判为无效果棘轮（最近 %d 条里仍有 %.1f%% 达标），未产出 change",
+                          old, new_val, 200, _above * 100)
+            elif new_val != old:  # 已顶到可达上限时不再产出空改（否则每轮都是"变了但没变"）
                 mc["evolve_threshold"] = new_val
                 changes.append({
                     "target": "metacog.evolve_threshold",
@@ -505,6 +515,33 @@ class Calibration:
                 except Exception:
                     continue
             return best
+        except Exception:
+            return 0.0
+
+    def _recent_above_ratio(self, threshold: float, n: int = 200) -> float:
+        """最近 n 条 metacog 分数里，达到 threshold 的比例（0..1）。
+
+        2026-11-04：用来判断"抬高 evolve_threshold"是否真的会改变行为。
+        实测量级：最近 200 条 overall_score 均值 0.245，193/200 条 ≥0.2。
+        也就是说 0.1→0.2 这种抬法基本不减少触发，只会让阈值一路爬到可达上限，
+        最后 evolution 永不触发 —— 2026-10-19 被 0.35 卡死就是这条路。
+        """
+        try:
+            from ..utils import METACORE_DIR as _md
+            p = Path(_md) / "metacog_history.jsonl"
+            if not p.exists():
+                return 0.0
+            lines = p.read_text(encoding="utf-8", errors="replace").strip().splitlines()[-n:]
+            seen = above = 0
+            for ln in lines:
+                try:
+                    s = float(json.loads(ln).get("overall_score") or 0.0)
+                except Exception:
+                    continue
+                seen += 1
+                if s >= threshold:
+                    above += 1
+            return (above / seen) if seen else 0.0
         except Exception:
             return 0.0
 

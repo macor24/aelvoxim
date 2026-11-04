@@ -221,8 +221,11 @@ def cmd_status(args) -> int:
     print("激活状态:", _activation_line())
     print("冷却:", _cooldown_left("metacog.evolve_threshold"))
     print("当前 evolve_threshold:", _live_value("metacog.evolve_threshold"))
-    print("队列有效提案数:", len([1 for n, d in _read_queue()
-                                  if not _is_dead(d, _voided(_read_queue()))]))
+    recs = _read_queue()
+    dead = _voided(recs)
+    live = [1 for n, d in recs
+            if not (d.get("void") or d.get("supersede")) and not _is_dead(d, dead)]
+    print("队列有效提案数:", len(live), f"（文件里共 {len(recs)} 条记录，含作废标记）")
     p = dgmh.DECISIONS_FILE
     print("决策令牌文件:", p, "存在" if p.exists() else "不存在（从未写过任何放行/否决）")
     if p.exists():
