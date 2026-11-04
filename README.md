@@ -8,47 +8,81 @@
 
 ---
 
-## Does your AI feel like it has amnesia?
+## Overview — what it actually is
 
-Every conversation with an LLM starts from zero. No memory of who you are, no progress from past mistakes, no way to get better over time.
+知境不是模型，是套在模型外面的一层：一个自托管（CPU 即可）的认知引擎，接任意 LLM，
+负责**记住、自己学、自己查错**这三件模型本身不负责的事。
 
-**知境 changes that.**
+**实际运行形态**（2026-11 生产实测，不是设计图）
 
-It is not an LLM. It is the **operating system for LLMs** — a cognitive engine that plugs into any model and gives it:
+| 进程 | 端口 | 职责 |
+|---|---|---|
+| `aelvoxim-api` | 9701 | FastAPI 服务：对话、检索、系统与管理接口 |
+| `aelvoxim-chatael` | 9702 | 前端页面 + 会话存储 |
+| `aelvoxim-learner` | 无端口 | 学习循环 + 皮层调度器（独立进程，心跳写 `learner/status.json`） |
+| PostgreSQL | 5432 | 知识、会话、方向、记忆实体（本机 127.0.0.1） |
+| nginx | 80/443 | TLS 终止 + 反代（公网只开这两个口） |
 
-- **Persistent memory** — remembers you across sessions, days, and months
-- **Self-learning** — gets better autonomously, in the background, 24/7
-- **Metacognition** — watches its own output, detects problems, and self-corrects
-- **Expert orchestration** — 7 specialized modules vote and collaborate on every decision
-- **Safety guardrails** — 6 ethically-gated protection layers (L1–L6)
+**能拿数据背书的几件事**（数字均取自代码现读）
 
-| Your pain | How others handle it | How 知境 solves it |
-|-----------|---------------------|-------------------|
-| AI forgets you between sessions | Stateless per chat — no persistent memory | 4-tier memory (Working → Episodic → Semantic → Procedural) + knowledge graph |
-| AI never improves with use | No background learning mechanism | 24/7 Learner Loop: curiosity discovery, spaced repetition, auto-tuning |
-| AI sometimes says nonsense with no self-check | No runtime self-monitoring | 6-signal metacognition trigger — detects degradation and auto-calibrates |
-| AI safety is an afterthought | Third-party guardrails, easily bypassed | 6 ethics gates (L1–L6) + SentriKit + circuit breaker |
-| Swapping LLM providers means starting over | Locked to one vendor | Framework-level abstraction — swap GPT, Claude, DeepSeek, or local models freely |
+- **4 层记忆**：working（24h TTL）→ episodic（7d）→ semantic（长期）→ procedural（访问 ≥5 次自动升级）
+- **10 个元认知信号**：success_rate / stagnation / repeat_failure / external_signal / introspection /
+  memory_health / snapshot_trend / belief_health / execution_health / retrieval_gap，加权后决定是否触发自我修正
+- **7 个投票专家**：memory / logic / ethics / safety / creative / emotion 按权重投票（合计 1.00），
+  introspection 作 meta 层评 S/A/B/C/D；另有 code-review 专家供路由单独调用
+- **3 层知识验证**：L1 多引擎检索交叉验证（3 引擎过 2）→ L2 LLM 正反辩论出可信度 → L3 聚合成分数
+- **间隔重复复习** + **好奇心驱动的自主选题**（选题必须先过 topic 闸，见下）
+
+**依赖与质量现状**
+
+- 运行时依赖 8 个，全部钉死版本：fastapi / uvicorn / httpx / bcrypt / pydantic / psycopg2-binary，
+  外加 certifi（保留安全下限 `>=2026.10.19`）
+- `src/` 44,609 行 Python；`scripts/dep_drift.py` 可随时核对"声明 vs 实装"
+- CI：ruff（E9/F）+ pytest（3.10 / 3.11 / 3.12 三档）+ coverage 门槛 20%（当前 46%，529 passed）
+
+**还没做实的地方**（写在文档里，而不是留给读者猜）
+
+- README 旧版声称的 "6 ethics gates (L1–L6)" 在代码里对不上：`L5` 是限流、`L6` 是熔断，
+  都在 `core/metacog_monitor.py`；L1–L4 没有对应实现。伦理部分实际是 `experts/ethics.py` 的规则 + 投票。
+- `learn/llm.py` 里对 `core.safety.r6_intercept_output` 的调用是**空挂**：模块不存在，
+  import 被 `except Exception: pass` 吞掉，那一层防护目前不生效。
+
+| 你的痛点 | 常见做法 | 知境的做法 |
+|---|---|---|
+| 换个会话就忘 | 每个 chat 独立，无持久记忆 | 4 层记忆 + 实体/关系图，会话与会话之间共享 |
+| 用久了也不变强 | 没有后台学习机制 | 7×24 学习循环：间隔重复 + 好奇选题 + 参数自校准 |
+| 说错了自己不知道 | 没有运行时自检 | 10 信号元认知触发 → 自校准 / 熔断 |
+| 安全是事后补的 | 外挂护栏，容易绕过 | 内容过滤 + 伦理专家投票 + L5 限流 + L6 熔断 |
+| 换模型等于重来 | 绑死一家 | 框架级抽象：DeepSeek / OpenAI / Ollama / Anthropic 可换 |
 
 ---
 
 ### Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│  Application Layer                                 │
-│  Desktop control, file ops, browser automation     │
-├─────────────────────────────────────────────────────┤
-│  Tool Layer                                         │
-│  Code execution, API calls, data analysis, MCP     │
-├─────────────────────────────────────────────────────┤
-│  Cognitive Layer                                    │
-│  Reasoning, planning, decision-making, learning     │
-├─────────────────────────────────────────────────────┤
-│  Memory Layer                                       │
-│  Working → Episodic → Semantic → Procedural        │
-│  Knowledge graph, entity extraction                │
-└─────────────────────────────────────────────────────┘
+                     ┌──────────────────────────┐
+   public  :443/:80 ─┤ nginx (TLS, 反代)         │
+                     └────────────┬─────────────┘
+                                  │
+        ┌─────────────────────────┼──────────────────────────┐
+        │                         │                          │
+┌───────▼────────┐      ┌─────────▼─────────┐      ┌─────────▼──────────┐
+│ aelvoxim-api   │      │ aelvoxim-chatael  │      │ aelvoxim-learner   │
+│ 9701 FastAPI   │      │ 9702 前端/会话     │      │ 无端口 · 学习循环   │
+│ 对话/检索/管理  │      │                   │      │ + 皮层调度器        │
+└───────┬────────┘      └─────────┬─────────┘      └─────────┬──────────┘
+        │                         │                          │
+        └─────────────────────────┼──────────────────────────┘
+                                  │
+                     ┌────────────▼─────────────┐
+                     │ PostgreSQL 127.0.0.1:5432 │
+                     │ knowledge_entries / chat_ │
+                     │ sessions / learning_dirs  │
+                     └───────────────────────────┘
+
+认知层：core/（元认知 10 信号 · 信念 · 裁决 · 校准）
+学习层：learn/（循环 · 分解 · 执行 · 验证 L1–L3 · 复习 · topic 闸）
+专家层：experts/（6 加权投票 + introspection meta + code-review）
 ```
 
 ---
@@ -158,7 +192,7 @@ See [SECURITY.md](SECURITY.md) for the full security policy.
 | Prompt injection guard | ✅ Built-in, enabled via `AELVOXIM_CONTENT_FILTER=1` |
 | API Key authentication | ✅ Required for all endpoints |
 | Rate limiting | ✅ Built into MetaCogMonitor (L5) |
-| Ethics gates (L1–L6) | ✅ Independently toggleable — see `core/metacog_monitor.py` |
+| Ethics gates (L1–L6) | ⚠️ 文档旧称与代码不符：`L5`=限流、`L6`=熔断（`core/metacog_monitor.py`），L1–L4 无对应实现；伦理实际由 `experts/ethics.py` 规则 + 投票承担 |
 | Circuit breaker | ✅ 3 consecutive low-confidence → auto trip |
 | Data encryption at rest | ⚠️ JSON file storage — encrypt at filesystem level |
 | PostgreSQL connection | ✅ Uses password auth, localhost-only by default |

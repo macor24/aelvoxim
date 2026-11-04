@@ -2,7 +2,10 @@
 
 ## 项目定位
 
-8,373 行，纯标准库（零第三方依赖），自进化 AI Agent 框架。
+自托管认知引擎（套在 LLM 外面，不是模型本身）。2026-11-04 现读：`src/` 44,609 行 Python，
+运行时依赖 8 个（fastapi / uvicorn / httpx / bcrypt / pydantic / psycopg2-binary / certifi，
+版本全部钉死，见 `requirements.txt` 与 `scripts/dep_drift.py`）。
+旧版本此处写"8,373 行，纯标准库（零第三方依赖）"，已不符合实际。
 
 ---
 
