@@ -24,6 +24,24 @@ _log = logging.getLogger("aelvoxim.meta_learner")
 
 _FEEDBACK_DIR = METACORE_DIR / "feedback"
 _FEEDBACK_FILE = _FEEDBACK_DIR / "pending.jsonl"
+# 采集计数：pending.jsonl 会被 tick() 消费掉，不能当"采到多少"的读数。
+_STATS_FILE = METACORE_DIR / "feedback_stats.json"
+
+
+def _bump_stats() -> None:
+    """累加采集计数（按天 + 总计），失败不影响采集。"""
+    try:
+        d = {}
+        if _STATS_FILE.exists():
+            d = json.loads(_STATS_FILE.read_text() or "{}")
+        day = datetime.now().strftime("%Y-%m-%d")
+        by_day = d.setdefault("by_day", {})
+        by_day[day] = by_day.get(day, 0) + 1
+        d["total"] = d.get("total", 0) + 1
+        d["last_ts"] = datetime.now().isoformat(timespec="seconds")
+        _STATS_FILE.write_text(json.dumps(d, ensure_ascii=False))
+    except Exception:
+        _log.debug("feedback stats bump failed", exc_info=True)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -49,6 +67,7 @@ def ingest_feedback(record: dict) -> None:
     try:
         with open(_FEEDBACK_FILE, "a") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        _bump_stats()
     except Exception:
         _log.exception("meta_learner error")
 

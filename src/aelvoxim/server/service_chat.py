@@ -985,16 +985,38 @@ def verify_response_facts(text: str, user_msg: str, user: dict) -> str:
 
 # ═══ Post-chat tasks ═══
 
+_CORRECTION_CUES_ZH = ("不对", "错了", "错的", "搞错", "弄错", "答错", "不是这个", "不是这样",
+                       "不是我要", "我说的是", "你理解错", "重新回答", "答非所问", "没有回答")
+_CORRECTION_CUES_EN = ("wrong", "incorrect", "not what i", "that's not", "that is not",
+                       "no, i", "actually i", "you missed")
+# 中文里"不错/没错"是肯定，不能算纠错
+_PRAISE_ZH = ("不错", "没错", "没有错")
+
+
+def _looks_like_correction(user_msg: str) -> bool:
+    """用户这句话是不是在纠错。
+
+    2026-11-04：原来的判据是 `text`（AI 自己的回复）里含 "wrong"/"no" ——
+    那检查的是被纠错方的输出，不是纠错方的输入；线上回复以中文为主，
+    于是条件恒为 False，feedback 队列从部署至今 0 条记录。
+    """
+    m = (user_msg or "").strip().lower()
+    if not m:
+        return False
+    if any(p in m for p in _PRAISE_ZH):
+        return False
+    if any(c in m for c in _CORRECTION_CUES_ZH):
+        return True
+    return any(c in m for c in _CORRECTION_CUES_EN)
+
+
 def run_post_chat_tasks(user_msg: str, text: str, user: dict,
                         kb_results: list, t0: float, user_id: str) -> None:
     try:
-        # Meta-learning: ingest feedback if user corrected the AI.
-        # Parentheses matter: without them, `and` binds tighter than `or`, so
-        # any reply containing "no" in its first 50 chars triggered the
-        # MetaLearner regardless of the "wrong" condition (B1, 9.txt audit).
-        # ingest_feedback is a MODULE function — MetaLearner() has no such
-        # method (B15, 9.txt audit).
-        if text and ("wrong" in text.lower() or "no" in text.lower()[:50]):
+        # Meta-learning: ingest feedback if the USER corrected the AI.
+        # 2026-11-04：判据从 text（AI 回复）改为 user_msg（用户输入）。
+        # ingest_feedback 是模块函数 —— MetaLearner() 没有这个方法（B15）。
+        if _looks_like_correction(user_msg):
             from ..learn.meta_learner import ingest_feedback as _ingest_feedback
             _ingest_feedback({
                 "kind": "correction",
@@ -1002,8 +1024,8 @@ def run_post_chat_tasks(user_msg: str, text: str, user: dict,
                 "assistant_reply": text,
                 "user": (user or {}).get("email", ""),
                 "signals": {
-                    "wrong": "wrong" in text.lower(),
-                    "no": "no" in text.lower()[:50],
+                    "zh_cue": any(c in user_msg for c in _CORRECTION_CUES_ZH),
+                    "en_cue": any(c in user_msg.lower() for c in _CORRECTION_CUES_EN),
                 },
             })
     except Exception:
