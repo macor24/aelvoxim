@@ -18,8 +18,6 @@ from .routes import _verify_key
 _log = logging.getLogger("aelvoxim.routes")
 
 
-class _McpNotConfigured(Exception):
-    """Raised when Windows-MCP env vars are absent — caller decides to skip silently."""
 router = APIRouter()
 
 
@@ -272,7 +270,7 @@ async def sync_session_messages(
 
 
 # ── Post-stream finishing (P0-1) ──────────────────────────────
-# 三条出口都要跑收尾：自然结束、[WIN:] 分支提前 return、[TOOL:] 分支提前 return。
+# 两条出口都要跑收尾：自然结束、[TOOL:] 分支提前 return。
 # 收尾含 PG 写 + 一次 KB 检索（0.2–1s），放后台线程：既不阻塞事件循环，
 # 也不会因客户端断连（生成器被取消）而丢失。
 # AELVOXIM_POST_STREAM_INLINE=1 时同步执行（判据测试用，生产不要开）。
@@ -623,72 +621,6 @@ async def llm_chat_stream(
     enhanced_system, identity_prefix = inject_safety_and_metacog(
         enhanced_system, identity_prefix, user)
 
-    # ── Windows-MCP capability injection ──
-    try:
-        import httpx as _httpx
-        import os as _os_mcp
-        WINDOWS_MCP_KEY = _os_mcp.environ.get("WINDOWS_MCP_KEY", "")
-        WINDOWS_MCP_URL = _os_mcp.environ.get("WINDOWS_MCP_URL", "")
-        if not (WINDOWS_MCP_KEY and WINDOWS_MCP_URL):
-            raise _McpNotConfigured()
-        # Probe connectivity and fetch desktop path
-        _test = _httpx.get(f"{WINDOWS_MCP_URL}/mcp",
-                           headers={"Authorization": f"Bearer {WINDOWS_MCP_KEY}"}, timeout=3)
-        if _test.status_code < 500:
-            _sid = _test.headers.get("mcp-session-id", "")
-            _win_user = "Administrator"
-            if _sid:
-                _h = {"Authorization":f"Bearer {WINDOWS_MCP_KEY}","Content-Type":"application/json",
-                    "Accept":"application/json, text/event-stream","Mcp-Session-Id":_sid}
-                _httpx.post(f"{WINDOWS_MCP_URL}/mcp", json={"jsonrpc":"2.0","id":"1","method":"initialize",
-                    "params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"aelvoxim","version":"1.0"}}}, headers=_h, timeout=10)
-                _ur = _httpx.post(f"{WINDOWS_MCP_URL}/mcp", json={"jsonrpc":"2.0","id":"2","method":"tools/call",
-                    "params":{"name":"PowerShell","arguments":{"command":"$env:USERNAME"}}}, headers=_h, timeout=15)
-                for _l in _ur.text.split("\n"):
-                    if _l.startswith("data: "):
-                        _ud = json.loads(_l[6:]).get("result",{}).get("content",[{}])
-                        if _ud and _ud[0].get("text"):
-                            _t = _ud[0]["text"].replace("Response: ","").strip()
-                            if _t:
-                                _win_user = _t.split()[0] if " " in _t else _t
-                                break
-            enhanced_system += f"""
-[Windows Control - 你正在使用 Windows-MCP 操作 Windows 桌面]
-你已连接到用户电脑的 Windows-MCP 服务，可以直接控制 Windows 桌面。
-用户桌面路径: C:\\Users\\{_win_user}\\Desktop
-
-可用工具（通过 [WIN:工具名] 标记调用）：
-1. [WIN:PowerShell] {{"command": "要执行的命令"}} — 执行任何 PowerShell 命令
-2. [WIN:Snapshot] {{}} — 截取桌面截图
-3. [WIN:DisplayInventory] {{}} — 获取显示器信息
-4. [WIN:Notification] {{"title": "...", "message": "..."}} — 发送 Windows 通知
-5. [WIN:App] {{"mode": "launch", "name": "app名称"}} — 打开开始菜单应用
-6. [WIN:Process] {{}} — 获取进程列表
-
-使用规则：
-- 当用户请求涉及 Windows 操作时，你要在回复中先说明你在调用 Windows-MCP 控制桌面
-- 打开桌面快捷方式时用 PowerShell: Start-Process "C:\\Users\\{_win_user}\\Desktop\\文件名.lnk"
-- 然后使用 [WIN:工具名] 标记来执行操作
-- 执行后你会看到结果，然后向用户解释执行情况
-- 所有回复用中文
-
-示例：
-用户: "帮我打开记事本"
-你: "好的，我通过 Windows-MCP 帮你打开记事本。
-[WIN:PowerShell] {{"command": "notepad"}}"
-
-用户: "帮我打开桌面上的 Chrome"
-你: "好的，我通过 Windows-MCP 打开桌面上的 Chrome。
-[WIN:PowerShell] {{"command": "Start-Process 'C:\\Users\\{_win_user}\\Desktop\\Chrome.lnk'"}}"
-
-用户: "看看桌面上有哪些文件"
-你: "我通过 Windows-MCP 查询桌面文件。
-[WIN:PowerShell] {{"command": "Get-ChildItem 'C:\\Users\\{_win_user}\\Desktop' | Select-Object Name | ConvertTo-Json"}}"
-"""
-    except _McpNotConfigured:
-        pass  # Windows-MCP 未配置 — 静默跳过能力注入，不再 3s 干等
-    except Exception:
-        _log.exception("routes_chat error")
 
     full_prompt = identity_prefix + user_msg
 
@@ -748,10 +680,6 @@ async def llm_chat_stream(
                         if _re.search(r'\[TOOL:\w+\]\s*\{', _norm):
                             _tool_seen = True
                             continue
-                        # Detect Windows-MCP call marker
-                        if _re.search(r'\[WIN:\w+\]', _norm):
-                            _tool_seen = True
-                            continue
                         yield f"data: {json.dumps({'token': chunk})}\n\n"
 
             _full_text = "".join(_pg_collected)
@@ -761,61 +689,6 @@ async def llm_chat_stream(
                     record_conversation_memory(user, user_msg, _full_text)
                 except Exception:
                     _log.exception("routes_chat error")
-                # ── Windows-MCP tool execution ──
-                _win_match = _re.search(r'\[WIN:(\w+)\]\s*(\{.*?\})', _full_text, _re.DOTALL)
-                if _win_match:
-                    _win_action = _win_match.group(1)
-                    try:
-                        _win_params = json.loads(_win_match.group(2))
-                    except Exception:
-                        _win_params = {}
-                    _chat_log.info("  Windows-MCP call: %s %s", _win_action, _win_params)
-                    try:
-                        import httpx as _httpx_w
-                        import os as _os_w
-                        WINDOWS_MCP_KEY = _os_w.environ.get("WINDOWS_MCP_KEY", "")
-                        WINDOWS_MCP_URL = _os_w.environ.get("WINDOWS_MCP_URL", "")
-                        if not (WINDOWS_MCP_KEY and WINDOWS_MCP_URL):
-                            raise RuntimeError("Windows-MCP not configured (set WINDOWS_MCP_KEY and WINDOWS_MCP_URL)")
-                        _sid_resp = _httpx_w.get(f"{WINDOWS_MCP_URL}/mcp",
-                            headers={"Authorization": f"Bearer {WINDOWS_MCP_KEY}"}, timeout=5)
-                        _sid = _sid_resp.headers.get("mcp-session-id", "")
-                        if _sid:
-                            _init_body = {"jsonrpc":"2.0","id":"1","method":"initialize",
-                                "params":{"protocolVersion":"2024-11-05","capabilities":{},
-                                    "clientInfo":{"name":"aelvoxim","version":"1.0"}}}
-                            _h = {"Authorization":f"Bearer {WINDOWS_MCP_KEY}","Content-Type":"application/json",
-                                "Accept":"application/json, text/event-stream","Mcp-Session-Id":_sid}
-                            _httpx_w.post(f"{WINDOWS_MCP_URL}/mcp", json=_init_body, headers=_h, timeout=10)
-                            _call_body = {"jsonrpc":"2.0","id":"2","method":"tools/call",
-                                "params":{"name":_win_action,"arguments":_win_params}}
-                            _mcp_resp = _httpx_w.post(f"{WINDOWS_MCP_URL}/mcp", json=_call_body, headers=_h, timeout=30)
-                            _resp_text = _mcp_resp.text
-                            for _line in _resp_text.split("\n"):
-                                if _line.startswith("data: "):
-                                    _win_result = json.loads(_line[6:])
-                                    _win_output = "执行成功"
-                                    _c = _win_result.get("result",{}).get("content",[])
-                                    if _c and _c[0].get("text"):
-                                        _win_output = _c[0]["text"][:500]
-                                    # Replace [WIN:xxx] with result, let AI continue
-                                    _full_text = _full_text.replace(
-                                        _win_match.group(0),
-                                        f"\n[Windows 执行结果] {_win_output}\n"
-                                    )
-                                    break
-                    except Exception as _win_err:
-                        _full_text = _full_text.replace(
-                            _win_match.group(0),
-                            f"\n[Windows 执行失败] {str(_win_err)[:200]}\n"
-                        )
-                    _pg_collected.clear()
-                    _pg_collected.append(_full_text)
-                    yield f"data: {json.dumps({'token': _full_text})}\n\n"
-                    yield "data: [DONE]\n\n"
-                    _schedule_post_stream_finish(
-                        user, _pg_sid, _pg_email, _pg_msg, _pg_collected, _t0_stream)
-                    return
                 try:
                     from .tool_use import execute_tool_calls, has_tool_calls
                     if has_tool_calls(_full_text):
@@ -850,7 +723,7 @@ async def llm_chat_stream(
             _log.exception("routes_chat stream error")  # log real error
             yield f"data: {json.dumps({'error': 'Internal error'})}\n\n"
         # 收尾（PG 落库 → 会话快照 → 对话记忆/实体 → 质量评估）。
-        # P0-1：三条出口（自然结束 / [WIN:] / [TOOL:]）共用这一个函数，
+        # P0-1：两条出口（自然结束 / [TOOL:]）共用这一个函数，
         # 不再被提前 return 跳过；执行放后台线程，不阻塞也不随断连取消。
         _schedule_post_stream_finish(
             user, _pg_sid, _pg_email, _pg_msg, _pg_collected, _t0_stream)

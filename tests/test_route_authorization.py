@@ -40,11 +40,10 @@ _FRONTEND_MOUNTED = (_REPO / "frontend" / "chatael" / "dist").exists()
 PRIVILEGED_PREFIXES = ("/v1/admin/", "/v1/logs", "/v1/llm/config", "/v1/config", "/v1/memory")
 
 TABLE = {
-    ("GET", ""): "public",
     ("GET", "/"): "public",
     ("GET", "/api"): "public",
-    ("GET", "/api/v1/metacore/intent"): "public",
-    ("GET", "/api/v1/metacore/intent/mock"): "public",
+    # 2026-11-04: chimera 路由随桌面控制移除，下面两条 /metacore/intent 与一条空路径
+    # 的登记是陈旧项（路由已不存在），一并删掉。
     ("GET", "/chatael"): "public",
     ("GET", "/chatael/{path:path}"): "public",
     ("GET", "/public/llm/test"): "user",

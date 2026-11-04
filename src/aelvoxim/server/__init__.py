@@ -35,8 +35,8 @@ router.include_router(_brain_router)
 from ..cortex import router as _cortex_router
 router.include_router(_cortex_router)
 
-# Chimera and brain routers (external)
-from ..chimera.routes import router as chimera_router
+# Brain router (external). 2026-11-04: chimera 路由随桌面控制一起移除
+# （chimera 的 /intent、/intent/mock、/action-stream 全部服务于 9705 gateway）
 from ..orchestrator import router as brain_router
 
 _log = logging.getLogger("aelvoxim.server")
@@ -100,7 +100,6 @@ def create_app() -> FastAPI:
 
     app.include_router(router)
     app.include_router(public_router)
-    app.include_router(chimera_router)
     app.include_router(brain_router)
 
     # Session IP check middleware (single-device login enforcement)

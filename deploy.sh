@@ -74,7 +74,7 @@ tar czf /tmp/aelvoxim-src.tar.gz \
     --exclude='__pycache__' --exclude='*.egg-info' \
     --exclude='build' --exclude='dist' --exclude='.git' \
     --exclude='node_modules' --exclude='.pytest_cache' \
-    --exclude='aelvoxim-gateway' --exclude='.hermes' \
+    --exclude='.hermes' \
     -C /mnt/c/Aelvoxim .
 
 scp /tmp/aelvoxim-src.tar.gz "$DEPLOY_USER@$DEPLOY_HOST:/opt/aelvoxim/"
