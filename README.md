@@ -44,8 +44,9 @@
 
 - README 旧版声称的 "6 ethics gates (L1–L6)" 在代码里对不上：`L5` 是限流、`L6` 是熔断，
   都在 `core/metacog_monitor.py`；L1–L4 没有对应实现。伦理部分实际是 `experts/ethics.py` 的规则 + 投票。
-- `learn/llm.py` 里对 `core.safety.r6_intercept_output` 的调用是**空挂**：模块不存在，
-  import 被 `except Exception: pass` 吞掉，那一层防护目前不生效。
+- `learn/llm.py` 里对 `core.safety.r6_intercept_output` 的调用是空挂（模块不存在，被
+  `except Exception: pass` 吞掉）——**2026-11-04 已删除该调用**，不再假装有这层防护；
+  输出侧实际生效的是 `content_filter`（需 `AELVOXIM_CONTENT_FILTER=1`）。
 
 | 你的痛点 | 常见做法 | 知境的做法 |
 |---|---|---|

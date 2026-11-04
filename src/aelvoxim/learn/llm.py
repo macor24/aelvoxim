@@ -434,12 +434,11 @@ def call_llm(
         else:
             raise LLMError(f"Unsupported provider: {model.provider}")
 
-        # SafetyGuard R6 content security (always active)
-        try:
-            from ..core.safety import r6_intercept_output
-            text = r6_intercept_output(text)
-        except Exception:
-            pass  # non-critical: safety module unavailable, continue without intercept
+        # 2026-11-04: 这里原来调 core.safety.r6_intercept_output()，但
+        # src/aelvoxim/core/safety.py 从不存在（全仓 0 个定义），异常被
+        # except Exception: pass 吞掉 —— 所谓 "SafetyGuard R6 始终生效"
+        # 其实一次都没执行过。删掉空挂，不假装有这层防护。
+        # 输出侧真正生效的是下面的 content_filter（需 AELVOXIM_CONTENT_FILTER=1）。
 
         # Content safety filter (only checked when enabled via env var AELVOXIM_CONTENT_FILTER=true)
         if os.environ.get("AELVOXIM_CONTENT_FILTER", "").lower() in ("true", "1", "yes"):
