@@ -89,35 +89,28 @@
 
 ## How 知境 Compares
 
-A realistic comparison against the actual competitive landscape — agent/cognitive frameworks, not LLMs.
+这里不评价别家产品。我们拿不出对别人内部实现的证据，所以只写自己这一列 —— 每一项都挂一条可复算的凭据。
 
-| Dimension | 知境 (Aelvoxim) | OpenWorker | OpenClaw | OpenAI Presence | openJiuwen |
-|---|---|---|---|---|---|
-| **Nature** | Cognitive engine framework | Desktop AI colleague | Open-source agent platform | Enterprise agent ops | Multi-agent swarm platform |
-| **Persistent memory** | ✅ 4-tier + knowledge graph | ❌ Session-only | ❌ Session-only | ❌ External storage-depend | ❌ Session-only |
-| **Metacognition** | ✅ 6-signal runtime self-check + auto-calibration | ❌ | ❌ | ❌ | ❌ |
-| **Self-learning** | ✅ Learner Loop (direction/growth/curiosity/spaced-repetition) | ❌ | ❌ | ❌ | ⚠️ Swarm-level evolution |
-| **Expert orchestration** | ✅ 7 expert modules with dynamic voting | ❌ | ⚠️ Skill marketplace | ❌ | ❌ |
-| **Security / Ethics** | ✅ 6 gates (L1–L6) + SentriKit + circuit breaker | ⚠️ Basic action confirmation | ⚠️ Skill review | ✅ Enterprise audit | ❌ |
-| **Desktop control** | ✅ Windows-MCP (mouse, keyboard, file, browser) | ✅ macOS (Windows in progress) | ✅ Cross-platform | ❌ API-only | ❌ |
-| **Local deployment** | ✅ CPU-only, Python 3.11+, optional PostgreSQL | ⚠️ Requires Python env | ✅ Lightweight (npm) | ❌ API-only | ⚠️ Huawei-ecosystem |
-| **Open source** | ✅ MIT | ✅ Open source | ✅ Foundation-governed | ❌ Closed | ✅ Open source |
-| **Plugin ecosystem** | ❌ None (built-in 7 experts) | ⚠️ aisuite framework | ✅ 12,000+ plugins | ❌ No public plugins | ⚠️ Huawei ecosystem |
+| 能力 | 实现位置 | 怎么自证 |
+|---|---|---|
+| 4 层记忆 | `memory/__init__.py` | working 24h TTL / episodic 7d / semantic 长期 / procedural 在 `access_count>=5` 自动升级 |
+| 10 个元认知信号 | `core/metacog.py` `FALLBACK_WEIGHTS` | 打印该字典得 10 个键：success_rate、stagnation、repeat_failure、external_signal、introspection、memory_health、snapshot_trend、belief_health、execution_health、retrieval_gap |
+| 6 个加权投票专家 | `experts/orchestrator.py` `EXPERT_WEIGHTS` | memory/logic/ethics/safety/creative/emotion，权重合计 1.00；introspection 作 meta 层；code-review 供路由调用 |
+| 3 层知识验证 | `learn/validator.py` | L1 多引擎检索（3 引擎过 2）→ L2 LLM 正反辩论 → L3 聚合分数 |
+| 后台学习循环 | `learn/loop.py` + `aelvoxim-learner` 进程 | `learner/status.json` 的 `loop_count` / `updated_at` 持续前进 |
+| 知识准入闸 | `learn/topic_gate.py` + `learn/knowledge.py` | 写库前过闸，拒收计数出现在 `status.json` 的 `kb_topic_gate` |
+| 依赖可复现 | `requirements.txt` + `scripts/dep_drift.py` | `dep_drift.py` 退出码 0 = 声明与实装一致 |
+| 运维读数 | `scripts/readout.py` | 六项体检（服务 / 知识闸 / 队列 / 空回复率 / 心跳 / 依赖漂移）一条命令出结论 |
 
-**Key takeaways:**
+**什么时候别用它**（这些边界比对比表更有用）
 
-1. **Memory + metacognition + self-learning** — No competitor has all three in one framework. This is 知境's core moat.
-2. **Not a competitor to LLMs** — 知境 makes any LLM better. Plug in DeepSeek for code, Claude for safety, or run local models — the cognitive layer stays the same.
-3. **Security-first by design** — The 6 ethics gates (L1–L6) + SentriKit + circuit breaker form a safety stack that most agent frameworks lack.
-4. **CPU-only deployment** — 知境 runs without GPU. This matters for enterprise on-premise scenarios where GPU is expensive or unavailable.
+- 需要自己训模型、跑大模型推理：它是套在模型外面的认知层，不替你训练，也不提升模型本身的智商。
+- 需要成熟插件市场/生态：目前只有内置专家，没有插件体系。
+- 只想单轮问答、不关心记忆：直接调模型 API 更省事、更便宜。
+- 需要桌面/系统级自动化：**这块已移除**（原 Windows-MCP 通道未部署，仓库内仍有遗留代码，不在支持范围）。
+- 需要合规认证级的安全产品：现在是应用层规则 + 限流 + 熔断，不是通过认证的安全产品。
 
-| Product | One-liner |
-|---|---|
-| **知境 (Aelvoxim)** | Gives any LLM persistent memory, metacognition, and self-learning |
-| **OpenWorker** | Desktop AI colleague that delivers finished work |
-| **OpenClaw** | Open-source agent platform with 12,000+ plugins |
-| **OpenAI Presence** | Enterprise agent deployment & operations |
-| **openJiuwen** | Multi-agent swarm with human-in-the-loop (HITS) |
+一句话说清和 LLM 的关系：**它不替代模型，是外挂的认知层** —— 换模型，记忆、元认知、学习闭环都还在。
 
 ---
 
@@ -170,14 +163,6 @@ Every decision is voted on by specialized expert modules with dynamic weighting:
 | Introspection | *meta* | S/A/B/C/D grade, issue detection and reporting |
 
 Confidence gap > 0.3 or ethics block → LLM arbitration with weighted-vote fallback.
-
-### 5. Desktop Control (via Windows-MCP)
-
-Control your Windows desktop through the AI — mouse, keyboard, file system, browser.
-
-- **Requires Windows-MCP** running on the Windows host
-- PowerShell execution, screenshots, app launching, file operations
-- Suitable for test automation, data harvesting, daily office tasks
 
 ---
 
@@ -239,7 +224,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 
 ### Prerequisites
 
-- Python 3.11+
+- Python 3.10+（CI 覆盖 3.10 / 3.11 / 3.12；生产跑 3.12）
 - PostgreSQL 15+ *(optional — falls back to JSON file storage)*
 - An LLM API key (OpenAI, DeepSeek, Anthropic, or any OpenAI-compatible provider)
 
@@ -281,8 +266,6 @@ PYTHONPATH=src python3 src/run_server.py 9701
 
 # (separate terminal) Start the frontend
 python3 serve_chatael.py --port 9702
-
-# (on Windows host) Start desktop control — see Windows-MCP/install_and_run.bat
 ```
 
 Open `http://localhost:9702` in your browser. Register an account and start chatting.
