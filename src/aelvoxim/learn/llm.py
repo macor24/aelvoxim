@@ -12,7 +12,8 @@ import os
 import re
 import time
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 from urllib.request import Request, urlopen
 
 
@@ -31,6 +32,102 @@ _BG_LLM_SEM = _threading.Semaphore(1)
 # model needs far more than the original 15s to emit visible content (measured
 # 17-90s on production prompts), so 15s silently dropped every call.
 _BG_LLM_TIMEOUT = int(os.environ.get("AELVOXIM_BG_LLM_TIMEOUT", "180"))
+
+# ── Call accounting (2026-11-04) ────────────────────
+# "empty content" used to be a bare warning: nobody could tell whether 7-16
+# events/day was 1% or 40% of traffic, because the denominator was never
+# recorded anywhere. These counters give both sides (calls / empty) plus the
+# caller site, are exposed via llm_call_stats(), and land in the learner's
+# status.json so monitors and readouts never parse logs for them.
+_CALL_STATS: Dict[str, Any] = {"day": "", "calls": 0, "empty": 0, "by_site": {}}
+_STATS_SAVE_EVERY = 1.0
+_last_save = 0.0
+
+
+def _stats_file():
+    root = Path(os.environ.get("AELVOXIM_DATA_DIR") or (Path.home() / ".aelvoxim"))
+    return root / "learner" / "llm_stats.json"
+
+
+def _load_stats() -> None:
+    """重启不丢当日计数：进程起来先把当天的 llm_stats.json 读回来。"""
+    try:
+        p = _stats_file()
+        if not p.exists():
+            return
+        d = json.loads(p.read_text(encoding="utf-8"))
+        if isinstance(d, dict) and d.get("day") == _today():
+            _CALL_STATS.update({"day": d["day"],
+                                "calls": int(d.get("calls") or 0),
+                                "empty": int(d.get("empty") or 0),
+                                "by_site": dict(d.get("by_site") or {})})
+    except Exception:
+        pass
+
+
+def _save_stats(force: bool = False) -> None:
+    global _last_save
+    now = time.time()
+    if not force and now - _last_save < _STATS_SAVE_EVERY:
+        return
+    _last_save = now
+    try:
+        p = _stats_file()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(_CALL_STATS, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _today() -> str:
+    return time.strftime("%Y-%m-%d")
+
+
+def _bump(key: str, site: str = "") -> None:
+    d = _today()
+    if _CALL_STATS["day"] != d:                      # daily reset
+        _CALL_STATS.update({"day": d, "calls": 0, "empty": 0, "by_site": {}})
+    _CALL_STATS[key] = int(_CALL_STATS.get(key, 0)) + 1
+    if key == "empty" and site:
+        bs = _CALL_STATS["by_site"]
+        bs[site] = int(bs.get(site, 0)) + 1
+    # 空回复稀有且最关键，强制落盘；普通调用走 1s 节流。
+    _save_stats(force=(key == "empty"))
+
+
+_load_stats()
+
+
+def _caller_site() -> str:
+    """调用方的 file:line 链（最多 3 跳），跳过 threading/本模块等内部帧。
+
+    2026-11-04 首版只取"第一个本模块之外的帧"，结果后台调用穿线程跑，
+    取到的是 threading.py:1010 —— 对定位毫无用处。真实链路是
+    extract.py:257 <- threading.py:1010 这种形状，所以保留 3 跳。
+    """
+    try:
+        import inspect
+        _SKIP_MODS = ("threading", "concurrent", "contextlib", "functools")
+        parts = []
+        f = inspect.currentframe()
+        while f is not None and len(parts) < 3:
+            mod = f.f_globals.get("__name__") or ""
+            fn = os.path.basename(f.f_code.co_filename)
+            if mod != __name__ and not any(mod == m or mod.startswith(m + ".") for m in _SKIP_MODS):
+                parts.append(f"{fn}:{f.f_lineno}")
+            f = f.f_back
+        return "<-".join(parts) if parts else "?"
+    except Exception:
+        return "?"
+
+
+def llm_call_stats() -> Dict[str, Any]:
+    """Today's call/empty counters. Never raises; a stale day reads as zeros."""
+    if _CALL_STATS["day"] != _today():
+        return {"day": _today(), "calls": 0, "empty": 0, "by_site": {}}
+    return {"day": _CALL_STATS["day"], "calls": _CALL_STATS["calls"],
+            "empty": _CALL_STATS["empty"], "by_site": dict(_CALL_STATS["by_site"])}
+
 
 def bg_llm_call(fn, *args, **kwargs):
     """Run a background LLM call under the global concurrency gate.
@@ -320,14 +417,18 @@ def call_llm(
     # returned ""). Floor at 1024 so the thinking pass has room.
     mt = max(mt, 1024)
     to = timeout if timeout is not None else model.timeout
+    # 2026-11-04: count both sides (calls + empty) and remember who asked, so a
+    # burst can be traced to a call site instead of guessed at.
+    _site = _caller_site()
+    _bump("calls")
 
     try:
         if model.provider == "ollama":
             text = _call_ollama(model, user_message, temp, mt)
         elif model.provider == "deepseek":
-            text = _call_openai_compat(model, system_prompt, user_message, temp, mt, to)
+            text = _call_openai_compat(model, system_prompt, user_message, temp, mt, to, site=_site)
         elif model.provider == "openai":
-            text = _call_openai_compat(model, system_prompt, user_message, temp, mt, to)
+            text = _call_openai_compat(model, system_prompt, user_message, temp, mt, to, site=_site)
         elif model.provider == "anthropic":
             text = _call_anthropic(model, system_prompt, user_message, temp, mt)
         else:
@@ -620,6 +721,7 @@ def _call_openai_compat(
     temperature: float,
     max_tokens: int,
     timeout: int = 30,
+    site: str = "",
 ) -> str:
     """Call OpenAI-compatible API (DeepSeek / OpenAI / other)."""
     messages = [
@@ -658,11 +760,12 @@ def _call_openai_compat(
         # — the learner produced nothing for days this way (2026-09-19).
         _usage = result.get("usage") or {}
         _rt = (_usage.get("completion_tokens_details") or {}).get("reasoning_tokens")
+        _bump("empty", site)
         _log.warning(
-            "empty content: %s/%s finish_reason=%s reasoning_tokens=%s completion_tokens=%s max_tokens=%s",
+            "empty content: %s/%s finish_reason=%s reasoning_tokens=%s completion_tokens=%s max_tokens=%s site=%s",
             getattr(model, "provider", "?"), getattr(model, "name", "?"),
             choices[0].get("finish_reason"), _rt,
-            _usage.get("completion_tokens"), max_tokens,
+            _usage.get("completion_tokens"), max_tokens, site or "?",
         )
     return content
 

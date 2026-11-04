@@ -1802,6 +1802,19 @@ class Learner:
             # iter_age_s 只用来区分"一轮跑很久"与"循环真的卡住"。
             "iter_age_s": int(time.time() - getattr(self, "_iteration_started", time.time())),
         }
+        # 2026-11-04: 分子分母同源。此前"空回复 7-16 条/天"只能数日志，没有分母，
+        # 判断不了是 1% 还是 30%；计数器在 llm.py，这里随心跳导出，只读不写。
+        try:
+            from .llm import llm_call_stats
+            status["llm"] = llm_call_stats()
+        except Exception:
+            status["llm"] = {}
+        # 2026-11-04: topic 闸拒收计数 —— 拒收必须可见，否则等于静默丢知识。
+        try:
+            from .knowledge import topic_gate_stats
+            status["kb_topic_gate"] = topic_gate_stats()
+        except Exception:
+            status["kb_topic_gate"] = {}
         try:
             STATUS_FILE.write_text(json.dumps(status, ensure_ascii=False, indent=2))
         except Exception:

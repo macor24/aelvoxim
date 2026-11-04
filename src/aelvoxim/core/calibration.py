@@ -76,6 +76,11 @@ DEFAULT_CALIBRATION: Dict[str, Any] = {
             "snapshot_trend": 0.09,
             "belief_health": 0.13,
             "execution_health": 0.10,
+            # 2026-11-04: retrieval_gap 一直是"未登记的隐式 0.1"（metacog.py:244
+            # weights.get(name, 0.1)），配置表里没有这个键 ⇒ 每天 19-41 条
+            # "signals without weight" 告警把真漏项淹没。登记值 0.10 与隐式值
+            # 相同，所以补键不改变任何分数，只让告警重新有信息量。
+            "retrieval_gap": 0.10,
         },
         "evolve_threshold": 0.15,                # overall_score >= 0.15 triggers evolution
     },
