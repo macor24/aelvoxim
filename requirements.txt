@@ -15,7 +15,7 @@ httpx==0.28.1
 # 认证
 bcrypt==5.0.0
 # pydantic 3 是 breaking major — 钉住实测版本，升级另开一次
-pydantic==2.13.4
+pydantic==2.14.3
 
 # Database
 psycopg2-binary==2.9.12
