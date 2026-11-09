@@ -31,7 +31,7 @@ dependencies = [
     # "正常部署"里悄悄发生。升级要单独排期 + 跑回归，不许夹在部署里。
     "bcrypt==5.0.0",
     "fastapi==0.139.0",
-    "uvicorn[standard]==0.51.0",
+    "uvicorn[standard]==0.54.0",
     # 代码里 17 个文件直接 import httpx，之前只是靠传递依赖被带进来（未声明）。
     "httpx==0.28.1",
     "pydantic==2.13.4",

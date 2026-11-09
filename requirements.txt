@@ -9,7 +9,7 @@ certifi>=2026.10.19
 
 # Web framework
 fastapi==0.139.0
-uvicorn[standard]==0.51.0
+uvicorn[standard]==0.54.0
 # 代码直接 import（17 个文件），此前只靠传递依赖带进来
 httpx==0.28.1
 # 认证
