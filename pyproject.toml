@@ -34,7 +34,7 @@ dependencies = [
     "uvicorn[standard]==0.51.0",
     # 代码里 17 个文件直接 import httpx，之前只是靠传递依赖被带进来（未声明）。
     "httpx==0.28.1",
-    "pydantic==2.13.4",
+    "pydantic==2.14.3",
     "psycopg2-binary==2.9.12",
     # 2026-11-04: 这里只列**代码真正 import 的**包（fastapi/uvicorn/httpx/bcrypt/
     # psycopg2/pydantic）。原来的 Pillow / numpy 在 src/ 与 scripts/ 里 0 引用，
